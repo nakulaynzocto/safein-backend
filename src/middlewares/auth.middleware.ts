@@ -1,20 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { JwtUtil } from '../utils/jwt.util';
 import { User } from '../models/user/user.model';
-import { ResponseUtil } from '../utils';
 import { IUser } from '../types/user/user.types';
+import { AppError } from './errorHandler';
+import { ERROR_CODES } from '../utils/constants';
 
 export interface AuthenticatedRequest extends Request {
   user?: IUser;
 }
 
-export const verifyToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const verifyToken = async (req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      ResponseUtil.unauthorized(res, 'Authorization header is required');
-      return;
+      throw new AppError('Authorization header is required', ERROR_CODES.UNAUTHORIZED);
     }
 
     const token = JwtUtil.extractTokenFromHeader(authHeader);
@@ -23,14 +23,17 @@ export const verifyToken = async (req: AuthenticatedRequest, res: Response, next
     // Find user and check if still exists and is active
     const user = await User.findById(decoded.userId);
     if (!user || !user.isActive) {
-      ResponseUtil.unauthorized(res, 'User not found or account disabled');
-      return;
+      throw new AppError('User not found or account disabled', ERROR_CODES.UNAUTHORIZED);
     }
 
     req.user = user;
     next();
   } catch (error) {
-    ResponseUtil.unauthorized(res, 'Invalid or expired token');
+    if (error instanceof AppError) {
+      next(error);
+    } else {
+      next(new AppError('Invalid or expired token', ERROR_CODES.UNAUTHORIZED));
+    }
   }
 };
 

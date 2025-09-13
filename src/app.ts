@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { connectDatabase } from './config/database.config';
-import { errorHandler, notFoundHandler, generalLimiter } from './middlewares';
+import { notFoundHandler, generalLimiter, errorHandler } from './middlewares';
 import { requestLogger, errorLogger } from './logging';
 import { devFormat, combinedFormat, morganOptions, morganFileOptions, morganErrorOptions, errorFormat } from './logging';
 import routes from './routes';
@@ -59,9 +59,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/v1', routes);
 
 // Error handling middleware (must be last)
-app.use(notFoundHandler);
 app.use(errorLogger); // Log errors before handling them
 app.use(errorHandler);
+app.use(notFoundHandler);
 
 // Start server
 const PORT = CONSTANTS.PORT;

@@ -6,6 +6,7 @@ import {
     authLimiter,
     passwordResetLimiter
 } from '../../middlewares';
+import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createUserValidation,
     loginValidation,
@@ -23,66 +24,66 @@ const router = Router();
 router.post('/register',
     authLimiter,
     validateRequest(createUserValidation),
-    UserController.register
+    asyncWrapper(UserController.register)
 );
 
 router.post('/login',
     authLimiter,
     validateRequest(loginValidation),
-    UserController.login
+    asyncWrapper(UserController.login)
 );
 
 router.post('/forgot-password',
     passwordResetLimiter,
     validateRequest(forgotPasswordValidation),
-    UserController.forgotPassword
+    asyncWrapper(UserController.forgotPassword)
 );
 
 router.post('/reset-password',
     passwordResetLimiter,
     validateRequest(resetPasswordValidation),
-    UserController.resetPassword
+    asyncWrapper(UserController.resetPassword)
 );
 
 // Protected routes (require authentication)
 router.use(protect); // All routes below require authentication
 
-router.get('/profile', UserController.getProfile);
+router.get('/profile', asyncWrapper(UserController.getProfile));
 router.put('/profile',
     validateRequest(updateUserValidation),
-    UserController.updateProfile
+    asyncWrapper(UserController.updateProfile)
 );
 router.post('/change-password',
     validateRequest(changePasswordValidation),
-    UserController.changePassword
+    asyncWrapper(UserController.changePassword)
 );
-router.post('/logout', UserController.logout);
+router.post('/logout', asyncWrapper(UserController.logout));
 
 // Admin routes (in a real app, you'd add admin role check)
 router.get('/',
     validateRequest(getUsersValidation),
-    UserController.getAllUsers
+    asyncWrapper(UserController.getAllUsers)
 );
 
 router.get('/:id',
     validateRequest(getUserByIdValidation),
-    UserController.getUserById
+    asyncWrapper(UserController.getUserById)
 );
 
 router.put('/:id',
     validateRequest(getUserByIdValidation),
     validateRequest(updateUserValidation),
-    UserController.updateUserById
+    asyncWrapper(UserController.updateUserById)
 );
 
 router.delete('/:id',
     validateRequest(getUserByIdValidation),
-    UserController.deleteUserById
+    asyncWrapper(UserController.deleteUserById)
 );
 
 router.post('/:id/verify-email',
     validateRequest(getUserByIdValidation),
-    UserController.verifyEmail
+    asyncWrapper(UserController.verifyEmail)
 );
 
 export default router;

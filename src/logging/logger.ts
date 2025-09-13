@@ -162,10 +162,16 @@ class Logger {
     }
 
     // Utility method to sanitize sensitive data
-    public sanitizePayload(payload: any): any {
+    public sanitizePayload(payload: any, visited = new WeakSet()): any {
         if (!payload || typeof payload !== 'object') {
             return payload;
         }
+
+        // Check for circular references
+        if (visited.has(payload)) {
+            return '[Circular Reference]';
+        }
+        visited.add(payload);
 
         const sensitiveFields = ['password', 'token', 'authorization', 'secret', 'key', 'jwt'];
         const sanitized = { ...payload };
@@ -179,7 +185,7 @@ class Logger {
         // Recursively sanitize nested objects
         for (const key in sanitized) {
             if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
-                sanitized[key] = this.sanitizePayload(sanitized[key]);
+                sanitized[key] = this.sanitizePayload(sanitized[key], visited);
             }
         }
 

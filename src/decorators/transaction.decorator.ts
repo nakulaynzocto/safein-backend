@@ -1,4 +1,5 @@
 import { TransactionUtil } from '../utils/transaction.util';
+import { AppError } from '../middlewares/errorHandler';
 
 /**
  * Decorator to automatically wrap a method with database transaction
@@ -36,10 +37,10 @@ export function TryCatch(errorMessage: string = 'Operation failed') {
             try {
                 return await method.apply(this, args);
             } catch (error) {
-                if (error instanceof Error && error.name === 'AppError') {
+                if (error instanceof AppError) {
                     throw error;
                 }
-                throw new Error(`${errorMessage}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                throw new AppError(`${errorMessage}: ${error instanceof Error ? error.message : 'Unknown error'}`, 500);
             }
         };
     };

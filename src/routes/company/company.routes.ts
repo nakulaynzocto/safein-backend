@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { CompanyController } from '../../controllers/company/company.controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
-import { asyncHandler } from '../../utils/asyncHandler.util';
+import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createCompanyValidation,
     updateCompanyValidation,
@@ -11,36 +11,35 @@ import {
 
 const router = Router();
 
+// Protected routes (require authentication)
+router.use(verifyToken);
+
 // Create company
 router.post(
     '/',
-    verifyToken,
     validateRequest(createCompanyValidation),
-    asyncHandler(CompanyController.createCompany)
+    asyncWrapper(CompanyController.createCompany)
 );
 
 // Get company by ID
 router.get(
     '/:id',
-    verifyToken,
     validateRequest(companyParamsValidation),
-    asyncHandler(CompanyController.getCompanyById)
+    asyncWrapper(CompanyController.getCompanyById)
 );
 
 // Update company
 router.put(
     '/:id',
-    verifyToken,
     validateRequest(updateCompanyValidation),
-    asyncHandler(CompanyController.updateCompany)
+    asyncWrapper(CompanyController.updateCompany)
 );
 
 // Delete company
 router.delete(
     '/:id',
-    verifyToken,
     validateRequest(companyParamsValidation),
-    asyncHandler(CompanyController.deleteCompany)
+    asyncWrapper(CompanyController.deleteCompany)
 );
 
 export default router;

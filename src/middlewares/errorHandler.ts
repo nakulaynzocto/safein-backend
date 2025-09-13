@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { ResponseUtil, ERROR_CODES } from '../utils';
+import { ERROR_CODES } from '../utils/constants';
+import { sendErrorResponse } from '../utils/errorResponse.util';
 
 export class AppError extends Error {
     public statusCode: number;
@@ -49,5 +50,10 @@ export const errorHandler = (
         console.error('Error:', error);
     }
 
-    ResponseUtil.error(res, message, statusCode, process.env.NODE_ENV === 'development' ? error.message : undefined);
+    sendErrorResponse(
+        res,
+        message,
+        statusCode,
+        process.env.NODE_ENV === 'development' ? error.message : undefined
+    );
 };

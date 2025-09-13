@@ -1,10 +1,13 @@
 import rateLimit from 'express-rate-limit';
-import { ERROR_CODES } from '../utils/constants';
+import { ERROR_CODES, CONSTANTS } from '../utils/constants';
+
+// Environment-based rate limiting configuration
+const isDevelopment = CONSTANTS.NODE_ENV === 'development';
 
 // General rate limiter
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: isDevelopment ? 1000 : 100, // More lenient in development
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.',
@@ -12,12 +15,14 @@ export const generalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for easier testing
+  skip: () => isDevelopment,
 });
 
 // Strict rate limiter for auth endpoints
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+  max: isDevelopment ? 50 : 10, // More lenient in development
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',
@@ -25,12 +30,14 @@ export const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for easier testing
+  skip: () => isDevelopment,
 });
 
 // Password reset rate limiter
 export const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // limit each IP to 3 password reset requests per hour
+  max: isDevelopment ? 10 : 3, // More lenient in development
   message: {
     success: false,
     message: 'Too many password reset attempts, please try again later.',
@@ -38,6 +45,8 @@ export const passwordResetLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for easier testing
+  skip: () => isDevelopment,
 });
 
 export default generalLimiter;
