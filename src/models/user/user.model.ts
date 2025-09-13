@@ -113,13 +113,11 @@ const userSchema = new Schema<IUser>(
 );
 
 // Indexes for performance
-userSchema.index({ email: 1 });
 userSchema.index({ phoneNumber: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });
 userSchema.index({ role: 1 });
-userSchema.index({ employeeId: 1 });
 userSchema.index({ companyId: 1, role: 1 });
 
 // Virtual for full name

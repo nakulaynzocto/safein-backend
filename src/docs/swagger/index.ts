@@ -1,17 +1,19 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import { userSchemas } from './schemas/user/user.schema';
 import { userPaths } from './paths/user/user.paths';
+import { companySchemas } from './schemas/company/company.schema';
+import { companyPaths } from './paths/company/company.paths';
 
 const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'My Project API',
+      title: 'Gatekeeper Visitor Appointment System API',
       version: '1.0.0',
-      description: 'A simple Node.js backend with user management',
+      description: 'SaaS multi-tenant visitor appointment management system with company management, user authentication, and appointment booking',
       contact: {
         name: 'API Support',
-        email: 'support@myproject.com'
+        email: 'support@gatekeeper.com'
       }
     },
     servers: [
@@ -21,7 +23,10 @@ const options: swaggerJsdoc.Options = {
       }
     ],
     components: {
-      schemas: userSchemas,
+      schemas: {
+        ...userSchemas,
+        ...companySchemas
+      },
       securitySchemes: {
         bearerAuth: {
           type: 'http',
@@ -31,11 +36,18 @@ const options: swaggerJsdoc.Options = {
         }
       }
     },
-    paths: userPaths,
+    paths: {
+      ...userPaths,
+      ...companyPaths
+    },
     tags: [
       {
         name: 'Users',
         description: 'User management endpoints'
+      },
+      {
+        name: 'Companies',
+        description: 'Company management endpoints'
       }
     ]
   },

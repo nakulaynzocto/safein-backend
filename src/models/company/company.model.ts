@@ -3,7 +3,7 @@ import mongoose, { Schema } from 'mongoose';
 export interface ICompany extends mongoose.Document {
     _id: string;
     companyName: string;
-    companyCode: string; // Unique identifier for the company
+    companyCode: string;
     email: string;
     phone: string;
     address: {
@@ -33,9 +33,9 @@ export interface ICompany extends mongoose.Document {
         allowWhatsAppNotifications: boolean;
         allowEmailNotifications: boolean;
         workingHours: {
-            start: string; // "09:00"
-            end: string;   // "18:00"
-            workingDays: number[]; // [1,2,3,4,5] for Mon-Fri
+            start: string;
+            end: string;
+            workingDays: number[];
         };
         timezone: string;
         logo?: string;
@@ -45,12 +45,6 @@ export interface ICompany extends mongoose.Document {
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
-
-    // Instance methods
-    isSubscriptionActive(): boolean;
-    canAddEmployee(): boolean;
-    getRemainingEmployees(): number;
-    getRemainingVisitorsThisMonth(): Promise<number>;
 }
 
 const companySchema = new Schema<ICompany>(
@@ -257,44 +251,8 @@ const companySchema = new Schema<ICompany>(
 );
 
 // Indexes for performance
-companySchema.index({ companyCode: 1 });
-companySchema.index({ email: 1 });
 companySchema.index({ 'subscription.status': 1 });
-// companySchema.index({ isActive: 1 });
 companySchema.index({ createdAt: -1 });
-
-// Instance methods
-companySchema.methods.isSubscriptionActive = function (): boolean {
-    const now = new Date();
-    return this.subscription.status === 'active' && this.subscription.endDate > now;
-};
-
-companySchema.methods.canAddEmployee = function (): boolean {
-    // This would need to be implemented with actual employee count
-    return this.isSubscriptionActive();
-};
-
-companySchema.methods.getRemainingEmployees = function (): number {
-    // This would need to be implemented with actual employee count
-    return this.subscription.maxEmployees;
-};
-
-companySchema.methods.getRemainingVisitorsThisMonth = async function (): Promise<number> {
-    // This would need to be implemented with actual visitor count for current month
-    return this.subscription.maxVisitorsPerMonth;
-};
-
-// Method to get public profile (without sensitive data)
-companySchema.methods.getPublicProfile = function () {
-    const companyObject = this.toObject();
-
-    // Add computed fields
-    companyObject.subscription.isActive = this.isSubscriptionActive();
-    companyObject.subscription.remainingEmployees = this.getRemainingEmployees();
-    companyObject.subscription.remainingVisitorsThisMonth = this.getRemainingVisitorsThisMonth();
-
-    return companyObject;
-};
 
 // Pre-save middleware to generate company code if not provided
 companySchema.pre('save', function (next) {

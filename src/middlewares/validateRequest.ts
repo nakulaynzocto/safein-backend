@@ -4,7 +4,8 @@ import { ResponseUtil } from '../utils';
 
 export const validateRequest = (schema: Joi.ObjectSchema) => {
     return (req: Request, res: Response, next: NextFunction): void => {
-        const { error } = schema.validate(req.body);
+        const dataToValidate = { ...req.body, ...req.params, ...req.query };
+        const { error } = schema.validate(dataToValidate);
 
         if (error) {
             const errorMessage = error.details.map(detail => detail.message).join(', ');
@@ -16,30 +17,4 @@ export const validateRequest = (schema: Joi.ObjectSchema) => {
     };
 };
 
-export const validateParams = (schema: Joi.ObjectSchema) => {
-    return (req: Request, res: Response, next: NextFunction): void => {
-        const { error } = schema.validate(req.params);
 
-        if (error) {
-            const errorMessage = error.details.map(detail => detail.message).join(', ');
-            ResponseUtil.badRequest(res, `Parameter Validation Error: ${errorMessage}`);
-            return;
-        }
-
-        next();
-    };
-};
-
-export const validateQuery = (schema: Joi.ObjectSchema) => {
-    return (req: Request, res: Response, next: NextFunction): void => {
-        const { error } = schema.validate(req.query);
-
-        if (error) {
-            const errorMessage = error.details.map(detail => detail.message).join(', ');
-            ResponseUtil.badRequest(res, `Query Validation Error: ${errorMessage}`);
-            return;
-        }
-
-        next();
-    };
-};

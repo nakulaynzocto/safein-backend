@@ -3,8 +3,6 @@ import { UserController } from '../../controllers/user/user.controller';
 import {
     protect,
     validateRequest,
-    validateParams,
-    validateQuery,
     authLimiter,
     passwordResetLimiter
 } from '../../middlewares';
@@ -62,28 +60,28 @@ router.post('/logout', UserController.logout);
 
 // Admin routes (in a real app, you'd add admin role check)
 router.get('/',
-    validateQuery(getUsersValidation),
+    validateRequest(getUsersValidation),
     UserController.getAllUsers
 );
 
 router.get('/:id',
-    validateParams(getUserByIdValidation),
+    validateRequest(getUserByIdValidation),
     UserController.getUserById
 );
 
 router.put('/:id',
-    validateParams(getUserByIdValidation),
+    validateRequest(getUserByIdValidation),
     validateRequest(updateUserValidation),
     UserController.updateUserById
 );
 
 router.delete('/:id',
-    validateParams(getUserByIdValidation),
+    validateRequest(getUserByIdValidation),
     UserController.deleteUserById
 );
 
 router.post('/:id/verify-email',
-    validateParams(getUserByIdValidation),
+    validateRequest(getUserByIdValidation),
     UserController.verifyEmail
 );
 
