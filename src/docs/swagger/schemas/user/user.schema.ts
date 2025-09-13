@@ -1,0 +1,259 @@
+export const userSchemas = {
+  User: {
+    type: 'object',
+    properties: {
+      _id: {
+        type: 'string',
+        description: 'User ID'
+      },
+      firstName: {
+        type: 'string',
+        description: 'User first name'
+      },
+      lastName: {
+        type: 'string',
+        description: 'User last name'
+      },
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'User email address'
+      },
+      phoneNumber: {
+        type: 'string',
+        description: 'User phone number'
+      },
+      dateOfBirth: {
+        type: 'string',
+        format: 'date',
+        description: 'User date of birth'
+      },
+      gender: {
+        type: 'string',
+        enum: ['male', 'female', 'other'],
+        description: 'User gender'
+      },
+      profilePicture: {
+        type: 'string',
+        description: 'User profile picture URL'
+      },
+      isEmailVerified: {
+        type: 'boolean',
+        description: 'Email verification status'
+      },
+      isPhoneVerified: {
+        type: 'boolean',
+        description: 'Phone verification status'
+      },
+      isActive: {
+        type: 'boolean',
+        description: 'Account active status'
+      },
+      lastLoginAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Last login timestamp'
+      },
+      createdAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Account creation timestamp'
+      },
+      updatedAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Last update timestamp'
+      }
+    }
+  },
+  CreateUser: {
+    type: 'object',
+    required: ['firstName', 'lastName', 'email', 'password'],
+    properties: {
+      firstName: {
+        type: 'string',
+        minLength: 2,
+        maxLength: 50,
+        description: 'User first name'
+      },
+      lastName: {
+        type: 'string',
+        minLength: 2,
+        maxLength: 50,
+        description: 'User last name'
+      },
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'User email address'
+      },
+      password: {
+        type: 'string',
+        minLength: 6,
+        description: 'User password'
+      },
+      phoneNumber: {
+        type: 'string',
+        description: 'User phone number'
+      },
+      dateOfBirth: {
+        type: 'string',
+        format: 'date',
+        description: 'User date of birth'
+      },
+      gender: {
+        type: 'string',
+        enum: ['male', 'female', 'other'],
+        description: 'User gender'
+      }
+    }
+  },
+  UpdateUser: {
+    type: 'object',
+    properties: {
+      firstName: {
+        type: 'string',
+        minLength: 2,
+        maxLength: 50,
+        description: 'User first name'
+      },
+      lastName: {
+        type: 'string',
+        minLength: 2,
+        maxLength: 50,
+        description: 'User last name'
+      },
+      phoneNumber: {
+        type: 'string',
+        description: 'User phone number'
+      },
+      dateOfBirth: {
+        type: 'string',
+        format: 'date',
+        description: 'User date of birth'
+      },
+      gender: {
+        type: 'string',
+        enum: ['male', 'female', 'other'],
+        description: 'User gender'
+      },
+      profilePicture: {
+        type: 'string',
+        format: 'uri',
+        description: 'User profile picture URL'
+      }
+    }
+  },
+  LoginUser: {
+    type: 'object',
+    required: ['email', 'password'],
+    properties: {
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'User email address'
+      },
+      password: {
+        type: 'string',
+        description: 'User password'
+      }
+    }
+  },
+  ChangePassword: {
+    type: 'object',
+    required: ['currentPassword', 'newPassword'],
+    properties: {
+      currentPassword: {
+        type: 'string',
+        description: 'Current password'
+      },
+      newPassword: {
+        type: 'string',
+        minLength: 6,
+        description: 'New password'
+      }
+    }
+  },
+  ForgotPassword: {
+    type: 'object',
+    required: ['email'],
+    properties: {
+      email: {
+        type: 'string',
+        format: 'email',
+        description: 'User email address'
+      }
+    }
+  },
+  ResetPassword: {
+    type: 'object',
+    required: ['token', 'newPassword'],
+    properties: {
+      token: {
+        type: 'string',
+        description: 'Password reset token'
+      },
+      newPassword: {
+        type: 'string',
+        minLength: 6,
+        description: 'New password'
+      }
+    }
+  },
+  LoginResponse: {
+    type: 'object',
+    properties: {
+      user: {
+        $ref: '#/components/schemas/User'
+      },
+      token: {
+        type: 'string',
+        description: 'JWT authentication token'
+      }
+    }
+  },
+  UsersList: {
+    type: 'object',
+    properties: {
+      users: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/User'
+        }
+      },
+      total: {
+        type: 'number',
+        description: 'Total number of users'
+      },
+      page: {
+        type: 'number',
+        description: 'Current page number'
+      },
+      totalPages: {
+        type: 'number',
+        description: 'Total number of pages'
+      }
+    }
+  },
+  ApiResponse: {
+    type: 'object',
+    properties: {
+      success: {
+        type: 'boolean',
+        description: 'Request success status'
+      },
+      message: {
+        type: 'string',
+        description: 'Response message'
+      },
+      data: {
+        type: 'object',
+        description: 'Response data'
+      },
+      statusCode: {
+        type: 'number',
+        description: 'HTTP status code'
+      }
+    }
+  }
+};
