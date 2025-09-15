@@ -11,6 +11,7 @@ import { notFoundHandler, generalLimiter, errorHandler } from './middlewares';
 import { requestLogger, errorLogger } from './logging';
 import { devFormat, combinedFormat, morganOptions, morganFileOptions, morganErrorOptions, errorFormat } from './logging';
 import routes from './routes';
+import employeeRoutes from './routes/employee/employee.routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 
@@ -57,6 +58,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/api/v1', routes);
+
+// Employee routes without /api/v1 prefix
+app.use('/employees', employeeRoutes);
 
 // Error handling middleware (must be last)
 app.use(errorLogger); // Log errors before handling them

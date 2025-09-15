@@ -1,5 +1,5 @@
 export const employeePaths = {
-    '/api/v1/employees': {
+    '/employees': {
         post: {
             tags: ['Employee'],
             summary: 'Create a new employee',
@@ -144,7 +144,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/stats': {
+    '/employees/stats': {
         get: {
             tags: ['Employee'],
             summary: 'Get employee statistics',
@@ -181,7 +181,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/trashed': {
+    '/employees/trashed': {
         get: {
             tags: ['Employee'],
             summary: 'Get trashed employees',
@@ -256,7 +256,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/bulk-update': {
+    '/employees/bulk-update': {
         put: {
             tags: ['Employee'],
             summary: 'Bulk update employees',
@@ -328,7 +328,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/{id}': {
+    '/employees/{id}': {
         get: {
             tags: ['Employee'],
             summary: 'Get employee by ID',
@@ -529,7 +529,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/{id}/status': {
+    '/employees/{id}/status': {
         put: {
             tags: ['Employee'],
             summary: 'Update employee status',
@@ -605,7 +605,7 @@ export const employeePaths = {
         }
     },
 
-    '/api/v1/employees/{id}/restore': {
+    '/employees/{id}/restore': {
         put: {
             tags: ['Employee'],
             summary: 'Restore employee from trash',
