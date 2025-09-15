@@ -20,6 +20,14 @@ const ERROR_MESSAGES = {
     PASSWORD_MISMATCH: "Current password is incorrect",
     EMAIL_NOT_VERIFIED: "Email not verified",
     ACCOUNT_DISABLED: "Account is disabled",
+    // Employee error messages
+    EMPLOYEE_NOT_FOUND: "Employee not found",
+    EMPLOYEE_ID_EXISTS: "Employee ID already exists",
+    EMPLOYEE_EMAIL_EXISTS: "Employee email already exists",
+    EMPLOYEE_ALREADY_DELETED: "Employee is already deleted",
+    EMPLOYEE_NOT_DELETED: "Employee is not deleted",
+    NO_UPDATE_DATA: "No update data provided",
+    NO_EMPLOYEES_FOUND: "No employees found for bulk update",
 };
 
 const ERROR_CODES = {

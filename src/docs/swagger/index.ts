@@ -3,6 +3,8 @@ import { userSchemas } from './schemas/user/user.schema';
 import { userPaths } from './paths/user/user.paths';
 import { companySchemas } from './schemas/company/company.schema';
 import { companyPaths } from './paths/company/company.paths';
+import { employeeSchemas } from './schemas/employee/employee.schemas';
+import { employeePaths } from './paths/employee/employee.paths';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -25,7 +27,8 @@ const options: swaggerJsdoc.Options = {
     components: {
       schemas: {
         ...userSchemas,
-        ...companySchemas
+        ...companySchemas,
+        ...employeeSchemas
       },
       securitySchemes: {
         bearerAuth: {
@@ -38,7 +41,8 @@ const options: swaggerJsdoc.Options = {
     },
     paths: {
       ...userPaths,
-      ...companyPaths
+      ...companyPaths,
+      ...employeePaths
     },
     tags: [
       {
@@ -48,6 +52,10 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Companies',
         description: 'Company management endpoints'
+      },
+      {
+        name: 'Employee',
+        description: 'Employee management endpoints'
       }
     ]
   },
