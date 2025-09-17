@@ -40,6 +40,7 @@ export interface IEmployeeResponse {
     role: string;
     officeLocation: string;
     status: 'Active' | 'Inactive';
+    createdBy: string; // Reference to User who created the employee
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: string; // Reference to User who deleted the employee

@@ -59,6 +59,11 @@ export const employeeSchemas = {
                 description: 'Employee status',
                 example: 'Active'
             },
+            createdBy: {
+                type: 'string',
+                description: 'User ID who created the employee',
+                example: '507f1f77bcf86cd799439011'
+            },
             isDeleted: {
                 type: 'boolean',
                 description: 'Whether employee is soft deleted',

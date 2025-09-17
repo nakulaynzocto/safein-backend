@@ -18,7 +18,7 @@ export class EmployeeService {
      * Create a new employee
      */
     @Transaction('Failed to create employee')
-    static async createEmployee(employeeData: ICreateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
+    static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
         // Check if employee ID already exists
@@ -33,8 +33,8 @@ export class EmployeeService {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        // Create new employee
-        const employee = new Employee(employeeData);
+        // Create new employee with createdBy from authenticated user
+        const employee = new Employee({ ...employeeData, createdBy });
         await employee.save({ session });
 
         return employee.toObject() as unknown as IEmployeeResponse;

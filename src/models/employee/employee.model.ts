@@ -11,6 +11,7 @@ export interface IEmployee extends Document {
     role: string;
     officeLocation: string;
     status: 'Active' | 'Inactive';
+    createdBy: mongoose.Types.ObjectId; // Reference to User who created the employee
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: mongoose.Types.ObjectId; // Reference to User who deleted the employee
@@ -85,6 +86,11 @@ const employeeSchema = new Schema<IEmployee>({
         enum: ['Active', 'Inactive'],
         default: 'Active'
     },
+    createdBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, 'Created by user ID is required']
+    },
     isDeleted: {
         type: Boolean,
         default: false
@@ -109,6 +115,7 @@ employeeSchema.index({ department: 1 });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ isDeleted: 1 });
 employeeSchema.index({ deletedAt: 1 });
+employeeSchema.index({ createdBy: 1 });
 
 // Virtual for full name
 employeeSchema.virtual('fullName').get(function () {

@@ -19,9 +19,13 @@ export class EmployeeController {
      * POST /api/employees
      */
     @TryCatch('Failed to create employee')
-    static async createEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async createEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
         const employeeData: ICreateEmployeeDTO = req.body;
-        const employee = await EmployeeService.createEmployee(employeeData);
+        const createdBy = req.user._id.toString();
+        const employee = await EmployeeService.createEmployee(employeeData, createdBy);
         ResponseUtil.success(res, 'Employee created successfully', employee, ERROR_CODES.CREATED);
     }
 
