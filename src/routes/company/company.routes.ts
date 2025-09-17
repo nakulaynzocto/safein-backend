@@ -21,6 +21,12 @@ router.post(
     asyncWrapper(CompanyController.createCompany)
 );
 
+// Get all companies
+router.get(
+    '/',
+    asyncWrapper(CompanyController.getAllCompanies)
+);
+
 // Get company by ID
 router.get(
     '/:id',
@@ -35,11 +41,18 @@ router.put(
     asyncWrapper(CompanyController.updateCompany)
 );
 
-// Delete company
+// Soft delete company
 router.delete(
     '/:id',
     validateRequest(companyParamsValidation),
     asyncWrapper(CompanyController.deleteCompany)
+);
+
+// Restore company from trash
+router.put(
+    '/:id/restore',
+    validateRequest(companyParamsValidation),
+    asyncWrapper(CompanyController.restoreCompany)
 );
 
 export default router;

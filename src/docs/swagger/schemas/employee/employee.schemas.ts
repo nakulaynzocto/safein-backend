@@ -70,6 +70,11 @@ export const employeeSchemas = {
                 description: 'Deletion timestamp',
                 example: null
             },
+            deletedBy: {
+                type: 'string',
+                description: 'User ID who deleted the employee',
+                example: null
+            },
             createdAt: {
                 type: 'string',
                 format: 'date-time',

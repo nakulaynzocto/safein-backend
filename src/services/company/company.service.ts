@@ -13,7 +13,7 @@ export class CompanyService {
      * Create a new company
      */
     @Transaction('Failed to create company')
-    static async createCompany(companyData: ICreateCompanyDTO, options: { session?: any } = {}): Promise<ICompanyResponse> {
+    static async createCompany(companyData: ICreateCompanyDTO, userId: string, options: { session?: any } = {}): Promise<ICompanyResponse> {
         const { session } = options;
 
         // Check if company code already exists
@@ -30,8 +30,8 @@ export class CompanyService {
             throw new AppError(ERROR_MESSAGES.COMPANY_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        // Create new company
-        const company = new Company(companyData);
+        // Create new company with userId from authenticated user
+        const company = new Company({ ...companyData, userId });
         await company.save({ session });
 
         return company.toObject() as unknown as ICompanyResponse;
@@ -41,7 +41,7 @@ export class CompanyService {
      * Get company by ID
      */
     static async getCompanyById(companyId: string): Promise<ICompanyResponse> {
-        const company = await Company.findById(companyId);
+        const company = await Company.findOne({ _id: companyId, isDeleted: false });
         if (!company) {
             throw new AppError(ERROR_MESSAGES.COMPANY_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -55,8 +55,8 @@ export class CompanyService {
     static async updateCompany(companyId: string, updateData: IUpdateCompanyDTO, options: { session?: any } = {}): Promise<ICompanyResponse> {
         const { session } = options;
 
-        const company = await Company.findByIdAndUpdate(
-            companyId,
+        const company = await Company.findOneAndUpdate(
+            { _id: companyId, isDeleted: false },
             updateData,
             { new: true, runValidators: true, session }
         );
@@ -69,15 +69,64 @@ export class CompanyService {
     }
 
     /**
-     * Delete company
+     * Soft delete company
      */
     @Transaction('Failed to delete company')
-    static async deleteCompany(companyId: string, options: { session?: any } = {}): Promise<void> {
+    static async deleteCompany(companyId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
         const { session } = options;
 
-        const company = await Company.findByIdAndDelete(companyId).session(session);
+        const company = await Company.findOne({ _id: companyId, isDeleted: false }).session(session);
         if (!company) {
             throw new AppError(ERROR_MESSAGES.COMPANY_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
+
+        await (company as any).softDelete(deletedBy);
+    }
+
+    /**
+     * Get all companies with pagination and filtering
+     */
+    static async getAllCompanies(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
+        companies: ICompanyResponse[];
+        total: number;
+        page: number;
+        totalPages: number;
+    }> {
+        const skip = (page - 1) * limit;
+        const filter = includeDeleted ? {} : { isDeleted: false };
+
+        const [companies, total] = await Promise.all([
+            Company.find(filter)
+                .populate('userId', 'firstName lastName email')
+                .populate('deletedBy', 'firstName lastName email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Company.countDocuments(filter)
+        ]);
+
+        return {
+            companies: companies as unknown as ICompanyResponse[],
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+
+    /**
+     * Restore company from trash
+     */
+    @Transaction('Failed to restore company')
+    static async restoreCompany(companyId: string, options: { session?: any } = {}): Promise<ICompanyResponse> {
+        const { session } = options;
+
+        const company = await Company.findOne({ _id: companyId, isDeleted: true }).session(session);
+        if (!company) {
+            throw new AppError(ERROR_MESSAGES.COMPANY_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        await (company as any).restore();
+        return company.toObject() as unknown as ICompanyResponse;
     }
 }

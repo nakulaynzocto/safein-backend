@@ -102,6 +102,19 @@ const userSchema = new Schema<IUser>(
             type: Boolean,
             default: true
         },
+        isDeleted: {
+            type: Boolean,
+            default: false
+        },
+        deletedAt: {
+            type: Date,
+            default: null
+        },
+        deletedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
         lastLoginAt: {
             type: Date
         }
@@ -119,6 +132,8 @@ userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ companyId: 1, role: 1 });
+userSchema.index({ isDeleted: 1 });
+userSchema.index({ deletedAt: 1 });
 
 // Virtual for full name
 userSchema.virtual('fullName').get(function () {
@@ -156,6 +171,32 @@ userSchema.methods.getPublicProfile = function () {
     const userObject = this.toObject();
     delete userObject.password;
     return userObject;
+};
+
+// Static method to find active users
+userSchema.statics.findActive = function () {
+    return this.find({ isDeleted: false, isActive: true });
+};
+
+// Static method to find deleted users
+userSchema.statics.findDeleted = function () {
+    return this.find({ isDeleted: true });
+};
+
+// Instance method to soft delete
+userSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
+    this.isDeleted = true;
+    this.deletedAt = new Date();
+    this.deletedBy = deletedBy;
+    return this.save();
+};
+
+// Instance method to restore
+userSchema.methods.restore = function () {
+    this.isDeleted = false;
+    this.deletedAt = null;
+    this.deletedBy = null;
+    return this.save();
 };
 
 export const User = mongoose.model<IUser>('User', userSchema);

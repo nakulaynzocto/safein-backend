@@ -2,6 +2,7 @@ import { Document } from 'mongoose';
 
 export interface ICompany extends Document {
     _id: string;
+    userId: string; // Reference to User who created the company
     companyName: string;
     companyCode: string;
     email: string;
@@ -43,6 +44,9 @@ export interface ICompany extends Document {
         secondaryColor?: string;
     };
     isActive: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    deletedBy?: string; // Reference to User who deleted the company
     createdAt: Date;
     updatedAt: Date;
 
@@ -51,6 +55,8 @@ export interface ICompany extends Document {
     canAddEmployee(): boolean;
     getRemainingEmployees(): number;
     getRemainingVisitorsThisMonth(): Promise<number>;
+    softDelete(deletedBy: string): Promise<ICompany>;
+    restore(): Promise<ICompany>;
 }
 
 export interface ICreateCompanyDTO {
@@ -182,6 +188,9 @@ export interface ICompanyResponse {
         secondaryColor?: string;
     };
     isActive: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    deletedBy?: string;
     createdAt: Date;
     updatedAt: Date;
 }

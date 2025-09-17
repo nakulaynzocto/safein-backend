@@ -42,6 +42,7 @@ export interface IEmployeeResponse {
     status: 'Active' | 'Inactive';
     isDeleted: boolean;
     deletedAt?: Date;
+    deletedBy?: string; // Reference to User who deleted the employee
     createdAt: Date;
     updatedAt: Date;
 }

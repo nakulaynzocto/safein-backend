@@ -82,10 +82,11 @@ export class UserController {
    */
   @TryCatch('Failed to get users')
   static async getAllUsers(req: Request, res: Response, _next: NextFunction): Promise<void> {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, includeDeleted = false } = req.query;
     const result = await UserService.getAllUsers(
       parseInt(page as string),
-      parseInt(limit as string)
+      parseInt(limit as string),
+      includeDeleted === 'true'
     );
     ResponseUtil.success(res, 'Users retrieved successfully', result);
   }
@@ -102,13 +103,27 @@ export class UserController {
   }
 
   /**
-   * Delete user by ID (admin)
+   * Soft delete user by ID (admin)
    */
   @TryCatch('Failed to delete user')
-  static async deleteUserById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+  static async deleteUserById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    if (!req.user) {
+      throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+    }
     const { id } = req.params;
-    await UserService.deleteUser(id);
+    const deletedBy = req.user._id.toString();
+    await UserService.deleteUser(id, deletedBy);
     ResponseUtil.success(res, 'User deleted successfully');
+  }
+
+  /**
+   * Restore user from trash (admin)
+   */
+  @TryCatch('Failed to restore user')
+  static async restoreUserById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { id } = req.params;
+    const user = await UserService.restoreUser(id);
+    ResponseUtil.success(res, 'User restored successfully', user);
   }
 
   /**

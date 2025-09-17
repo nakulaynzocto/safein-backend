@@ -4,6 +4,8 @@ import { ResponseUtil } from '../../utils';
 import { ICreateCompanyDTO, IUpdateCompanyDTO } from '../../types/company/company.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
+import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
+import { AppError } from '../../middlewares/errorHandler';
 
 export class CompanyController {
     /**
@@ -11,9 +13,13 @@ export class CompanyController {
      * POST /api/companies
      */
     @TryCatch('Failed to create company')
-    static async createCompany(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async createCompany(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
         const companyData: ICreateCompanyDTO = req.body;
-        const company = await CompanyService.createCompany(companyData);
+        const userId = req.user._id.toString();
+        const company = await CompanyService.createCompany(companyData, userId);
         ResponseUtil.success(res, 'Company created successfully', company, ERROR_CODES.CREATED);
     }
 
@@ -41,13 +47,43 @@ export class CompanyController {
     }
 
     /**
-     * Delete company
+     * Soft delete company
      * DELETE /api/companies/:id
      */
     @TryCatch('Failed to delete company')
-    static async deleteCompany(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async deleteCompany(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
         const { id } = req.params;
-        await CompanyService.deleteCompany(id);
+        const deletedBy = req.user._id.toString();
+        await CompanyService.deleteCompany(id, deletedBy);
         ResponseUtil.success(res, 'Company deleted successfully');
+    }
+
+    /**
+     * Get all companies with pagination
+     * GET /api/companies
+     */
+    @TryCatch('Failed to get companies')
+    static async getAllCompanies(req: Request, res: Response, _next: NextFunction): Promise<void> {
+        const { page = 1, limit = 10, includeDeleted = false } = req.query;
+        const result = await CompanyService.getAllCompanies(
+            parseInt(page as string),
+            parseInt(limit as string),
+            includeDeleted === 'true'
+        );
+        ResponseUtil.success(res, 'Companies retrieved successfully', result);
+    }
+
+    /**
+     * Restore company from trash
+     * PUT /api/companies/:id/restore
+     */
+    @TryCatch('Failed to restore company')
+    static async restoreCompany(req: Request, res: Response, _next: NextFunction): Promise<void> {
+        const { id } = req.params;
+        const company = await CompanyService.restoreCompany(id);
+        ResponseUtil.success(res, 'Company restored successfully', company);
     }
 }

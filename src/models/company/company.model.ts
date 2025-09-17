@@ -2,6 +2,7 @@ import mongoose, { Schema } from 'mongoose';
 
 export interface ICompany extends mongoose.Document {
     _id: string;
+    userId: mongoose.Types.ObjectId; // Reference to User who created the company
     companyName: string;
     companyCode: string;
     email: string;
@@ -43,12 +44,20 @@ export interface ICompany extends mongoose.Document {
         secondaryColor?: string;
     };
     isActive: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    deletedBy?: mongoose.Types.ObjectId; // Reference to User who deleted the company
     createdAt: Date;
     updatedAt: Date;
 }
 
 const companySchema = new Schema<ICompany>(
     {
+        userId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: [true, 'User ID is required']
+        },
         companyName: {
             type: String,
             required: [true, 'Company name is required'],
@@ -242,6 +251,19 @@ const companySchema = new Schema<ICompany>(
         isActive: {
             type: Boolean,
             default: true
+        },
+        isDeleted: {
+            type: Boolean,
+            default: false
+        },
+        deletedAt: {
+            type: Date,
+            default: null
+        },
+        deletedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
         }
     },
     {
@@ -253,6 +275,9 @@ const companySchema = new Schema<ICompany>(
 // Indexes for performance
 companySchema.index({ 'subscription.status': 1 });
 companySchema.index({ createdAt: -1 });
+companySchema.index({ userId: 1 });
+companySchema.index({ isDeleted: 1 });
+companySchema.index({ deletedAt: 1 });
 
 // Pre-save middleware to generate company code if not provided
 companySchema.pre('save', function (next) {
@@ -265,5 +290,31 @@ companySchema.pre('save', function (next) {
     }
     next();
 });
+
+// Static method to find active companies
+companySchema.statics.findActive = function () {
+    return this.find({ isDeleted: false, isActive: true });
+};
+
+// Static method to find deleted companies
+companySchema.statics.findDeleted = function () {
+    return this.find({ isDeleted: true });
+};
+
+// Instance method to soft delete
+companySchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
+    this.isDeleted = true;
+    this.deletedAt = new Date();
+    this.deletedBy = deletedBy;
+    return this.save();
+};
+
+// Instance method to restore
+companySchema.methods.restore = function () {
+    this.isDeleted = false;
+    this.deletedAt = null;
+    this.deletedBy = null;
+    return this.save();
+};
 
 export const Company = mongoose.model<ICompany>('Company', companySchema);

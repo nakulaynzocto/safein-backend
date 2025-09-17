@@ -81,6 +81,11 @@ router.delete('/:id',
     asyncWrapper(UserController.deleteUserById)
 );
 
+router.put('/:id/restore',
+    validateRequest(getUserByIdValidation),
+    asyncWrapper(UserController.restoreUserById)
+);
+
 router.post('/:id/verify-email',
     validateRequest(getUserByIdValidation),
     asyncWrapper(UserController.verifyEmail)

@@ -10,6 +10,8 @@ import {
 } from '../../types/employee/employee.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
+import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
+import { AppError } from '../../middlewares/errorHandler';
 
 export class EmployeeController {
     /**
@@ -62,9 +64,13 @@ export class EmployeeController {
      * DELETE /api/employees/:id
      */
     @TryCatch('Failed to delete employee')
-    static async deleteEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async deleteEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
         const { id } = req.params;
-        await EmployeeService.deleteEmployee(id);
+        const deletedBy = req.user._id.toString();
+        await EmployeeService.deleteEmployee(id, deletedBy);
         ResponseUtil.success(res, 'Employee deleted successfully');
     }
 

@@ -44,7 +44,7 @@ export class EmployeeService {
      * Get employee by ID
      */
     static async getEmployeeById(employeeId: string): Promise<IEmployeeResponse> {
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findOne({ _id: employeeId, isDeleted: false });
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -128,15 +128,16 @@ export class EmployeeService {
         if (updateData.email) {
             const existingEmail = await Employee.findOne({
                 email: updateData.email,
-                _id: { $ne: employeeId }
+                _id: { $ne: employeeId },
+                isDeleted: false
             }).session(session);
             if (existingEmail) {
                 throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
             }
         }
 
-        const employee = await Employee.findByIdAndUpdate(
-            employeeId,
+        const employee = await Employee.findOneAndUpdate(
+            { _id: employeeId, isDeleted: false },
             updateData,
             { new: true, runValidators: true, session }
         );
@@ -152,21 +153,15 @@ export class EmployeeService {
      * Soft delete employee
      */
     @Transaction('Failed to delete employee')
-    static async deleteEmployee(employeeId: string, options: { session?: any } = {}): Promise<void> {
+    static async deleteEmployee(employeeId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
         const { session } = options;
 
-        const employee = await Employee.findById(employeeId).session(session);
+        const employee = await Employee.findOne({ _id: employeeId, isDeleted: false }).session(session);
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        if (employee.isDeleted) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_ALREADY_DELETED, ERROR_CODES.BAD_REQUEST);
-        }
-
-        employee.isDeleted = true;
-        employee.deletedAt = new Date();
-        await employee.save({ session });
+        await (employee as any).softDelete(deletedBy);
     }
 
     /**
@@ -259,8 +254,8 @@ export class EmployeeService {
     static async updateEmployeeStatus(employeeId: string, statusData: IUpdateEmployeeStatusDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        const employee = await Employee.findByIdAndUpdate(
-            employeeId,
+        const employee = await Employee.findOneAndUpdate(
+            { _id: employeeId, isDeleted: false },
             { status: statusData.status },
             { new: true, runValidators: true, session }
         );

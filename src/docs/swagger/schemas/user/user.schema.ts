@@ -49,6 +49,19 @@ export const userSchemas = {
         type: 'boolean',
         description: 'Account active status'
       },
+      isDeleted: {
+        type: 'boolean',
+        description: 'Whether the user is soft deleted'
+      },
+      deletedAt: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Date when the user was deleted'
+      },
+      deletedBy: {
+        type: 'string',
+        description: 'User ID who deleted this user'
+      },
       lastLoginAt: {
         type: 'string',
         format: 'date-time',

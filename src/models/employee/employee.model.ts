@@ -13,6 +13,7 @@ export interface IEmployee extends Document {
     status: 'Active' | 'Inactive';
     isDeleted: boolean;
     deletedAt?: Date;
+    deletedBy?: mongoose.Types.ObjectId; // Reference to User who deleted the employee
     createdAt: Date;
     updatedAt: Date;
 }
@@ -91,6 +92,11 @@ const employeeSchema = new Schema<IEmployee>({
     deletedAt: {
         type: Date,
         default: null
+    },
+    deletedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     }
 }, {
     timestamps: true,
@@ -102,6 +108,7 @@ const employeeSchema = new Schema<IEmployee>({
 employeeSchema.index({ department: 1 });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ isDeleted: 1 });
+employeeSchema.index({ deletedAt: 1 });
 
 // Virtual for full name
 employeeSchema.virtual('fullName').get(function () {
@@ -127,9 +134,10 @@ employeeSchema.statics.findDeleted = function () {
 };
 
 // Instance method to soft delete
-employeeSchema.methods.softDelete = function () {
+employeeSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
+    this.deletedBy = deletedBy;
     return this.save();
 };
 
@@ -137,6 +145,7 @@ employeeSchema.methods.softDelete = function () {
 employeeSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;
+    this.deletedBy = null;
     return this.save();
 };
 

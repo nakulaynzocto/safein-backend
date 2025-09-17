@@ -38,7 +38,7 @@ export class UserService {
    */
   static async loginUser(loginData: ILoginDTO): Promise<{ user: IUserResponse; token: string }> {
     // Find user and include password for comparison
-    const user = await User.findOne({ email: loginData.email }).select('+password');
+    const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password');
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
@@ -75,7 +75,7 @@ export class UserService {
    * Get user by ID
    */
   static async getUserById(userId: string): Promise<IUserResponse> {
-    const user = await User.findById(userId);
+    const user = await User.findOne({ _id: userId, isDeleted: false });
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
@@ -89,8 +89,8 @@ export class UserService {
   static async updateUser(userId: string, updateData: IUpdateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
+    const user = await User.findOneAndUpdate(
+      { _id: userId, isDeleted: false },
       updateData,
       { new: true, runValidators: true, session }
     );
@@ -109,7 +109,7 @@ export class UserService {
   static async changePassword(userId: string, passwordData: IChangePasswordDTO, options: { session?: any } = {}): Promise<void> {
     const { session } = options;
 
-    const user = await User.findById(userId).select('+password').session(session);
+    const user = await User.findOne({ _id: userId, isDeleted: false }).select('+password').session(session);
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
@@ -129,21 +129,23 @@ export class UserService {
   /**
    * Get all users (admin function)
    */
-  static async getAllUsers(page: number = 1, limit: number = 10): Promise<{
+  static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
     users: IUserResponse[];
     total: number;
     page: number;
     totalPages: number;
   }> {
     const skip = (page - 1) * limit;
+    const filter = includeDeleted ? {} : { isDeleted: false };
 
     const [users, total] = await Promise.all([
-      User.find({})
+      User.find(filter)
         .select('-password')
+        .populate('deletedBy', 'firstName lastName email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      User.countDocuments({})
+      User.countDocuments(filter)
     ]);
 
     const usersWithoutPassword = users.map(user => user.getPublicProfile());
@@ -157,16 +159,34 @@ export class UserService {
   }
 
   /**
-   * Delete user (admin function)
+   * Soft delete user (admin function)
    */
   @Transaction('Failed to delete user')
-  static async deleteUser(userId: string, options: { session?: any } = {}): Promise<void> {
+  static async deleteUser(userId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
     const { session } = options;
 
-    const user = await User.findByIdAndDelete(userId).session(session);
+    const user = await User.findOne({ _id: userId, isDeleted: false }).session(session);
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
+
+    await (user as any).softDelete(deletedBy);
+  }
+
+  /**
+   * Restore user from trash (admin function)
+   */
+  @Transaction('Failed to restore user')
+  static async restoreUser(userId: string, options: { session?: any } = {}): Promise<IUserResponse> {
+    const { session } = options;
+
+    const user = await User.findOne({ _id: userId, isDeleted: true }).session(session);
+    if (!user) {
+      throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    await (user as any).restore();
+    return user.getPublicProfile();
   }
 
   /**
@@ -176,8 +196,8 @@ export class UserService {
   static async verifyEmail(userId: string, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
+    const user = await User.findOneAndUpdate(
+      { _id: userId, isDeleted: false },
       { isEmailVerified: true },
       { new: true, session }
     );

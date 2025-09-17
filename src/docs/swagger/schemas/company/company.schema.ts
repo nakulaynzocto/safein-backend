@@ -6,6 +6,10 @@ export const companySchemas = {
                 type: 'string',
                 description: 'Company ID'
             },
+            userId: {
+                type: 'string',
+                description: 'User ID who created the company'
+            },
             companyName: {
                 type: 'string',
                 description: 'Company name'
@@ -180,6 +184,19 @@ export const companySchemas = {
             isActive: {
                 type: 'boolean',
                 description: 'Company active status'
+            },
+            isDeleted: {
+                type: 'boolean',
+                description: 'Whether the company is soft deleted'
+            },
+            deletedAt: {
+                type: 'string',
+                format: 'date-time',
+                description: 'Date when the company was deleted'
+            },
+            deletedBy: {
+                type: 'string',
+                description: 'User ID who deleted the company'
             },
             createdAt: {
                 type: 'string',

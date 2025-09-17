@@ -18,6 +18,9 @@ export interface IUser extends Document {
     isEmailVerified: boolean;
     isPhoneVerified: boolean;
     isActive: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    deletedBy?: string; // Reference to User who deleted this user
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -26,6 +29,8 @@ export interface IUser extends Document {
     comparePassword(candidatePassword: string): Promise<boolean>;
     updateLastLogin(): Promise<IUser>;
     getPublicProfile(): IUserResponse;
+    softDelete(deletedBy: string): Promise<IUser>;
+    restore(): Promise<IUser>;
 }
 
 export interface ICreateUserDTO {
@@ -93,6 +98,9 @@ export interface IUserResponse {
     isEmailVerified: boolean;
     isPhoneVerified: boolean;
     isActive: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date;
+    deletedBy?: string;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
