@@ -155,6 +155,26 @@ export const appointmentPaths = {
                         enum: ['asc', 'desc'],
                         default: 'desc'
                     }
+                },
+                {
+                    name: 'searchType',
+                    in: 'query',
+                    description: 'Type of search to perform',
+                    schema: {
+                        type: 'string',
+                        enum: ['visitor_name', 'visitor_phone', 'visitor_email', 'appointment_id', 'employee_name'],
+                        default: 'visitor_name'
+                    }
+                },
+                {
+                    name: 'view',
+                    in: 'query',
+                    description: 'Response view format',
+                    schema: {
+                        type: 'string',
+                        enum: ['list', 'calendar'],
+                        default: 'list'
+                    }
                 }
             ],
             responses: {
@@ -576,99 +596,6 @@ export const appointmentPaths = {
                                     success: { type: 'boolean', example: true },
                                     message: { type: 'string', example: 'Appointment statistics retrieved successfully' },
                                     data: { $ref: '#/components/schemas/AppointmentStats' },
-                                    statusCode: { type: 'number', example: 200 }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    },
-    '/appointments/calendar': {
-        get: {
-            tags: ['Appointments'],
-            summary: 'Get appointments calendar view',
-            description: 'Get appointments organized by date for calendar view',
-            security: [{ bearerAuth: [] }],
-            parameters: [
-                {
-                    name: 'startDate',
-                    in: 'query',
-                    required: true,
-                    description: 'Start date (YYYY-MM-DD)',
-                    schema: { type: 'string', format: 'date' }
-                },
-                {
-                    name: 'endDate',
-                    in: 'query',
-                    required: true,
-                    description: 'End date (YYYY-MM-DD)',
-                    schema: { type: 'string', format: 'date' }
-                }
-            ],
-            responses: {
-                200: {
-                    description: 'Appointments calendar retrieved successfully',
-                    content: {
-                        'application/json': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    success: { type: 'boolean', example: true },
-                                    message: { type: 'string', example: 'Appointments calendar retrieved successfully' },
-                                    data: { $ref: '#/components/schemas/AppointmentCalendar' },
-                                    statusCode: { type: 'number', example: 200 }
-                                }
-                            }
-                        }
-                    }
-                },
-                400: {
-                    description: 'Bad request - missing start date or end date',
-                    content: {
-                        'application/json': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    success: { type: 'boolean', example: false },
-                                    message: { type: 'string', example: 'Start date and end date are required' },
-                                    statusCode: { type: 'number', example: 400 }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    },
-    '/appointments/search': {
-        post: {
-            tags: ['Appointments'],
-            summary: 'Search appointments',
-            description: 'Search appointments by various criteria',
-            security: [{ bearerAuth: [] }],
-            requestBody: {
-                required: true,
-                content: {
-                    'application/json': {
-                        schema: {
-                            $ref: '#/components/schemas/AppointmentSearchRequest'
-                        }
-                    }
-                }
-            },
-            responses: {
-                200: {
-                    description: 'Appointments search completed successfully',
-                    content: {
-                        'application/json': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    success: { type: 'boolean', example: true },
-                                    message: { type: 'string', example: 'Appointments search completed successfully' },
-                                    data: { $ref: '#/components/schemas/AppointmentListResponse' },
                                     statusCode: { type: 'number', example: 200 }
                                 }
                             }

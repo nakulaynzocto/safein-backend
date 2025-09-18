@@ -12,8 +12,6 @@ import {
     checkOutValidation,
     getAppointmentsValidation,
     bulkUpdateAppointmentsValidation,
-    appointmentSearchValidation,
-    calendarValidation,
     employeeIdParamsValidation,
     dateRangeValidation
 } from '../../validations/appointment/appointment.validation';
@@ -43,19 +41,7 @@ router.get(
     asyncWrapper(AppointmentController.getAppointmentStats)
 );
 
-// Get appointments calendar view
-router.get(
-    '/calendar',
-    validateRequest(calendarValidation),
-    asyncWrapper(AppointmentController.getAppointmentsCalendar)
-);
 
-// Search appointments
-router.post(
-    '/search',
-    validateRequest(appointmentSearchValidation),
-    asyncWrapper(AppointmentController.searchAppointments)
-);
 
 // Bulk update appointments
 router.put(

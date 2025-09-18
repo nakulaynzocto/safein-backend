@@ -7,8 +7,7 @@ import {
     IGetAppointmentsQuery,
     ICheckInRequest,
     ICheckOutRequest,
-    IBulkUpdateAppointmentsDTO,
-    IAppointmentSearchRequest
+    IBulkUpdateAppointmentsDTO
 } from '../../types/appointment/appointment.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
@@ -123,35 +122,7 @@ export class AppointmentController {
         ResponseUtil.success(res, 'Appointment statistics retrieved successfully', stats);
     }
 
-    /**
-     * Get appointments calendar view
-     * GET /api/appointments/calendar
-     */
-    @TryCatch('Failed to get appointments calendar')
-    static async getAppointmentsCalendar(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const { startDate, endDate } = req.query;
 
-        if (!startDate || !endDate) {
-            throw new AppError('Start date and end date are required', ERROR_CODES.BAD_REQUEST);
-        }
-
-        const calendar = await AppointmentService.getAppointmentsCalendar(
-            startDate as string,
-            endDate as string
-        );
-        ResponseUtil.success(res, 'Appointments calendar retrieved successfully', calendar);
-    }
-
-    /**
-     * Search appointments
-     * POST /api/appointments/search
-     */
-    @TryCatch('Failed to search appointments')
-    static async searchAppointments(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const request: IAppointmentSearchRequest = req.body;
-        const result = await AppointmentService.searchAppointments(request);
-        ResponseUtil.success(res, 'Appointments search completed successfully', result);
-    }
 
     /**
      * Bulk update appointments

@@ -112,6 +112,8 @@ export interface IGetAppointmentsQuery {
     endDate?: string; // YYYY-MM-DD format
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    searchType?: 'visitor_name' | 'visitor_phone' | 'visitor_email' | 'appointment_id' | 'employee_name';
+    view?: 'list' | 'calendar';
 }
 
 export interface IAppointmentListResponse {
