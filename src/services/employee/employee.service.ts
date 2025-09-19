@@ -121,29 +121,40 @@ export class EmployeeService {
      * Update employee
      */
     @Transaction('Failed to update employee')
-    static async updateEmployee(employeeId: string, updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
+    static async updateEmployee( employeeId: string,updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        // Check if email is being updated and if it already exists
-        if (updateData.email) {
+        // ✅ Ensure session is not part of updateData
+        const safeUpdateData = { ...updateData };
+        delete (safeUpdateData as any).session;
+
+        // 🔍 Check if email already exists (excluding current employee)
+        if (safeUpdateData.email) {
             const existingEmail = await Employee.findOne({
-                email: updateData.email,
-                _id: { $ne: employeeId },
-                isDeleted: false
+                email: safeUpdateData.email,
+                _id: { $ne: employeeId }
             }).session(session);
+
             if (existingEmail) {
-                throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
+                throw new AppError(
+                    ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS,
+                    ERROR_CODES.CONFLICT
+                );
             }
         }
 
-        const employee = await Employee.findOneAndUpdate(
-            { _id: employeeId, isDeleted: false },
-            updateData,
+        // 🔄 Update employee
+        const employee = await Employee.findByIdAndUpdate(
+            employeeId,
+            safeUpdateData,
             { new: true, runValidators: true, session }
         );
 
         if (!employee) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+            throw new AppError(
+                ERROR_MESSAGES.EMPLOYEE_NOT_FOUND,
+                ERROR_CODES.NOT_FOUND
+            );
         }
 
         return employee.toObject() as unknown as IEmployeeResponse;
