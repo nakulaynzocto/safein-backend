@@ -28,6 +28,12 @@ const ERROR_MESSAGES = {
     EMPLOYEE_NOT_DELETED: "Employee is not deleted",
     NO_UPDATE_DATA: "No update data provided",
     NO_EMPLOYEES_FOUND: "No employees found for bulk update",
+    // Visitor error messages
+    VISITOR_NOT_FOUND: "Visitor not found",
+    VISITOR_EMAIL_EXISTS: "Visitor email already exists",
+    VISITOR_ALREADY_DELETED: "Visitor is already deleted",
+    VISITOR_NOT_DELETED: "Visitor is not deleted",
+    NO_VISITORS_FOUND: "No visitors found for bulk update",
 };
 
 const ERROR_CODES = {

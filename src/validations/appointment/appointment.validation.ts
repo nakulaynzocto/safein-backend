@@ -22,87 +22,6 @@ const idProofValidation = Joi.object({
         })
 });
 
-const addressValidation = Joi.object({
-    street: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'any.required': 'Street address is required'
-        }),
-    city: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'any.required': 'City is required'
-        }),
-    state: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'any.required': 'State is required'
-        }),
-    country: Joi.string()
-        .default('India')
-        .trim()
-        .messages({
-            'string.base': 'Country must be a string'
-        }),
-    zipCode: Joi.string()
-        .required()
-        .trim()
-        .messages({
-            'any.required': 'ZIP code is required'
-        })
-});
-
-const visitorDetailsValidation = Joi.object({
-    name: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Visitor name must be at least 2 characters',
-            'string.max': 'Visitor name cannot exceed 100 characters',
-            'any.required': 'Visitor name is required'
-        }),
-    email: Joi.string()
-        .email()
-        .optional()
-        .messages({
-            'string.email': 'Please provide a valid email address'
-        }),
-    phone: Joi.string()
-        .required()
-        .pattern(/^[\+]?[1-9][\d]{0,15}$/)
-        .messages({
-            'string.pattern.base': 'Please provide a valid phone number',
-            'any.required': 'Visitor phone is required'
-        }),
-    company: Joi.string()
-        .optional()
-        .trim()
-        .max(100)
-        .messages({
-            'string.max': 'Company name cannot exceed 100 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .max(100)
-        .messages({
-            'string.max': 'Designation cannot exceed 100 characters'
-        }),
-    address: addressValidation.optional(),
-    idProof: idProofValidation.required(),
-    photo: Joi.string()
-        .uri()
-        .optional()
-        .messages({
-            'string.uri': 'Photo must be a valid URL'
-        })
-});
-
 const accompaniedByValidation = Joi.object({
     name: Joi.string()
         .required()
@@ -215,8 +134,14 @@ export const createAppointmentValidation = Joi.object({
             'string.pattern.base': 'Invalid employee ID format',
             'any.required': 'Employee ID is required'
         }),
-    visitorDetails: visitorDetailsValidation.required(),
-    accompaniedBy: accompaniedByValidation.optional(),
+    visitorId: Joi.string()
+        .required()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .messages({
+            'string.pattern.base': 'Invalid visitor ID format',
+            'any.required': 'Visitor ID is required'
+        }),
+    accompaniedBy: accompaniedByValidation.optional().allow(null),
     appointmentDetails: appointmentDetailsValidation.required(),
     securityDetails: securityDetailsValidation.optional(),
     notifications: notificationsValidation.optional()
@@ -229,8 +154,13 @@ export const updateAppointmentValidation = Joi.object({
         .messages({
             'string.pattern.base': 'Invalid employee ID format'
         }),
-    visitorDetails: visitorDetailsValidation.optional(),
-    accompaniedBy: accompaniedByValidation.optional(),
+    visitorId: Joi.string()
+        .optional()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .messages({
+            'string.pattern.base': 'Invalid visitor ID format'
+        }),
+    accompaniedBy: accompaniedByValidation.optional().allow(null),
     appointmentDetails: appointmentDetailsValidation.optional(),
     status: Joi.string()
         .valid('scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show')
@@ -336,7 +266,7 @@ export const getAppointmentsValidation = Joi.object({
     endDate: Joi.date()
         .optional(),
     sortBy: Joi.string()
-        .valid('createdAt', 'appointmentDetails.scheduledDate', 'visitorDetails.name', 'status')
+        .valid('createdAt', 'appointmentDetails.scheduledDate', 'status')
         .default('createdAt'),
     sortOrder: Joi.string()
         .valid('asc', 'desc')

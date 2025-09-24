@@ -257,5 +257,50 @@ export const companyPaths = {
                 }
             }
         }
+    },
+    '/companies/exists': {
+        get: {
+            tags: ['Companies'],
+            summary: 'Check if company exists for authenticated user',
+            description: 'Check if the authenticated user has a company associated with their account',
+            security: [{ bearerAuth: [] }],
+            responses: {
+                200: {
+                    description: 'Company existence checked successfully',
+                    content: {
+                        'application/json': {
+                            schema: {
+                                allOf: [
+                                    { $ref: '#/components/schemas/ApiResponse' },
+                                    {
+                                        properties: {
+                                            data: {
+                                                type: 'object',
+                                                properties: {
+                                                    exists: {
+                                                        type: 'boolean',
+                                                        description: 'Whether the user has a company'
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                401: {
+                    description: 'Unauthorized',
+                    content: {
+                        'application/json': {
+                            schema: {
+                                $ref: '#/components/schemas/ApiResponse'
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 };

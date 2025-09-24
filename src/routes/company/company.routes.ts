@@ -27,6 +27,12 @@ router.get(
     asyncWrapper(CompanyController.getAllCompanies)
 );
 
+// Check if company exists for authenticated user
+router.get(
+    '/exists',
+    asyncWrapper(CompanyController.checkCompanyExists)
+);
+
 // Get company by ID
 router.get(
     '/:id',

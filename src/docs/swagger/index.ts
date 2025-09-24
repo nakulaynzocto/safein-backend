@@ -7,6 +7,8 @@ import { employeeSchemas } from './schemas/employee/employee.schemas';
 import { employeePaths } from './paths/employee/employee.paths';
 import { appointmentSchemas } from './schemas/appointment/appointment.schema';
 import { appointmentPaths } from './paths/appointment/appointment.paths';
+import { visitorSchemas } from './schemas/visitor/visitor.schema';
+import { visitorPaths } from './paths/visitor/visitor.paths';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -31,7 +33,8 @@ const options: swaggerJsdoc.Options = {
         ...userSchemas,
         ...companySchemas,
         ...employeeSchemas,
-        ...appointmentSchemas
+        ...appointmentSchemas,
+        ...visitorSchemas
       },
       securitySchemes: {
         bearerAuth: {
@@ -46,7 +49,8 @@ const options: swaggerJsdoc.Options = {
       ...userPaths,
       ...companyPaths,
       ...employeePaths,
-      ...appointmentPaths
+      ...appointmentPaths,
+      ...visitorPaths
     },
     tags: [
       {
@@ -64,6 +68,10 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Appointments',
         description: 'Appointment booking and management endpoints'
+      },
+      {
+        name: 'Visitor',
+        description: 'Visitor management endpoints'
       }
     ]
   },

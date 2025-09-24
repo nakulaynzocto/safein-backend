@@ -142,7 +142,7 @@ export const appointmentPaths = {
                     description: 'Sort field',
                     schema: {
                         type: 'string',
-                        enum: ['createdAt', 'appointmentDetails.scheduledDate', 'visitorDetails.name', 'status'],
+                        enum: ['createdAt', 'appointmentDetails.scheduledDate', 'status'],
                         default: 'createdAt'
                     }
                 },

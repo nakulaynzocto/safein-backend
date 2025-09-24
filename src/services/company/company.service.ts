@@ -129,4 +129,15 @@ export class CompanyService {
         await (company as any).restore();
         return company.toObject() as unknown as ICompanyResponse;
     }
+
+    /**
+     * Check if company exists for a user
+     */
+    static async checkCompanyExists(userId: string): Promise<boolean> {
+        const company = await Company.findOne({ 
+            userId, 
+            isDeleted: false 
+        });
+        return !!company;
+    }
 }

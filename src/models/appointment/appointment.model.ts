@@ -3,26 +3,7 @@ import mongoose, { Schema } from 'mongoose';
 export interface IAppointment extends mongoose.Document {
     appointmentId: string;
     employeeId: mongoose.Types.ObjectId; // Reference to Employee
-    visitorDetails: {
-        name: string;
-        email?: string;
-        phone: string;
-        company?: string;
-        designation?: string;
-        address?: {
-            street: string;
-            city: string;
-            state: string;
-            country: string;
-            zipCode: string;
-        };
-        idProof: {
-            type: 'aadhaar' | 'pan' | 'driving_license' | 'passport' | 'other';
-            number: string;
-            image?: string;
-        };
-        photo?: string;
-    };
+    visitorId: mongoose.Types.ObjectId; // Reference to Visitor
     accompaniedBy?: {
         name: string;
         phone: string;
@@ -79,88 +60,10 @@ const appointmentSchema = new Schema<IAppointment>(
             ref: 'Employee',
             required: [true, 'Employee ID is required']
         },
-        visitorDetails: {
-            name: {
-                type: String,
-                required: [true, 'Visitor name is required'],
-                trim: true,
-                minlength: [2, 'Visitor name must be at least 2 characters'],
-                maxlength: [100, 'Visitor name cannot exceed 100 characters']
-            },
-            email: {
-                type: String,
-                trim: true,
-                lowercase: true,
-                match: [
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    'Please provide a valid email address'
-                ]
-            },
-            phone: {
-                type: String,
-                required: [true, 'Visitor phone is required'],
-                trim: true,
-                match: [
-                    /^[\+]?[1-9][\d]{0,15}$/,
-                    'Please provide a valid phone number'
-                ]
-            },
-            company: {
-                type: String,
-                trim: true,
-                maxlength: [100, 'Company name cannot exceed 100 characters']
-            },
-            designation: {
-                type: String,
-                trim: true,
-                maxlength: [100, 'Designation cannot exceed 100 characters']
-            },
-            address: {
-                street: {
-                    type: String,
-                    trim: true
-                },
-                city: {
-                    type: String,
-                    trim: true
-                },
-                state: {
-                    type: String,
-                    trim: true
-                },
-                country: {
-                    type: String,
-                    trim: true,
-                    default: 'India'
-                },
-                zipCode: {
-                    type: String,
-                    trim: true
-                }
-            },
-            idProof: {
-                type: {
-                    type: String,
-                    enum: {
-                        values: ['aadhaar', 'pan', 'driving_license', 'passport', 'other'],
-                        message: 'ID proof type must be one of: aadhaar, pan, driving_license, passport, other'
-                    },
-                    required: [true, 'ID proof type is required']
-                },
-                number: {
-                    type: String,
-                    required: [true, 'ID proof number is required'],
-                    trim: true
-                },
-                image: {
-                    type: String,
-                    trim: true
-                }
-            },
-            photo: {
-                type: String,
-                trim: true
-            }
+        visitorId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Visitor',
+            required: [true, 'Visitor ID is required']
         },
         accompaniedBy: {
             name: {
@@ -316,8 +219,7 @@ const appointmentSchema = new Schema<IAppointment>(
 // Indexes for performance
 appointmentSchema.index({ appointmentId: 1 });
 appointmentSchema.index({ employeeId: 1 });
-appointmentSchema.index({ 'visitorDetails.phone': 1 });
-appointmentSchema.index({ 'visitorDetails.email': 1 });
+appointmentSchema.index({ visitorId: 1 });
 appointmentSchema.index({ 'appointmentDetails.scheduledDate': 1 });
 appointmentSchema.index({ status: 1 });
 appointmentSchema.index({ createdBy: 1 });
@@ -336,9 +238,10 @@ appointmentSchema.pre('save', function (next) {
     next();
 });
 
-// Virtual for full visitor name
+// Virtual for full visitor name (requires population)
 appointmentSchema.virtual('visitorFullName').get(function () {
-    return this.visitorDetails.name;
+    // This will work when the visitor is populated
+    return this.populated('visitorId')?.name || 'Visitor not loaded';
 });
 
 // Virtual for appointment date and time

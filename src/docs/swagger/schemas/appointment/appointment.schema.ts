@@ -17,9 +17,25 @@ export const appointmentSchemas = {
                 description: 'Employee ID reference',
                 example: '64f1a2b3c4d5e6f7g8h9i0j2'
             },
-            visitorDetails: {
+            visitorId: {
+                type: 'string',
+                description: 'Visitor ID reference',
+                example: '64f1a2b3c4d5e6f7g8h9i0j3'
+            },
+            visitor: {
                 type: 'object',
+                description: 'Populated visitor details (when requested)',
                 properties: {
+                    _id: {
+                        type: 'string',
+                        description: 'Visitor unique identifier',
+                        example: '64f1a2b3c4d5e6f7g8h9i0j3'
+                    },
+                    visitorId: {
+                        type: 'string',
+                        description: 'Auto-generated visitor ID',
+                        example: 'VIS123456789'
+                    },
                     name: {
                         type: 'string',
                         description: 'Visitor full name',
@@ -295,108 +311,18 @@ export const appointmentSchemas = {
     },
     CreateAppointment: {
         type: 'object',
-        required: ['employeeId', 'visitorDetails', 'appointmentDetails'],
+        required: ['employeeId', 'visitorId', 'appointmentDetails'],
         properties: {
             employeeId: {
                 type: 'string',
                 description: 'Employee ID for the appointment',
                 example: '64f1a2b3c4d5e6f7g8h9i0j2'
             },
-            visitorDetails: {
-                type: 'object',
-                required: ['name', 'phone', 'idProof'],
-                properties: {
-                    name: {
-                        type: 'string',
-                        minLength: 2,
-                        maxLength: 100,
-                        description: 'Visitor full name',
-                        example: 'John Doe'
-                    },
-                    email: {
-                        type: 'string',
-                        format: 'email',
-                        description: 'Visitor email address',
-                        example: 'john.doe@example.com'
-                    },
-                    phone: {
-                        type: 'string',
-                        pattern: '^[\\+]?[1-9][\\d]{0,15}$',
-                        description: 'Visitor phone number',
-                        example: '+1234567890'
-                    },
-                    company: {
-                        type: 'string',
-                        maxLength: 100,
-                        description: 'Visitor company name',
-                        example: 'ABC Corporation'
-                    },
-                    designation: {
-                        type: 'string',
-                        maxLength: 100,
-                        description: 'Visitor designation',
-                        example: 'Senior Manager'
-                    },
-                    address: {
-                        type: 'object',
-                        properties: {
-                            street: {
-                                type: 'string',
-                                description: 'Street address',
-                                example: '123 Main Street'
-                            },
-                            city: {
-                                type: 'string',
-                                description: 'City',
-                                example: 'New York'
-                            },
-                            state: {
-                                type: 'string',
-                                description: 'State',
-                                example: 'NY'
-                            },
-                            country: {
-                                type: 'string',
-                                description: 'Country',
-                                example: 'USA'
-                            },
-                            zipCode: {
-                                type: 'string',
-                                description: 'ZIP code',
-                                example: '10001'
-                            }
-                        }
-                    },
-                    idProof: {
-                        type: 'object',
-                        required: ['type', 'number'],
-                        properties: {
-                            type: {
-                                type: 'string',
-                                enum: ['aadhaar', 'pan', 'driving_license', 'passport', 'other'],
-                                description: 'Type of ID proof',
-                                example: 'aadhaar'
-                            },
-                            number: {
-                                type: 'string',
-                                description: 'ID proof number',
-                                example: '123456789012'
-                            },
-                            image: {
-                                type: 'string',
-                                format: 'uri',
-                                description: 'ID proof image URL',
-                                example: 'https://example.com/id-proof.jpg'
-                            }
-                        }
-                    },
-                    photo: {
-                        type: 'string',
-                        format: 'uri',
-                        description: 'Visitor photo URL',
-                        example: 'https://example.com/visitor-photo.jpg'
-                    }
-                }
+            visitorId: {
+                type: 'string',
+                pattern: '^[0-9a-fA-F]{24}$',
+                description: 'Visitor ID for the appointment',
+                example: '64f1a2b3c4d5e6f7g8h9i0j3'
             },
             accompaniedBy: {
                 type: 'object',
@@ -547,99 +473,11 @@ export const appointmentSchemas = {
                 description: 'Employee ID for the appointment',
                 example: '64f1a2b3c4d5e6f7g8h9i0j2'
             },
-            visitorDetails: {
-                type: 'object',
-                properties: {
-                    name: {
-                        type: 'string',
-                        minLength: 2,
-                        maxLength: 100,
-                        description: 'Visitor full name',
-                        example: 'John Doe'
-                    },
-                    email: {
-                        type: 'string',
-                        format: 'email',
-                        description: 'Visitor email address',
-                        example: 'john.doe@example.com'
-                    },
-                    phone: {
-                        type: 'string',
-                        pattern: '^[\\+]?[1-9][\\d]{0,15}$',
-                        description: 'Visitor phone number',
-                        example: '+1234567890'
-                    },
-                    company: {
-                        type: 'string',
-                        maxLength: 100,
-                        description: 'Visitor company name',
-                        example: 'ABC Corporation'
-                    },
-                    designation: {
-                        type: 'string',
-                        maxLength: 100,
-                        description: 'Visitor designation',
-                        example: 'Senior Manager'
-                    },
-                    address: {
-                        type: 'object',
-                        properties: {
-                            street: {
-                                type: 'string',
-                                description: 'Street address',
-                                example: '123 Main Street'
-                            },
-                            city: {
-                                type: 'string',
-                                description: 'City',
-                                example: 'New York'
-                            },
-                            state: {
-                                type: 'string',
-                                description: 'State',
-                                example: 'NY'
-                            },
-                            country: {
-                                type: 'string',
-                                description: 'Country',
-                                example: 'USA'
-                            },
-                            zipCode: {
-                                type: 'string',
-                                description: 'ZIP code',
-                                example: '10001'
-                            }
-                        }
-                    },
-                    idProof: {
-                        type: 'object',
-                        properties: {
-                            type: {
-                                type: 'string',
-                                enum: ['aadhaar', 'pan', 'driving_license', 'passport', 'other'],
-                                description: 'Type of ID proof',
-                                example: 'aadhaar'
-                            },
-                            number: {
-                                type: 'string',
-                                description: 'ID proof number',
-                                example: '123456789012'
-                            },
-                            image: {
-                                type: 'string',
-                                format: 'uri',
-                                description: 'ID proof image URL',
-                                example: 'https://example.com/id-proof.jpg'
-                            }
-                        }
-                    },
-                    photo: {
-                        type: 'string',
-                        format: 'uri',
-                        description: 'Visitor photo URL',
-                        example: 'https://example.com/visitor-photo.jpg'
-                    }
-                }
+            visitorId: {
+                type: 'string',
+                pattern: '^[0-9a-fA-F]{24}$',
+                description: 'Visitor ID for the appointment',
+                example: '64f1a2b3c4d5e6f7g8h9i0j3'
             },
             appointmentDetails: {
                 type: 'object',

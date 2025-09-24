@@ -60,7 +60,7 @@ export interface INotifications {
 
 export interface ICreateAppointmentDTO {
     employeeId: string;
-    visitorDetails: IVisitorDetails;
+    visitorId: string; // Reference to Visitor
     accompaniedBy?: IAccompaniedBy;
     appointmentDetails: IAppointmentDetails;
     securityDetails?: ISecurityDetails;
@@ -69,7 +69,7 @@ export interface ICreateAppointmentDTO {
 
 export interface IUpdateAppointmentDTO {
     employeeId?: string;
-    visitorDetails?: Partial<IVisitorDetails>;
+    visitorId?: string; // Reference to Visitor
     accompaniedBy?: Partial<IAccompaniedBy>;
     appointmentDetails?: Partial<IAppointmentDetails>;
     status?: AppointmentStatus;
@@ -84,7 +84,8 @@ export interface IAppointmentResponse {
     _id: string;
     appointmentId: string;
     employeeId: string;
-    visitorDetails: IVisitorDetails;
+    visitorId: string; // Reference to Visitor
+    visitor?: IVisitorDetails; // Populated visitor details
     accompaniedBy?: IAccompaniedBy;
     appointmentDetails: IAppointmentDetails;
     status: AppointmentStatus;

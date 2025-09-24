@@ -86,4 +86,18 @@ export class CompanyController {
         const company = await CompanyService.restoreCompany(id);
         ResponseUtil.success(res, 'Company restored successfully', company);
     }
+
+    /**
+     * Check if company exists for authenticated user
+     * GET /api/companies/exists
+     */
+    @TryCatch('Failed to check company existence')
+    static async checkCompanyExists(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        const userId = req.user._id.toString();
+        const exists = await CompanyService.checkCompanyExists(userId);
+        ResponseUtil.success(res, 'Company existence checked successfully', { exists });
+    }
 }
