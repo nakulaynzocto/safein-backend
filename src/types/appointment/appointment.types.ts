@@ -1,6 +1,5 @@
-import { IAppointment } from '../../models/appointment/appointment.model';
 
-export type AppointmentStatus = 'scheduled' | 'checked_in' | 'in_meeting' | 'completed' | 'cancelled' | 'no_show';
+export type AppointmentStatus = 'pending' | 'approved' | 'rejected' | 'completed';
 export type IDProofType = 'aadhaar' | 'pan' | 'driving_license' | 'passport' | 'other';
 
 export interface IVisitorDetails {

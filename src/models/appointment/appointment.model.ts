@@ -22,7 +22,7 @@ export interface IAppointment extends mongoose.Document {
         meetingRoom?: string;
         notes?: string;
     };
-    status: 'scheduled' | 'checked_in' | 'in_meeting' | 'completed' | 'cancelled' | 'no_show';
+    status: 'pending' | 'approved' | 'rejected' | 'completed';
     checkInTime?: Date;
     checkOutTime?: Date;
     actualDuration?: number; // in minutes
@@ -138,10 +138,10 @@ const appointmentSchema = new Schema<IAppointment>(
         status: {
             type: String,
             enum: {
-                values: ['scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show'],
-                message: 'Status must be one of: scheduled, checked_in, in_meeting, completed, cancelled, no_show'
+                values: ['pending', 'approved', 'rejected', 'completed'],
+                message: 'Status must be one of: pending, approved, rejected, completed'
             },
-            default: 'scheduled'
+            default: 'pending'
         },
         checkInTime: {
             type: Date

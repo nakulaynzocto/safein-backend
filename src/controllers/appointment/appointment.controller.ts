@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppointmentService } from '../../services/appointment/appointment.service';
+import { Appointment } from '../../models/appointment/appointment.model';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateAppointmentDTO,
@@ -31,24 +32,43 @@ export class AppointmentController {
     }
 
     /**
-     * Get all appointments with pagination and filtering
+     * Get all appointments with pagination and filtering (user-specific)
      * GET /api/appointments
      */
     @TryCatch('Failed to get appointments')
-    static async getAllAppointments(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getAllAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const query: IGetAppointmentsQuery = req.query;
-        const result = await AppointmentService.getAllAppointments(query);
+        const userId = req.user._id.toString();
+        const result = await AppointmentService.getAllAppointments(query, userId);
         ResponseUtil.success(res, 'Appointments retrieved successfully', result);
     }
 
     /**
-     * Get appointment by ID
+     * Get appointment by ID (user-specific)
      * GET /api/appointments/:id
      */
     @TryCatch('Failed to get appointment')
-    static async getAppointmentById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getAppointmentById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentById(id);
+        
+        // Additional check: verify the appointment was created by the current user
+        const appointmentRecord = await Appointment.findById(id);
+        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
+            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         ResponseUtil.success(res, 'Appointment retrieved successfully', appointment);
     }
 
@@ -113,12 +133,17 @@ export class AppointmentController {
     }
 
     /**
-     * Get appointment statistics
+     * Get appointment statistics (user-specific)
      * GET /api/appointments/stats
      */
     @TryCatch('Failed to get appointment statistics')
-    static async getAppointmentStats(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const stats = await AppointmentService.getAppointmentStats();
+    static async getAppointmentStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
+        const userId = req.user._id.toString();
+        const stats = await AppointmentService.getAppointmentStats(userId);
         ResponseUtil.success(res, 'Appointment statistics retrieved successfully', stats);
     }
 
@@ -177,5 +202,16 @@ export class AppointmentController {
         };
         const result = await AppointmentService.getAllAppointments(query);
         ResponseUtil.success(res, 'Appointments by date range retrieved successfully', result);
+    }
+
+    /**
+     * Cancel appointment
+     * PUT /api/appointments/:id/cancel
+     */
+    @TryCatch('Failed to cancel appointment')
+    static async cancelAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+        const { id } = req.params;
+        const appointment = await AppointmentService.cancelAppointment(id);
+        ResponseUtil.success(res, 'Appointment cancelled successfully', appointment);
     }
 }

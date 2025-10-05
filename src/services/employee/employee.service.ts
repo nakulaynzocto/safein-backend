@@ -21,14 +21,20 @@ export class EmployeeService {
     static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        // Check if employee ID already exists
-        const existingEmployeeId = await Employee.findOne({ employeeId: employeeData.employeeId }).session(session);
+        // Check if employee ID already exists for this user
+        const existingEmployeeId = await Employee.findOne({ 
+            employeeId: employeeData.employeeId, 
+            createdBy: createdBy 
+        }).session(session);
         if (existingEmployeeId) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_ID_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        // Check if email already exists
-        const existingEmail = await Employee.findOne({ email: employeeData.email }).session(session);
+        // Check if email already exists for this user
+        const existingEmail = await Employee.findOne({ 
+            email: employeeData.email, 
+            createdBy: createdBy 
+        }).session(session);
         if (existingEmail) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
@@ -52,9 +58,9 @@ export class EmployeeService {
     }
 
     /**
-     * Get all employees with pagination and filtering
+     * Get all employees with pagination and filtering (user-specific)
      */
-    static async getAllEmployees(query: IGetEmployeesQuery = {}): Promise<IEmployeeListResponse> {
+    static async getAllEmployees(query: IGetEmployeesQuery = {}, userId?: string): Promise<IEmployeeListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -65,8 +71,13 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object
+        // Build filter object - only show employees created by the current user
         const filter: any = { isDeleted: false };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.createdBy = userId;
+        }
 
         if (search) {
             filter.$or = [
@@ -128,10 +139,17 @@ export class EmployeeService {
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        // 🔍 Check if email already exists (excluding current employee)
+        // 🔍 Get the existing employee to check createdBy
+        const existingEmployee = await Employee.findById(employeeId).session(session);
+        if (!existingEmployee) {
+            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        // 🔍 Check if email already exists for this user (excluding current employee)
         if (safeUpdateData.email) {
             const existingEmail = await Employee.findOne({
                 email: safeUpdateData.email,
+                createdBy: existingEmployee.createdBy,
                 _id: { $ne: employeeId }
             }).session(session);
 
@@ -309,9 +327,15 @@ export class EmployeeService {
     }
 
     /**
-     * Get employee statistics
+     * Get employee statistics (user-specific)
      */
-    static async getEmployeeStats(): Promise<IEmployeeStats> {
+    static async getEmployeeStats(userId?: string): Promise<IEmployeeStats> {
+        // Build base filter - only show employees created by the current user
+        const baseFilter: any = {};
+        if (userId) {
+            baseFilter.createdBy = userId;
+        }
+
         const [
             totalEmployees,
             activeEmployees,
@@ -320,18 +344,18 @@ export class EmployeeService {
             employeesByDepartment,
             employeesByStatus
         ] = await Promise.all([
-            Employee.countDocuments({ isDeleted: false }),
-            Employee.countDocuments({ isDeleted: false, status: 'Active' }),
-            Employee.countDocuments({ isDeleted: false, status: 'Inactive' }),
-            Employee.countDocuments({ isDeleted: true }),
+            Employee.countDocuments({ ...baseFilter, isDeleted: false }),
+            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Active' }),
+            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Inactive' }),
+            Employee.countDocuments({ ...baseFilter, isDeleted: true }),
             Employee.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$department', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
             Employee.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$status', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ])

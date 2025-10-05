@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { EmployeeService } from '../../services/employee/employee.service';
+import { Employee } from '../../models/employee/employee.model';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateEmployeeDTO,
@@ -30,24 +31,43 @@ export class EmployeeController {
     }
 
     /**
-     * Get all employees with pagination and filtering
+     * Get all employees with pagination and filtering (user-specific)
      * GET /api/employees
      */
     @TryCatch('Failed to get employees')
-    static async getAllEmployees(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getAllEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const query: IGetEmployeesQuery = req.query;
-        const result = await EmployeeService.getAllEmployees(query);
+        const userId = req.user._id.toString();
+        const result = await EmployeeService.getAllEmployees(query, userId);
         ResponseUtil.success(res, 'Employees retrieved successfully', result);
     }
 
     /**
-     * Get employee by ID
+     * Get employee by ID (user-specific)
      * GET /api/employees/:id
      */
     @TryCatch('Failed to get employee')
-    static async getEmployeeById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getEmployeeById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Get employee and verify it belongs to the current user
         const employee = await EmployeeService.getEmployeeById(id);
+        
+        // Additional check: verify the employee was created by the current user
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         ResponseUtil.success(res, 'Employee retrieved successfully', employee);
     }
 
@@ -124,12 +144,17 @@ export class EmployeeController {
     }
 
     /**
-     * Get employee statistics
+     * Get employee statistics (user-specific)
      * GET /api/employees/stats
      */
     @TryCatch('Failed to get employee statistics')
-    static async getEmployeeStats(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const stats = await EmployeeService.getEmployeeStats();
+    static async getEmployeeStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
+        const userId = req.user._id.toString();
+        const stats = await EmployeeService.getEmployeeStats(userId);
         ResponseUtil.success(res, 'Employee statistics retrieved successfully', stats);
     }
 }

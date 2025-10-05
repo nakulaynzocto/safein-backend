@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { VisitorService } from '../../services/visitor/visitor.service';
+import { Visitor } from '../../models/visitor/visitor.model';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateVisitorDTO,
@@ -30,24 +31,43 @@ export class VisitorController {
     }
 
     /**
-     * Get all visitors with pagination and filtering
+     * Get all visitors with pagination and filtering (user-specific)
      * GET /api/visitors
      */
     @TryCatch('Failed to get visitors')
-    static async getAllVisitors(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getAllVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const query: IGetVisitorsQuery = req.query;
-        const result = await VisitorService.getAllVisitors(query);
+        const userId = req.user._id.toString();
+        const result = await VisitorService.getAllVisitors(query, userId);
         ResponseUtil.success(res, 'Visitors retrieved successfully', result);
     }
 
     /**
-     * Get visitor by ID
+     * Get visitor by ID (user-specific)
      * GET /api/visitors/:id
      */
     @TryCatch('Failed to get visitor')
-    static async getVisitorById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getVisitorById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Get visitor and verify it belongs to the current user
         const visitor = await VisitorService.getVisitorById(id);
+        
+        // Additional check: verify the visitor was created by the current user
+        const visitorRecord = await Visitor.findById(id);
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         ResponseUtil.success(res, 'Visitor retrieved successfully', visitor);
     }
 
@@ -123,12 +143,17 @@ export class VisitorController {
     }
 
     /**
-     * Get visitor statistics
+     * Get visitor statistics (user-specific)
      * GET /api/visitors/stats
      */
     @TryCatch('Failed to get visitor statistics')
-    static async getVisitorStats(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const stats = await VisitorService.getVisitorStats();
+    static async getVisitorStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
+        const userId = req.user._id.toString();
+        const stats = await VisitorService.getVisitorStats(userId);
         ResponseUtil.success(res, 'Visitor statistics retrieved successfully', stats);
     }
 }

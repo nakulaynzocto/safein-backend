@@ -66,8 +66,8 @@ export const visitorPaths = {
         },
         get: {
             tags: ['Visitor'],
-            summary: 'Get all visitors',
-            description: 'Retrieve a paginated list of visitors with filtering and sorting options',
+            summary: 'Get all visitors (User-specific)',
+            description: 'Retrieve a paginated list of visitors created by the authenticated user with filtering and sorting options',
             security: [{ bearerAuth: [] }],
             parameters: [
                 {

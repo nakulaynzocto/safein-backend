@@ -66,8 +66,8 @@ export const employeePaths = {
         },
         get: {
             tags: ['Employee'],
-            summary: 'Get all employees',
-            description: 'Retrieve a paginated list of employees with filtering and sorting options',
+            summary: 'Get all employees (User-specific)',
+            description: 'Retrieve a paginated list of employees created by the authenticated user with filtering and sorting options',
             security: [{ bearerAuth: [] }],
             parameters: [
                 {
@@ -147,8 +147,8 @@ export const employeePaths = {
     '/employees/stats': {
         get: {
             tags: ['Employee'],
-            summary: 'Get employee statistics',
-            description: 'Retrieve comprehensive statistics about employees',
+            summary: 'Get employee statistics (User-specific)',
+            description: 'Retrieve comprehensive statistics about employees created by the authenticated user',
             security: [{ bearerAuth: [] }],
             responses: {
                 200: {

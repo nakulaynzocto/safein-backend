@@ -84,16 +84,21 @@ export class CompanyService {
     }
 
     /**
-     * Get all companies with pagination and filtering
+     * Get all companies with pagination and filtering (user-specific)
      */
-    static async getAllCompanies(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
+    static async getAllCompanies(page: number = 1, limit: number = 10, includeDeleted: boolean = false, userId?: string): Promise<{
         companies: ICompanyResponse[];
         total: number;
         page: number;
         totalPages: number;
     }> {
         const skip = (page - 1) * limit;
-        const filter = includeDeleted ? {} : { isDeleted: false };
+        const filter: any = includeDeleted ? {} : { isDeleted: false };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.userId = userId;
+        }
 
         const [companies, total] = await Promise.all([
             Company.find(filter)

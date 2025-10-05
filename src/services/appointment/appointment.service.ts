@@ -88,9 +88,9 @@ export class AppointmentService {
     }
 
     /**
-     * Get all appointments with pagination and filtering
+     * Get all appointments with pagination and filtering (user-specific)
      */
-    static async getAllAppointments(query: IGetAppointmentsQuery = {}): Promise<IAppointmentListResponse> {
+    static async getAllAppointments(query: IGetAppointmentsQuery = {}, userId?: string): Promise<IAppointmentListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -104,8 +104,13 @@ export class AppointmentService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object
+        // Build filter object - only show appointments created by the current user
         const filter: any = { isDeleted: false };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.createdBy = userId;
+        }
 
         if (search) {
             filter.$or = [
@@ -184,6 +189,10 @@ export class AppointmentService {
     @Transaction('Failed to update appointment')
     static async updateAppointment(appointmentId: string, updateData: IUpdateAppointmentDTO, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
+        
+        // Remove session from updateData if it exists to prevent circular reference
+        const cleanUpdateData = { ...updateData };
+        delete (cleanUpdateData as any).session;
 
         // Check for scheduling conflicts if updating time/date
         if (updateData.appointmentDetails?.scheduledDate || updateData.appointmentDetails?.scheduledTime) {
@@ -212,7 +221,7 @@ export class AppointmentService {
 
         const appointment = await Appointment.findOneAndUpdate(
             { _id: appointmentId, isDeleted: false },
-            updateData,
+            cleanUpdateData,
             { new: true, runValidators: true, session }
         )
             .populate('employeeId', 'name email department designation')
@@ -254,12 +263,12 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        if (appointment.status !== 'scheduled') {
-            throw new AppError('Appointment is not in scheduled status', ERROR_CODES.BAD_REQUEST);
+        if (appointment.status !== 'pending') {
+            throw new AppError('Appointment is not in pending status', ERROR_CODES.BAD_REQUEST);
         }
 
         // Update appointment
-        appointment.status = 'checked_in';
+        appointment.status = 'approved';
         appointment.checkInTime = new Date();
 
         if (badgeNumber) {
@@ -289,9 +298,7 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        if (!['checked_in', 'in_meeting'].includes(appointment.status)) {
-            throw new AppError('Appointment is not checked in', ERROR_CODES.BAD_REQUEST);
-        }
+        // Allow check-out for any status
 
         // Update appointment
         appointment.status = 'completed';
@@ -313,9 +320,15 @@ export class AppointmentService {
     }
 
     /**
-     * Get appointment statistics
+     * Get appointment statistics (user-specific)
      */
-    static async getAppointmentStats(): Promise<IAppointmentStats> {
+    static async getAppointmentStats(userId?: string): Promise<IAppointmentStats> {
+        // Build base filter - only show appointments created by the current user
+        const baseFilter: any = {};
+        if (userId) {
+            baseFilter.createdBy = userId;
+        }
+
         const [
             totalAppointments,
             scheduledAppointments,
@@ -327,19 +340,19 @@ export class AppointmentService {
             appointmentsByEmployee,
             appointmentsByDate
         ] = await Promise.all([
-            Appointment.countDocuments({ isDeleted: false }),
-            Appointment.countDocuments({ isDeleted: false, status: 'scheduled' }),
-            Appointment.countDocuments({ isDeleted: false, status: 'checked_in' }),
-            Appointment.countDocuments({ isDeleted: false, status: 'completed' }),
-            Appointment.countDocuments({ isDeleted: false, status: 'cancelled' }),
-            Appointment.countDocuments({ isDeleted: false, status: 'no_show' }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'scheduled' }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'checked_in' }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'completed' }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'cancelled' }),
+            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'no_show' }),
             Appointment.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$status', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ]),
             Appointment.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$employeeId', count: { $sum: 1 } } },
                 { $lookup: { from: 'employees', localField: '_id', foreignField: '_id', as: 'employee' } },
                 { $unwind: '$employee' },
@@ -348,7 +361,7 @@ export class AppointmentService {
                 { $limit: 10 }
             ]),
             Appointment.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 {
                     $group: {
                         _id: {
@@ -527,6 +540,34 @@ export class AppointmentService {
         }
 
         await (appointment as any).restore();
+        return appointment.toObject() as unknown as IAppointmentResponse;
+    }
+
+    /**
+     * Cancel appointment
+     */
+    @Transaction('Failed to cancel appointment')
+    static async cancelAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
+        const { session } = options;
+
+        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false }).session(session);
+        if (!appointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        // Check if appointment can be cancelled (only pending or approved appointments can be cancelled)
+        if (appointment.status === 'completed') {
+            throw new AppError('Cannot cancel a completed appointment', ERROR_CODES.BAD_REQUEST);
+        }
+
+        if (appointment.status === 'rejected') {
+            throw new AppError('Appointment is already cancelled', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Update status to rejected (cancelled)
+        appointment.status = 'rejected';
+        await appointment.save({ session });
+
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 }

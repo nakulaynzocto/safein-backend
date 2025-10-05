@@ -23,7 +23,6 @@ const employeeSchema = new Schema<IEmployee>({
     employeeId: {
         type: String,
         required: [true, 'Employee ID is required'],
-        unique: true,
         trim: true,
         uppercase: true
     },
@@ -37,7 +36,6 @@ const employeeSchema = new Schema<IEmployee>({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true,
         lowercase: true,
         trim: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -116,6 +114,10 @@ employeeSchema.index({ status: 1 });
 employeeSchema.index({ isDeleted: 1 });
 employeeSchema.index({ deletedAt: 1 });
 employeeSchema.index({ createdBy: 1 });
+
+// Compound indexes for user-specific uniqueness
+employeeSchema.index({ createdBy: 1, employeeId: 1 }, { unique: true });
+employeeSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
 // Virtual for full name
 employeeSchema.virtual('fullName').get(function () {

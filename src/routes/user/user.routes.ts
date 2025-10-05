@@ -48,6 +48,7 @@ router.post('/reset-password',
 // Protected routes (require authentication)
 router.use(protect); // All routes below require authentication
 
+// User profile routes (users can access their own profile)
 router.get('/profile', asyncWrapper(UserController.getProfile));
 router.put('/profile',
     validateRequest(updateUserValidation),
@@ -59,12 +60,7 @@ router.post('/change-password',
 );
 router.post('/logout', asyncWrapper(UserController.logout));
 
-// Admin routes (in a real app, you'd add admin role check)
-router.get('/',
-    validateRequest(getUsersValidation),
-    asyncWrapper(UserController.getAllUsers)
-);
-
+// User access by ID (users can access their own profile, admins can access any)
 router.get('/:id',
     validateRequest(getUserByIdValidation),
     asyncWrapper(UserController.getUserById)
@@ -74,6 +70,12 @@ router.put('/:id',
     validateRequest(getUserByIdValidation),
     validateRequest(updateUserValidation),
     asyncWrapper(UserController.updateUserById)
+);
+
+// Admin-only routes (require admin role)
+router.get('/',
+    validateRequest(getUsersValidation),
+    asyncWrapper(UserController.getAllUsers)
 );
 
 router.delete('/:id',

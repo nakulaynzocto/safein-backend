@@ -22,8 +22,11 @@ export class VisitorService {
     static async createVisitor(visitorData: ICreateVisitorDTO, createdBy: string, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
-        // Check if email already exists
-        const existingEmail = await Visitor.findOne({ email: visitorData.email }).session(session);
+        // Check if email already exists for this user
+        const existingEmail = await Visitor.findOne({ 
+            email: visitorData.email, 
+            createdBy: createdBy 
+        }).session(session);
         if (existingEmail) {
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
@@ -47,9 +50,9 @@ export class VisitorService {
     }
 
     /**
-     * Get all visitors with pagination and filtering
+     * Get all visitors with pagination and filtering (user-specific)
      */
-    static async getAllVisitors(query: IGetVisitorsQuery = {}): Promise<IVisitorListResponse> {
+    static async getAllVisitors(query: IGetVisitorsQuery = {}, userId?: string): Promise<IVisitorListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -64,8 +67,13 @@ export class VisitorService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object
+        // Build filter object - only show visitors created by the current user
         const filter: any = { isDeleted: false };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.createdBy = userId;
+        }
 
         if (search) {
             filter.$or = [
@@ -150,10 +158,17 @@ export class VisitorService {
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        // 🔍 Check if email already exists (excluding current visitor)
+        // 🔍 Get the existing visitor to check createdBy
+        const existingVisitor = await Visitor.findById(visitorId).session(session);
+        if (!existingVisitor) {
+            throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        // 🔍 Check if email already exists for this user (excluding current visitor)
         if (safeUpdateData.email) {
             const existingEmail = await Visitor.findOne({
                 email: safeUpdateData.email,
+                createdBy: existingVisitor.createdBy,
                 _id: { $ne: visitorId }
             }).session(session);
 
@@ -375,9 +390,15 @@ export class VisitorService {
     }
 
     /**
-     * Get visitor statistics
+     * Get visitor statistics (user-specific)
      */
-    static async getVisitorStats(): Promise<IVisitorStats> {
+    static async getVisitorStats(userId?: string): Promise<IVisitorStats> {
+        // Build base filter - only show visitors created by the current user
+        const baseFilter: any = {};
+        if (userId) {
+            baseFilter.createdBy = userId;
+        }
+
         const [
             totalVisitors,
             deletedVisitors,
@@ -387,34 +408,34 @@ export class VisitorService {
             visitorsByCountry,
             visitorsByIdProofType
         ] = await Promise.all([
-            Visitor.countDocuments({ isDeleted: false }),
-            Visitor.countDocuments({ isDeleted: true }),
+            Visitor.countDocuments({ ...baseFilter, isDeleted: false }),
+            Visitor.countDocuments({ ...baseFilter, isDeleted: true }),
             Visitor.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$company', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
             Visitor.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$address.city', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
             Visitor.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$address.state', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
             Visitor.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$address.country', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
             Visitor.aggregate([
-                { $match: { isDeleted: false } },
+                { $match: { ...baseFilter, isDeleted: false } },
                 { $group: { _id: '$idProof.type', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }

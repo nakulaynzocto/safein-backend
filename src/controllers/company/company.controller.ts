@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { CompanyService } from '../../services/company/company.service';
+import { Company } from '../../models/company/company.model';
 import { ResponseUtil } from '../../utils';
 import { ICreateCompanyDTO, IUpdateCompanyDTO } from '../../types/company/company.types';
 import { ERROR_CODES } from '../../utils/constants';
@@ -24,13 +25,27 @@ export class CompanyController {
     }
 
     /**
-     * Get company by ID
+     * Get company by ID (user-specific)
      * GET /api/companies/:id
      */
     @TryCatch('Failed to get company')
-    static async getCompanyById(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getCompanyById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Get company and verify it belongs to the current user
         const company = await CompanyService.getCompanyById(id);
+        
+        // Additional check: verify the company belongs to the current user
+        const companyRecord = await Company.findById(id);
+        if (!companyRecord || companyRecord.userId.toString() !== userId) {
+            throw new AppError('Company not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         ResponseUtil.success(res, 'Company retrieved successfully', company);
     }
 
@@ -62,16 +77,22 @@ export class CompanyController {
     }
 
     /**
-     * Get all companies with pagination
+     * Get all companies with pagination (user-specific)
      * GET /api/companies
      */
     @TryCatch('Failed to get companies')
-    static async getAllCompanies(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getAllCompanies(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { page = 1, limit = 10, includeDeleted = false } = req.query;
+        const userId = req.user._id.toString();
         const result = await CompanyService.getAllCompanies(
             parseInt(page as string),
             parseInt(limit as string),
-            includeDeleted === 'true'
+            includeDeleted === 'true',
+            userId
         );
         ResponseUtil.success(res, 'Companies retrieved successfully', result);
     }

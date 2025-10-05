@@ -95,7 +95,6 @@ const idProofSchema = new Schema<IIdProof>({
 const visitorSchema = new Schema<IVisitor>({
     visitorId: {
         type: String,
-        unique: true,
         sparse: true, // Allow null values but ensure uniqueness when present
         default: function() {
             // Generate a unique visitor ID
@@ -112,7 +111,6 @@ const visitorSchema = new Schema<IVisitor>({
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true,
         lowercase: true,
         trim: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -175,7 +173,7 @@ const visitorSchema = new Schema<IVisitor>({
 });
 
 // Indexes for better performance
-visitorSchema.index({ visitorId: 1 }, { unique: true, sparse: true });
+visitorSchema.index({ visitorId: 1 }, { sparse: true });
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
 visitorSchema.index({ company: 1 });
@@ -185,6 +183,10 @@ visitorSchema.index({ 'address.country': 1 });
 visitorSchema.index({ isDeleted: 1 });
 visitorSchema.index({ deletedAt: 1 });
 visitorSchema.index({ createdBy: 1 });
+
+// Compound indexes for user-specific uniqueness
+visitorSchema.index({ createdBy: 1, visitorId: 1 }, { unique: true, sparse: true });
+visitorSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
 // Virtual for full name
 visitorSchema.virtual('fullName').get(function () {

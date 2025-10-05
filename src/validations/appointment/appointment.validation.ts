@@ -102,12 +102,14 @@ const securityDetailsValidation = Joi.object({
         .default(false),
     badgeNumber: Joi.string()
         .optional()
+        .allow('')
         .trim()
         .uppercase(),
     securityClearance: Joi.boolean()
         .default(false),
     securityNotes: Joi.string()
         .optional()
+        .allow('')
         .trim()
         .max(200)
         .messages({
@@ -163,10 +165,10 @@ export const updateAppointmentValidation = Joi.object({
     accompaniedBy: accompaniedByValidation.optional().allow(null),
     appointmentDetails: appointmentDetailsValidation.optional(),
     status: Joi.string()
-        .valid('scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show')
+        .valid('pending', 'approved', 'rejected', 'completed')
         .optional()
         .messages({
-            'any.only': 'Status must be one of: scheduled, checked_in, in_meeting, completed, cancelled, no_show'
+            'any.only': 'Status must be one of: pending, approved, rejected, completed'
         }),
     checkInTime: Joi.date()
         .optional(),
@@ -257,7 +259,7 @@ export const getAppointmentsValidation = Joi.object({
             'string.pattern.base': 'Invalid employee ID format'
         }),
     status: Joi.string()
-        .valid('scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show')
+        .valid('pending', 'approved', 'rejected', 'completed')
         .optional(),
     scheduledDate: Joi.date()
         .optional(),
@@ -283,7 +285,7 @@ export const bulkUpdateAppointmentsValidation = Joi.object({
             'any.required': 'Appointment IDs are required'
         }),
     status: Joi.string()
-        .valid('scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show')
+        .valid('pending', 'approved', 'rejected', 'completed')
         .optional(),
     employeeId: Joi.string()
         .optional()

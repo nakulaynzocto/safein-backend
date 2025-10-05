@@ -234,8 +234,8 @@ export const userPaths = {
   '/users': {
     get: {
       tags: ['Users'],
-      summary: 'Get all users (Admin)',
-      description: 'Get paginated list of all users',
+      summary: 'Get all users (Admin Only)',
+      description: 'Get paginated list of all users. Requires admin role.',
       security: [{ bearerAuth: [] }],
       parameters: [
         {
@@ -296,7 +296,7 @@ export const userPaths = {
   '/users/{id}': {
     get: {
       tags: ['Users'],
-      summary: 'Get user by ID (Admin)',
+      summary: 'Get user by ID (Own Profile or Admin)',
       description: 'Get user details by ID',
       security: [{ bearerAuth: [] }],
       parameters: [

@@ -109,6 +109,13 @@ router.put(
     asyncWrapper(AppointmentController.restoreAppointment)
 );
 
+// Cancel appointment
+router.put(
+    '/:id/cancel',
+    validateRequest(appointmentParamsValidation),
+    asyncWrapper(AppointmentController.cancelAppointment)
+);
+
 // Get appointment by appointment ID
 router.get(
     '/appointment/:appointmentId',
