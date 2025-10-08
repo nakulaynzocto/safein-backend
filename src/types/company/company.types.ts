@@ -5,8 +5,6 @@ export interface ICompany extends Document {
     userId: string; // Reference to User who created the company
     companyName: string;
     companyCode: string;
-    email: string;
-    phone: string;
     address: {
         street: string;
         city: string;
@@ -14,34 +12,13 @@ export interface ICompany extends Document {
         country: string;
         zipCode: string;
     };
-    contactPerson: {
-        name: string;
-        email: string;
-        phone: string;
-        designation: string;
-    };
-    subscription: {
-        plan: 'basic' | 'premium' | 'enterprise';
-        status: 'active' | 'inactive' | 'suspended' | 'trial';
-        startDate: Date;
-        endDate: Date;
-        maxEmployees: number;
-        maxVisitorsPerMonth: number;
-    };
     settings: {
         allowAadhaarVerification: boolean;
         requireAadhaarPhoto: boolean;
         allowWhatsAppNotifications: boolean;
         allowEmailNotifications: boolean;
-        workingHours: {
-            start: string;
-            end: string;
-            workingDays: number[];
-        };
         timezone: string;
         logo?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
     };
     isActive: boolean;
     isDeleted: boolean;
@@ -62,8 +39,6 @@ export interface ICompany extends Document {
 export interface ICreateCompanyDTO {
     companyName: string;
     companyCode?: string;
-    email: string;
-    phone: string;
     address: {
         street: string;
         city: string;
@@ -71,39 +46,18 @@ export interface ICreateCompanyDTO {
         country?: string;
         zipCode: string;
     };
-    contactPerson: {
-        name: string;
-        email: string;
-        phone: string;
-        designation: string;
-    };
-    subscription: {
-        plan: 'basic' | 'premium' | 'enterprise';
-        maxEmployees: number;
-        maxVisitorsPerMonth: number;
-        endDate: Date;
-    };
     settings?: {
         allowAadhaarVerification?: boolean;
         requireAadhaarPhoto?: boolean;
         allowWhatsAppNotifications?: boolean;
         allowEmailNotifications?: boolean;
-        workingHours?: {
-            start?: string;
-            end?: string;
-            workingDays?: number[];
-        };
         timezone?: string;
         logo?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
     };
 }
 
 export interface IUpdateCompanyDTO {
     companyName?: string;
-    email?: string;
-    phone?: string;
     address?: {
         street?: string;
         city?: string;
@@ -111,33 +65,13 @@ export interface IUpdateCompanyDTO {
         country?: string;
         zipCode?: string;
     };
-    contactPerson?: {
-        name?: string;
-        email?: string;
-        phone?: string;
-        designation?: string;
-    };
-    subscription?: {
-        plan?: 'basic' | 'premium' | 'enterprise';
-        status?: 'active' | 'inactive' | 'suspended' | 'trial';
-        maxEmployees?: number;
-        maxVisitorsPerMonth?: number;
-        endDate?: Date;
-    };
     settings?: {
         allowAadhaarVerification?: boolean;
         requireAadhaarPhoto?: boolean;
         allowWhatsAppNotifications?: boolean;
         allowEmailNotifications?: boolean;
-        workingHours?: {
-            start?: string;
-            end?: string;
-            workingDays?: number[];
-        };
         timezone?: string;
         logo?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
     };
     isActive?: boolean;
 }
@@ -146,8 +80,6 @@ export interface ICompanyResponse {
     _id: string;
     companyName: string;
     companyCode: string;
-    email: string;
-    phone: string;
     address: {
         street: string;
         city: string;
@@ -155,37 +87,13 @@ export interface ICompanyResponse {
         country: string;
         zipCode: string;
     };
-    contactPerson: {
-        name: string;
-        email: string;
-        phone: string;
-        designation: string;
-    };
-    subscription: {
-        plan: 'basic' | 'premium' | 'enterprise';
-        status: 'active' | 'inactive' | 'suspended' | 'trial';
-        startDate: Date;
-        endDate: Date;
-        maxEmployees: number;
-        maxVisitorsPerMonth: number;
-        isActive: boolean;
-        remainingEmployees: number;
-        remainingVisitorsThisMonth: number;
-    };
     settings: {
         allowAadhaarVerification: boolean;
         requireAadhaarPhoto: boolean;
         allowWhatsAppNotifications: boolean;
         allowEmailNotifications: boolean;
-        workingHours: {
-            start: string;
-            end: string;
-            workingDays: number[];
-        };
         timezone: string;
         logo?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
     };
     isActive: boolean;
     isDeleted: boolean;

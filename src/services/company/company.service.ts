@@ -24,11 +24,6 @@ export class CompanyService {
             }
         }
 
-        // Check if email already exists
-        const existingEmail = await Company.findOne({ email: companyData.email }).session(session);
-        if (existingEmail) {
-            throw new AppError(ERROR_MESSAGES.COMPANY_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
-        }
 
         // Create new company with userId from authenticated user
         const company = new Company({ ...companyData, userId });

@@ -194,9 +194,9 @@ export class EmployeeService {
     }
 
     /**
-     * Get trashed employees
+     * Get trashed employees (user-specific)
      */
-    static async getTrashedEmployees(query: IGetEmployeesQuery = {}): Promise<IEmployeeListResponse> {
+    static async getTrashedEmployees(query: IGetEmployeesQuery = {}, userId?: string): Promise<IEmployeeListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -206,8 +206,13 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object for deleted employees
+        // Build filter object for deleted employees - only show employees created by the current user
         const filter: any = { isDeleted: true };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.createdBy = userId;
+        }
 
         if (search) {
             filter.$or = [

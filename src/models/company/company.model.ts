@@ -5,8 +5,6 @@ export interface ICompany extends mongoose.Document {
     userId: mongoose.Types.ObjectId; // Reference to User who created the company
     companyName: string;
     companyCode: string;
-    email: string;
-    phone: string;
     address: {
         street: string;
         city: string;
@@ -14,34 +12,13 @@ export interface ICompany extends mongoose.Document {
         country: string;
         zipCode: string;
     };
-    contactPerson: {
-        name: string;
-        email: string;
-        phone: string;
-        designation: string;
-    };
-    subscription: {
-        plan: 'basic' | 'premium' | 'enterprise';
-        status: 'active' | 'inactive' | 'suspended' | 'trial';
-        startDate: Date;
-        endDate: Date;
-        maxEmployees: number;
-        maxVisitorsPerMonth: number;
-    };
     settings: {
         allowAadhaarVerification: boolean;
         requireAadhaarPhoto: boolean;
         allowWhatsAppNotifications: boolean;
         allowEmailNotifications: boolean;
-        workingHours: {
-            start: string;
-            end: string;
-            workingDays: number[];
-        };
         timezone: string;
         logo?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
     };
     isActive: boolean;
     isDeleted: boolean;
@@ -75,26 +52,6 @@ const companySchema = new Schema<ICompany>(
             maxlength: [10, 'Company code cannot exceed 10 characters'],
             match: [/^[A-Z0-9]+$/, 'Company code can only contain uppercase letters and numbers']
         },
-        email: {
-            type: String,
-            required: [true, 'Company email is required'],
-            unique: true,
-            lowercase: true,
-            trim: true,
-            match: [
-                /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                'Please provide a valid email address'
-            ]
-        },
-        phone: {
-            type: String,
-            required: [true, 'Company phone is required'],
-            trim: true,
-            match: [
-                /^[\+]?[1-9][\d]{0,15}$/,
-                'Please provide a valid phone number'
-            ]
-        },
         address: {
             street: {
                 type: String,
@@ -115,79 +72,12 @@ const companySchema = new Schema<ICompany>(
                 type: String,
                 required: [true, 'Country is required'],
                 trim: true,
-                default: 'India'
+                default: 'IN' // India country code
             },
             zipCode: {
                 type: String,
                 required: [true, 'ZIP code is required'],
                 trim: true
-            }
-        },
-        contactPerson: {
-            name: {
-                type: String,
-                required: [true, 'Contact person name is required'],
-                trim: true
-            },
-            email: {
-                type: String,
-                required: [true, 'Contact person email is required'],
-                lowercase: true,
-                trim: true,
-                match: [
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                    'Please provide a valid email address'
-                ]
-            },
-            phone: {
-                type: String,
-                required: [true, 'Contact person phone is required'],
-                trim: true,
-                match: [
-                    /^[\+]?[1-9][\d]{0,15}$/,
-                    'Please provide a valid phone number'
-                ]
-            },
-            designation: {
-                type: String,
-                required: [true, 'Contact person designation is required'],
-                trim: true
-            }
-        },
-        subscription: {
-            plan: {
-                type: String,
-                enum: {
-                    values: ['basic', 'premium', 'enterprise'],
-                    message: 'Plan must be basic, premium, or enterprise'
-                },
-                default: 'basic'
-            },
-            status: {
-                type: String,
-                enum: {
-                    values: ['active', 'inactive', 'suspended', 'trial'],
-                    message: 'Status must be active, inactive, suspended, or trial'
-                },
-                default: 'trial'
-            },
-            startDate: {
-                type: Date,
-                default: Date.now
-            },
-            endDate: {
-                type: Date,
-                required: [true, 'Subscription end date is required']
-            },
-            maxEmployees: {
-                type: Number,
-                required: [true, 'Maximum employees limit is required'],
-                min: [1, 'Maximum employees must be at least 1']
-            },
-            maxVisitorsPerMonth: {
-                type: Number,
-                required: [true, 'Maximum visitors per month limit is required'],
-                min: [1, 'Maximum visitors per month must be at least 1']
             }
         },
         settings: {
@@ -207,28 +97,6 @@ const companySchema = new Schema<ICompany>(
                 type: Boolean,
                 default: true
             },
-            workingHours: {
-                start: {
-                    type: String,
-                    default: '09:00',
-                    match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)']
-                },
-                end: {
-                    type: String,
-                    default: '18:00',
-                    match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)']
-                },
-                workingDays: {
-                    type: [Number],
-                    default: [1, 2, 3, 4, 5], // Monday to Friday
-                    validate: {
-                        validator: function (days: number[]) {
-                            return days.every(day => day >= 1 && day <= 7);
-                        },
-                        message: 'Working days must be between 1 (Monday) and 7 (Sunday)'
-                    }
-                }
-            },
             timezone: {
                 type: String,
                 default: 'Asia/Kolkata'
@@ -237,16 +105,6 @@ const companySchema = new Schema<ICompany>(
                 type: String,
                 trim: true
             },
-            primaryColor: {
-                type: String,
-                default: '#3B82F6',
-                match: [/^#[0-9A-F]{6}$/i, 'Invalid color format (use #RRGGBB)']
-            },
-            secondaryColor: {
-                type: String,
-                default: '#1E40AF',
-                match: [/^#[0-9A-F]{6}$/i, 'Invalid color format (use #RRGGBB)']
-            }
         },
         isActive: {
             type: Boolean,
@@ -273,7 +131,6 @@ const companySchema = new Schema<ICompany>(
 );
 
 // Indexes for performance
-companySchema.index({ 'subscription.status': 1 });
 companySchema.index({ createdAt: -1 });
 companySchema.index({ userId: 1 });
 companySchema.index({ isDeleted: 1 });

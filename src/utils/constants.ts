@@ -16,7 +16,6 @@ const ERROR_MESSAGES = {
     USER_NOT_FOUND: "User not found",
     COMPANY_NOT_FOUND: "Company not found",
     COMPANY_CODE_EXISTS: "Company code already exists",
-    COMPANY_EMAIL_EXISTS: "Company email already exists",
     PASSWORD_MISMATCH: "Current password is incorrect",
     EMAIL_NOT_VERIFIED: "Email not verified",
     ACCOUNT_DISABLED: "Account is disabled",

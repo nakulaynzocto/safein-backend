@@ -3,7 +3,7 @@ export const companyPaths = {
         post: {
             tags: ['Companies'],
             summary: 'Create a new company',
-            description: 'Create a new company with subscription details',
+            description: 'Create a new company',
             security: [{ bearerAuth: [] }],
             requestBody: {
                 required: true,

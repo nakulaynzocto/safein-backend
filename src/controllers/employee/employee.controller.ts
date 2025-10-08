@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { EmployeeService } from '../../services/employee/employee.service';
 import { Employee } from '../../models/employee/employee.model';
 import { ResponseUtil } from '../../utils';
@@ -72,19 +72,31 @@ export class EmployeeController {
     }
 
     /**
-     * Update employee
+     * Update employee (user-specific)
      * PUT /api/employees/:id
      */
     @TryCatch('Failed to update employee')
-    static async updateEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async updateEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
         const updateData: IUpdateEmployeeDTO = req.body;
+        const userId = req.user._id.toString();
+        
+        // Verify the employee belongs to the current user before updating
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const employee = await EmployeeService.updateEmployee(id, updateData);
         ResponseUtil.success(res, 'Employee updated successfully', employee);
     }
 
     /**
-     * Soft delete employee
+     * Soft delete employee (user-specific)
      * DELETE /api/employees/:id
      */
     @TryCatch('Failed to delete employee')
@@ -92,53 +104,107 @@ export class EmployeeController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Verify the employee belongs to the current user before deleting
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const deletedBy = req.user._id.toString();
         await EmployeeService.deleteEmployee(id, deletedBy);
         ResponseUtil.success(res, 'Employee deleted successfully');
     }
 
     /**
-     * Get trashed employees
+     * Get trashed employees (user-specific)
      * GET /api/employees/trashed
      */
     @TryCatch('Failed to get trashed employees')
-    static async getTrashedEmployees(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getTrashedEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const query: IGetEmployeesQuery = req.query;
-        const result = await EmployeeService.getTrashedEmployees(query);
+        const userId = req.user._id.toString();
+        const result = await EmployeeService.getTrashedEmployees(query, userId);
         ResponseUtil.success(res, 'Trashed employees retrieved successfully', result);
     }
 
     /**
-     * Restore employee from trash
+     * Restore employee from trash (user-specific)
      * PUT /api/employees/:id/restore
      */
     @TryCatch('Failed to restore employee')
-    static async restoreEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async restoreEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Verify the employee belongs to the current user before restoring
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const employee = await EmployeeService.restoreEmployee(id);
         ResponseUtil.success(res, 'Employee restored successfully', employee);
     }
 
     /**
-     * Update employee status
+     * Update employee status (user-specific)
      * PUT /api/employees/:id/status
      */
     @TryCatch('Failed to update employee status')
-    static async updateEmployeeStatus(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async updateEmployeeStatus(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
         const statusData: IUpdateEmployeeStatusDTO = req.body;
+        const userId = req.user._id.toString();
+        
+        // Verify the employee belongs to the current user before updating status
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const employee = await EmployeeService.updateEmployeeStatus(id, statusData);
         ResponseUtil.success(res, 'Employee status updated successfully', employee);
     }
 
     /**
-     * Bulk update employees
+     * Bulk update employees (user-specific)
      * PUT /api/employees/bulk-update
      */
     @TryCatch('Failed to bulk update employees')
-    static async bulkUpdateEmployees(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async bulkUpdateEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const bulkData: IBulkUpdateEmployeesDTO = req.body;
+        const userId = req.user._id.toString();
+        
+        // Verify all employees belong to the current user before bulk updating
+        const employees = await Employee.find({ 
+            _id: { $in: bulkData.employeeIds },
+            createdBy: userId 
+        });
+        
+        if (employees.length !== bulkData.employeeIds.length) {
+            throw new AppError('Some employees not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const result = await EmployeeService.bulkUpdateEmployees(bulkData);
         ResponseUtil.success(res, 'Employees updated successfully', result);
     }
