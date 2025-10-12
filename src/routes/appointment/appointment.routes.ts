@@ -116,6 +116,20 @@ router.put(
     asyncWrapper(AppointmentController.cancelAppointment)
 );
 
+// Approve appointment
+router.put(
+    '/:id/approve',
+    validateRequest(appointmentParamsValidation),
+    asyncWrapper(AppointmentController.approveAppointment)
+);
+
+// Reject appointment
+router.put(
+    '/:id/reject',
+    validateRequest(appointmentParamsValidation),
+    asyncWrapper(AppointmentController.rejectAppointment)
+);
+
 // Get appointment by appointment ID
 router.get(
     '/appointment/:appointmentId',

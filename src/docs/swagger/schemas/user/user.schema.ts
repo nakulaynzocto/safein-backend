@@ -6,32 +6,14 @@ export const userSchemas = {
         type: 'string',
         description: 'User ID'
       },
-      firstName: {
+      companyName: {
         type: 'string',
-        description: 'User first name'
-      },
-      lastName: {
-        type: 'string',
-        description: 'User last name'
+        description: 'Company name'
       },
       email: {
         type: 'string',
         format: 'email',
         description: 'User email address'
-      },
-      phoneNumber: {
-        type: 'string',
-        description: 'User phone number'
-      },
-      dateOfBirth: {
-        type: 'string',
-        format: 'date',
-        description: 'User date of birth'
-      },
-      gender: {
-        type: 'string',
-        enum: ['male', 'female', 'other'],
-        description: 'User gender'
       },
       profilePicture: {
         type: 'string',
@@ -81,19 +63,13 @@ export const userSchemas = {
   },
   CreateUser: {
     type: 'object',
-    required: ['firstName', 'lastName', 'email', 'password'],
+    required: ['companyName', 'email', 'password'],
     properties: {
-      firstName: {
+      companyName: {
         type: 'string',
         minLength: 2,
-        maxLength: 50,
-        description: 'User first name'
-      },
-      lastName: {
-        type: 'string',
-        minLength: 2,
-        maxLength: 50,
-        description: 'User last name'
+        maxLength: 100,
+        description: 'Company name'
       },
       email: {
         type: 'string',
@@ -104,52 +80,12 @@ export const userSchemas = {
         type: 'string',
         minLength: 6,
         description: 'User password'
-      },
-      phoneNumber: {
-        type: 'string',
-        description: 'User phone number'
-      },
-      dateOfBirth: {
-        type: 'string',
-        format: 'date',
-        description: 'User date of birth'
-      },
-      gender: {
-        type: 'string',
-        enum: ['male', 'female', 'other'],
-        description: 'User gender'
       }
     }
   },
   UpdateUser: {
     type: 'object',
     properties: {
-      firstName: {
-        type: 'string',
-        minLength: 2,
-        maxLength: 50,
-        description: 'User first name'
-      },
-      lastName: {
-        type: 'string',
-        minLength: 2,
-        maxLength: 50,
-        description: 'User last name'
-      },
-      phoneNumber: {
-        type: 'string',
-        description: 'User phone number'
-      },
-      dateOfBirth: {
-        type: 'string',
-        format: 'date',
-        description: 'User date of birth'
-      },
-      gender: {
-        type: 'string',
-        enum: ['male', 'female', 'other'],
-        description: 'User gender'
-      },
       profilePicture: {
         type: 'string',
         format: 'uri',

@@ -14,11 +14,22 @@ import routes from './routes';
 import employeeRoutes from './routes/employee/employee.routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
+import { EmailService } from './services/email/email.service';
 
 const app: Express = express();
 
 // Connect to MongoDB
 connectDatabase();
+
+// Initialize Email Service
+EmailService.initializeTransporter();
+EmailService.verifyConnection().then((isConnected) => {
+  if (isConnected) {
+    console.log('✅ Email service initialized successfully');
+  } else {
+    console.log('⚠️ Email service initialization failed - OTP emails may not work');
+  }
+});
 
 // Security middleware
 app.use(helmet());

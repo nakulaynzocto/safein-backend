@@ -1,5 +1,6 @@
 import { Appointment } from '../../models/appointment/appointment.model';
 import { Employee } from '../../models/employee/employee.model';
+import { EmailService } from '../email/email.service';
 import {
     ICreateAppointmentDTO,
     IUpdateAppointmentDTO,
@@ -51,6 +52,30 @@ export class AppointmentService {
         });
 
         await appointment.save({ session });
+
+        // Populate appointment data for email notification
+        const populatedAppointment = await Appointment.findById(appointment._id)
+            .populate('employeeId', 'name email')
+            .populate('visitorId', 'name email phone')
+            .session(session);
+
+        // Send notification email to employee about new appointment request
+        try {
+            if (populatedAppointment) {
+                await EmailService.sendNewAppointmentRequestEmail(
+                    (populatedAppointment.employeeId as any).email,
+                    (populatedAppointment.employeeId as any).name,
+                    (populatedAppointment.visitorId as any).name,
+                    populatedAppointment.appointmentDetails.scheduledDate,
+                    populatedAppointment.appointmentDetails.scheduledTime,
+                    populatedAppointment.appointmentDetails.purpose,
+                    (populatedAppointment._id as any).toString()
+                );
+            }
+        } catch (error) {
+            console.error('Failed to send new appointment request email to employee:', error);
+            // Don't throw error - appointment is still created
+        }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
@@ -567,6 +592,116 @@ export class AppointmentService {
         // Update status to rejected (cancelled)
         appointment.status = 'rejected';
         await appointment.save({ session });
+
+        return appointment.toObject() as unknown as IAppointmentResponse;
+    }
+
+    /**
+     * Approve appointment
+     */
+    static async approveAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
+        const { session } = options;
+
+        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
+            .populate('employeeId', 'name email')
+            .populate('visitorId', 'name email phone')
+            .session(session);
+            
+        if (!appointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        // Check if appointment can be approved (only pending appointments can be approved)
+        if (appointment.status !== 'pending') {
+            throw new AppError('Only pending appointments can be approved', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Update status to approved
+        appointment.status = 'approved';
+        await appointment.save({ session });
+
+        // Send notification to visitor
+        try {
+            await EmailService.sendAppointmentApprovalEmail(
+                (appointment.visitorId as any).email,
+                (appointment.visitorId as any).name,
+                (appointment.employeeId as any).name,
+                appointment.appointmentDetails.scheduledDate,
+                appointment.appointmentDetails.scheduledTime
+            );
+        } catch (error) {
+            console.error('Failed to send approval email to visitor:', error);
+            // Don't throw error - appointment is still approved
+        }
+
+        // Send notification to employee
+        try {
+            await EmailService.sendEmployeeAppointmentApprovalEmail(
+                (appointment.employeeId as any).email,
+                (appointment.employeeId as any).name,
+                (appointment.visitorId as any).name,
+                appointment.appointmentDetails.scheduledDate,
+                appointment.appointmentDetails.scheduledTime
+            );
+        } catch (error) {
+            console.error('Failed to send approval email to employee:', error);
+            // Don't throw error - appointment is still approved
+        }
+
+        return appointment.toObject() as unknown as IAppointmentResponse;
+    }
+
+    /**
+     * Reject appointment
+     */
+    static async rejectAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
+        const { session } = options;
+
+        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
+            .populate('employeeId', 'name email')
+            .populate('visitorId', 'name email phone')
+            .session(session);
+            
+        if (!appointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        // Check if appointment can be rejected (only pending appointments can be rejected)
+        if (appointment.status !== 'pending') {
+            throw new AppError('Only pending appointments can be rejected', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Update status to rejected
+        appointment.status = 'rejected';
+        await appointment.save({ session });
+
+        // Send notification to visitor
+        try {
+            await EmailService.sendAppointmentRejectionEmail(
+                (appointment.visitorId as any).email,
+                (appointment.visitorId as any).name,
+                (appointment.employeeId as any).name,
+                appointment.appointmentDetails.scheduledDate,
+                appointment.appointmentDetails.scheduledTime
+            );
+        } catch (error) {
+            console.error('Failed to send rejection email to visitor:', error);
+            // Don't throw error - appointment is still rejected
+        }
+
+        // Send notification to employee
+        try {
+            await EmailService.sendEmployeeAppointmentRejectionEmail(
+                (appointment.employeeId as any).email,
+                (appointment.employeeId as any).name,
+                (appointment.visitorId as any).name,
+                appointment.appointmentDetails.scheduledDate,
+                appointment.appointmentDetails.scheduledTime
+            );
+        } catch (error) {
+            console.error('Failed to send rejection email to employee:', error);
+            // Don't throw error - appointment is still rejected
+        }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }

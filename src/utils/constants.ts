@@ -21,7 +21,6 @@ const ERROR_MESSAGES = {
     ACCOUNT_DISABLED: "Account is disabled",
     // Employee error messages
     EMPLOYEE_NOT_FOUND: "Employee not found",
-    EMPLOYEE_ID_EXISTS: "Employee ID already exists",
     EMPLOYEE_EMAIL_EXISTS: "Employee email already exists",
     EMPLOYEE_ALREADY_DELETED: "Employee is already deleted",
     EMPLOYEE_NOT_DELETED: "Employee is not deleted",

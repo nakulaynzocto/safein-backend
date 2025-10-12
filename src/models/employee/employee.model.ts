@@ -1,15 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IEmployee extends Document {
-    employeeId: string;
     name: string;
     email: string;
     phone: string;
-    whatsapp?: string;
     department: string;
-    designation: string;
-    role: string;
-    officeLocation: string;
     status: 'Active' | 'Inactive';
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the employee
     isDeleted: boolean;
@@ -20,12 +15,6 @@ export interface IEmployee extends Document {
 }
 
 const employeeSchema = new Schema<IEmployee>({
-    employeeId: {
-        type: String,
-        required: [true, 'Employee ID is required'],
-        trim: true,
-        uppercase: true
-    },
     name: {
         type: String,
         required: [true, 'Employee name is required'],
@@ -46,38 +35,12 @@ const employeeSchema = new Schema<IEmployee>({
         trim: true,
         match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
     },
-    whatsapp: {
-        type: String,
-        trim: true,
-        match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid WhatsApp number']
-    },
     department: {
         type: String,
         required: [true, 'Department is required'],
         trim: true,
         minlength: [2, 'Department must be at least 2 characters long'],
         maxlength: [50, 'Department cannot exceed 50 characters']
-    },
-    designation: {
-        type: String,
-        required: [true, 'Designation is required'],
-        trim: true,
-        minlength: [2, 'Designation must be at least 2 characters long'],
-        maxlength: [50, 'Designation cannot exceed 50 characters']
-    },
-    role: {
-        type: String,
-        required: [true, 'Role is required'],
-        trim: true,
-        minlength: [2, 'Role must be at least 2 characters long'],
-        maxlength: [100, 'Role cannot exceed 100 characters']
-    },
-    officeLocation: {
-        type: String,
-        required: [true, 'Office location is required'],
-        trim: true,
-        minlength: [2, 'Office location must be at least 2 characters long'],
-        maxlength: [100, 'Office location cannot exceed 100 characters']
     },
     status: {
         type: String,
@@ -116,7 +79,6 @@ employeeSchema.index({ deletedAt: 1 });
 employeeSchema.index({ createdBy: 1 });
 
 // Compound indexes for user-specific uniqueness
-employeeSchema.index({ createdBy: 1, employeeId: 1 }, { unique: true });
 employeeSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
 // Virtual for full name
@@ -124,11 +86,8 @@ employeeSchema.virtual('fullName').get(function () {
     return this.name;
 });
 
-// Pre-save middleware to ensure employeeId is uppercase
+// Pre-save middleware
 employeeSchema.pre('save', function (next) {
-    if (this.employeeId) {
-        this.employeeId = this.employeeId.toUpperCase();
-    }
     next();
 });
 

@@ -1,8 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import { userSchemas } from './schemas/user/user.schema';
 import { userPaths } from './paths/user/user.paths';
-import { companySchemas } from './schemas/company/company.schema';
-import { companyPaths } from './paths/company/company.paths';
 import { employeeSchemas } from './schemas/employee/employee.schemas';
 import { employeePaths } from './paths/employee/employee.paths';
 import { appointmentSchemas } from './schemas/appointment/appointment.schema';
@@ -16,7 +14,7 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'Gatekeeper Visitor Appointment System API',
       version: '1.0.0',
-      description: 'SaaS multi-tenant visitor appointment management system with company management, user authentication, and appointment booking',
+      description: 'SaaS visitor appointment management system with user authentication and appointment booking',
       contact: {
         name: 'API Support',
         email: 'support@gatekeeper.com'
@@ -31,7 +29,6 @@ const options: swaggerJsdoc.Options = {
     components: {
       schemas: {
         ...userSchemas,
-        ...companySchemas,
         ...employeeSchemas,
         ...appointmentSchemas,
         ...visitorSchemas
@@ -47,7 +44,6 @@ const options: swaggerJsdoc.Options = {
     },
     paths: {
       ...userPaths,
-      ...companyPaths,
       ...employeePaths,
       ...appointmentPaths,
       ...visitorPaths
@@ -56,10 +52,6 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Users',
         description: 'User management endpoints'
-      },
-      {
-        name: 'Companies',
-        description: 'Company management endpoints'
       },
       {
         name: 'Employee',

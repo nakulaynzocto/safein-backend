@@ -15,7 +15,9 @@ import {
     forgotPasswordValidation,
     resetPasswordValidation,
     getUserByIdValidation,
-    getUsersValidation
+    getUsersValidation,
+    verifyOtpValidation,
+    resendOtpValidation
 } from '../../validations/user/user.validation';
 
 const router = Router();
@@ -43,6 +45,18 @@ router.post('/reset-password',
     passwordResetLimiter,
     validateRequest(resetPasswordValidation),
     asyncWrapper(UserController.resetPassword)
+);
+
+router.post('/verify-otp',
+    authLimiter,
+    validateRequest(verifyOtpValidation),
+    asyncWrapper(UserController.verifyOtp)
+);
+
+router.post('/resend-otp',
+    authLimiter,
+    validateRequest(resendOtpValidation),
+    asyncWrapper(UserController.resendOtp)
 );
 
 // Protected routes (require authentication)

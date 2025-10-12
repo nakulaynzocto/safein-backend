@@ -7,13 +7,33 @@ import { AppError } from '../../middlewares/errorHandler';
 
 export class UserController {
   /**
-   * Register a new user
+   * Register a new user (sends OTP)
    */
   @TryCatch('Failed to register user')
   static async register(req: Request, res: Response, _next: NextFunction): Promise<void> {
     const userData = req.body;
-    const user = await UserService.createUser(userData);
-    ResponseUtil.created(res, 'User registered successfully', user);
+    const result = await UserService.initiateRegistration(userData);
+    ResponseUtil.success(res, 'OTP sent to your email', result);
+  }
+
+  /**
+   * Verify OTP and complete registration
+   */
+  @TryCatch('Failed to verify OTP')
+  static async verifyOtp(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { email, otp } = req.body;
+    const result = await UserService.verifyOtpAndCompleteRegistration(email, otp);
+    ResponseUtil.success(res, 'OTP verified — registration complete', result);
+  }
+
+  /**
+   * Resend OTP
+   */
+  @TryCatch('Failed to resend OTP')
+  static async resendOtp(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { email } = req.body;
+    const result = await UserService.resendOtp(email);
+    ResponseUtil.success(res, 'OTP resent to your email', result);
   }
 
   /**

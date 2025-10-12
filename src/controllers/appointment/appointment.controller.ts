@@ -214,4 +214,26 @@ export class AppointmentController {
         const appointment = await AppointmentService.cancelAppointment(id);
         ResponseUtil.success(res, 'Appointment cancelled successfully', appointment);
     }
+
+    /**
+     * Approve appointment
+     * PUT /api/appointments/:id/approve
+     */
+    @TryCatch('Failed to approve appointment')
+    static async approveAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+        const { id } = req.params;
+        const result = await AppointmentService.approveAppointment(id);
+        ResponseUtil.success(res, 'Appointment approved successfully. The visitor has been notified.', result);
+    }
+
+    /**
+     * Reject appointment
+     * PUT /api/appointments/:id/reject
+     */
+    @TryCatch('Failed to reject appointment')
+    static async rejectAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+        const { id } = req.params;
+        const result = await AppointmentService.rejectAppointment(id);
+        ResponseUtil.success(res, 'Appointment rejected. The visitor has been informed.', result);
+    }
 }

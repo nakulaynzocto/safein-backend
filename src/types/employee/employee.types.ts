@@ -1,16 +1,9 @@
-import { IEmployee } from '../../models/employee/employee.model';
-
 // DTOs for creating employee
 export interface ICreateEmployeeDTO {
-    employeeId: string;
     name: string;
     email: string;
     phone: string;
-    whatsapp?: string;
     department: string;
-    designation: string;
-    role: string;
-    officeLocation: string;
     status?: 'Active' | 'Inactive';
 }
 
@@ -19,26 +12,17 @@ export interface IUpdateEmployeeDTO {
     name?: string;
     email?: string;
     phone?: string;
-    whatsapp?: string;
     department?: string;
-    designation?: string;
-    role?: string;
-    officeLocation?: string;
     status?: 'Active' | 'Inactive';
 }
 
 // Response interface for employee
 export interface IEmployeeResponse {
     _id: string;
-    employeeId: string;
     name: string;
     email: string;
     phone: string;
-    whatsapp?: string;
     department: string;
-    designation: string;
-    role: string;
-    officeLocation: string;
     status: 'Active' | 'Inactive';
     createdBy: string; // Reference to User who created the employee
     isDeleted: boolean;
@@ -71,11 +55,6 @@ export interface IEmployeeListResponse {
     };
 }
 
-// Request interface for authenticated requests
-export interface AuthenticatedRequest extends Request {
-    user?: any;
-}
-
 // Status update DTO
 export interface IUpdateEmployeeStatusDTO {
     status: 'Active' | 'Inactive';
@@ -86,7 +65,6 @@ export interface IBulkUpdateEmployeesDTO {
     employeeIds: string[];
     status?: 'Active' | 'Inactive';
     department?: string;
-    designation?: string;
 }
 
 // Employee statistics interface

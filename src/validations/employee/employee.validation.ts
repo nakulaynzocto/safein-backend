@@ -2,18 +2,6 @@ import Joi from 'joi';
 
 // Validation for creating employee
 export const createEmployeeValidation = Joi.object({
-    employeeId: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(20)
-        .pattern(/^[A-Z0-9]+$/)
-        .messages({
-            'string.empty': 'Employee ID is required',
-            'string.min': 'Employee ID must be at least 2 characters long',
-            'string.max': 'Employee ID cannot exceed 20 characters',
-            'string.pattern.base': 'Employee ID must contain only uppercase letters and numbers'
-        }),
     name: Joi.string()
         .required()
         .trim()
@@ -41,14 +29,6 @@ export const createEmployeeValidation = Joi.object({
             'string.empty': 'Phone number is required',
             'string.pattern.base': 'Please enter a valid phone number'
         }),
-    whatsapp: Joi.string()
-        .optional()
-        .trim()
-        .pattern(/^[\+]?[1-9][\d]{0,15}$/)
-        .allow('')
-        .messages({
-            'string.pattern.base': 'Please enter a valid WhatsApp number'
-        }),
     department: Joi.string()
         .required()
         .trim()
@@ -58,36 +38,6 @@ export const createEmployeeValidation = Joi.object({
             'string.empty': 'Department is required',
             'string.min': 'Department must be at least 2 characters long',
             'string.max': 'Department cannot exceed 50 characters'
-        }),
-    designation: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(50)
-        .messages({
-            'string.empty': 'Designation is required',
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 50 characters'
-        }),
-    role: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.empty': 'Role is required',
-            'string.min': 'Role must be at least 2 characters long',
-            'string.max': 'Role cannot exceed 100 characters'
-        }),
-    officeLocation: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.empty': 'Office location is required',
-            'string.min': 'Office location must be at least 2 characters long',
-            'string.max': 'Office location cannot exceed 100 characters'
         }),
     status: Joi.string()
         .optional()
@@ -124,14 +74,6 @@ export const updateEmployeeValidation = Joi.object({
         .messages({
             'string.pattern.base': 'Please enter a valid phone number'
         }),
-    whatsapp: Joi.string()
-        .optional()
-        .trim()
-        .pattern(/^[\+]?[1-9][\d]{0,15}$/)
-        .allow('')
-        .messages({
-            'string.pattern.base': 'Please enter a valid WhatsApp number'
-        }),
     department: Joi.string()
         .optional()
         .trim()
@@ -140,33 +82,6 @@ export const updateEmployeeValidation = Joi.object({
         .messages({
             'string.min': 'Department must be at least 2 characters long',
             'string.max': 'Department cannot exceed 50 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(50)
-        .messages({
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 50 characters'
-        }),
-    role: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Role must be at least 2 characters long',
-            'string.max': 'Role cannot exceed 100 characters'
-        }),
-    officeLocation: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Office location must be at least 2 characters long',
-            'string.max': 'Office location cannot exceed 100 characters'
         }),
     status: Joi.string()
         .optional()
@@ -227,7 +142,7 @@ export const getEmployeesValidation = Joi.object({
         }),
     sortBy: Joi.string()
         .optional()
-        .valid('name', 'email', 'department', 'designation', 'status', 'createdAt', 'updatedAt')
+        .valid('name', 'email', 'department', 'status', 'createdAt', 'updatedAt')
         .default('createdAt')
         .messages({
             'any.only': 'Invalid sort field'
@@ -278,14 +193,5 @@ export const bulkUpdateEmployeesValidation = Joi.object({
         .messages({
             'string.min': 'Department must be at least 2 characters long',
             'string.max': 'Department cannot exceed 50 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(50)
-        .messages({
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 50 characters'
         })
 });

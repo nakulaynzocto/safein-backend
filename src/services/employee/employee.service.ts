@@ -21,15 +21,6 @@ export class EmployeeService {
     static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        // Check if employee ID already exists for this user
-        const existingEmployeeId = await Employee.findOne({ 
-            employeeId: employeeData.employeeId, 
-            createdBy: createdBy 
-        }).session(session);
-        if (existingEmployeeId) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_ID_EXISTS, ERROR_CODES.CONFLICT);
-        }
-
         // Check if email already exists for this user
         const existingEmail = await Employee.findOne({ 
             email: employeeData.email, 

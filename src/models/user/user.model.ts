@@ -4,19 +4,12 @@ import { IUser } from '../../types/user/user.types';
 
 const userSchema = new Schema<IUser>(
     {
-        firstName: {
+        companyName: {
             type: String,
-            required: [true, 'First name is required'],
+            required: [true, 'Company name is required'],
             trim: true,
-            minlength: [2, 'First name must be at least 2 characters'],
-            maxlength: [50, 'First name cannot exceed 50 characters']
-        },
-        lastName: {
-            type: String,
-            required: [true, 'Last name is required'],
-            trim: true,
-            minlength: [2, 'Last name must be at least 2 characters'],
-            maxlength: [50, 'Last name cannot exceed 50 characters']
+            minlength: [2, 'Company name must be at least 2 characters'],
+            maxlength: [100, 'Company name cannot exceed 100 characters']
         },
         email: {
             type: String,
@@ -34,30 +27,6 @@ const userSchema = new Schema<IUser>(
             required: [true, 'Password is required'],
             minlength: [6, 'Password must be at least 6 characters'],
             select: false // Don't include password in queries by default
-        },
-        phoneNumber: {
-            type: String,
-            trim: true,
-            match: [
-                /^[\+]?[1-9][\d]{0,15}$/,
-                'Please provide a valid phone number'
-            ]
-        },
-        dateOfBirth: {
-            type: Date,
-            validate: {
-                validator: function (value: Date) {
-                    return !value || value < new Date();
-                },
-                message: 'Date of birth must be in the past'
-            }
-        },
-        gender: {
-            type: String,
-            enum: {
-                values: ['male', 'female', 'other'],
-                message: 'Gender must be male, female, or other'
-            }
         },
         profilePicture: {
             type: String,
@@ -126,7 +95,6 @@ const userSchema = new Schema<IUser>(
 );
 
 // Indexes for performance
-userSchema.index({ phoneNumber: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });
@@ -134,11 +102,6 @@ userSchema.index({ role: 1 });
 userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ isDeleted: 1 });
 userSchema.index({ deletedAt: 1 });
-
-// Virtual for full name
-userSchema.virtual('fullName').get(function () {
-    return `${this.firstName} ${this.lastName}`;
-});
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function (next) {

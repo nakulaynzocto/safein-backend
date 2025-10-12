@@ -11,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@types/nodemailer": "^7.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -21,6 +22,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "morgan": "^1.10.1",
+    "nodemailer": "^7.0.9",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0"
   },

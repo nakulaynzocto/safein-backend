@@ -5,7 +5,6 @@ export interface IAddress {
     city: string;
     state: string;
     country: string;
-    zipCode: string;
 }
 
 export interface IIdProof {
@@ -19,8 +18,6 @@ export interface IVisitor extends Document {
     name: string;
     email: string;
     phone: string;
-    company: string;
-    designation: string;
     address: IAddress;
     idProof: IIdProof;
     photo?: string;
@@ -60,13 +57,6 @@ const addressSchema = new Schema<IAddress>({
         trim: true,
         minlength: [2, 'Country must be at least 2 characters long'],
         maxlength: [100, 'Country cannot exceed 100 characters']
-    },
-    zipCode: {
-        type: String,
-        required: [true, 'ZIP code is required'],
-        trim: true,
-        minlength: [3, 'ZIP code must be at least 3 characters long'],
-        maxlength: [20, 'ZIP code cannot exceed 20 characters']
     }
 }, { _id: false });
 
@@ -121,20 +111,6 @@ const visitorSchema = new Schema<IVisitor>({
         trim: true,
         match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
     },
-    company: {
-        type: String,
-        required: [true, 'Company is required'],
-        trim: true,
-        minlength: [2, 'Company must be at least 2 characters long'],
-        maxlength: [100, 'Company cannot exceed 100 characters']
-    },
-    designation: {
-        type: String,
-        required: [true, 'Designation is required'],
-        trim: true,
-        minlength: [2, 'Designation must be at least 2 characters long'],
-        maxlength: [100, 'Designation cannot exceed 100 characters']
-    },
     address: {
         type: addressSchema,
         required: [true, 'Address is required']
@@ -176,7 +152,6 @@ const visitorSchema = new Schema<IVisitor>({
 visitorSchema.index({ visitorId: 1 }, { sparse: true });
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
-visitorSchema.index({ company: 1 });
 visitorSchema.index({ 'address.city': 1 });
 visitorSchema.index({ 'address.state': 1 });
 visitorSchema.index({ 'address.country': 1 });

@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import userRoutes from './user/user.routes';
-import companyRoutes from './company/company.routes';
 import employeeRoutes from './employee/employee.routes';
 import appointmentRoutes from './appointment/appointment.routes';
 import visitorRoutes from './visitor/visitor.routes';
@@ -19,7 +18,6 @@ router.get('/health', (_req, res) => {
 
 // API routes
 router.use('/users', userRoutes);
-router.use('/companies', companyRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/visitors', visitorRoutes);

@@ -1,5 +1,4 @@
 import { IAddress, IIdProof } from '../../models/visitor/visitor.model';
-import { Request } from 'express';
 
 // DTOs for creating visitor
 export interface ICreateVisitorDTO {
@@ -71,11 +70,6 @@ export interface IVisitorListResponse {
         hasNextPage: boolean;
         hasPrevPage: boolean;
     };
-}
-
-// Request interface for authenticated requests
-export interface AuthenticatedRequest extends Request {
-    user?: any;
 }
 
 // Bulk operations DTO

@@ -2,13 +2,9 @@ import { Document } from 'mongoose';
 
 export interface IUser extends Document {
     _id: string;
-    firstName: string;
-    lastName: string;
+    companyName: string;
     email: string;
     password: string;
-    phoneNumber?: string;
-    dateOfBirth?: Date;
-    gender?: "male" | "female" | "other";
     profilePicture?: string;
     companyId?: string; // Reference to Company
     role: "admin" | "gatekeeper" | "employee" | "visitor";
@@ -34,13 +30,9 @@ export interface IUser extends Document {
 }
 
 export interface ICreateUserDTO {
-    firstName: string;
-    lastName: string;
+    companyName: string;
     email: string;
     password: string;
-    phoneNumber?: string;
-    dateOfBirth?: Date;
-    gender?: "male" | "female" | "other";
     companyId?: string;
     role: "admin" | "gatekeeper" | "employee" | "visitor";
     department?: string;
@@ -49,11 +41,6 @@ export interface ICreateUserDTO {
 }
 
 export interface IUpdateUserDTO {
-    firstName?: string;
-    lastName?: string;
-    phoneNumber?: string;
-    dateOfBirth?: Date;
-    gender?: "male" | "female" | "other";
     profilePicture?: string;
     companyId?: string;
     role?: "admin" | "gatekeeper" | "employee" | "visitor";
@@ -83,12 +70,8 @@ export interface IResetPasswordDTO {
 
 export interface IUserResponse {
     _id: string;
-    firstName: string;
-    lastName: string;
+    companyName: string;
     email: string;
-    phoneNumber?: string;
-    dateOfBirth?: Date;
-    gender?: "male" | "female" | "other";
     profilePicture?: string;
     companyId?: string;
     role: "admin" | "gatekeeper" | "employee" | "visitor";

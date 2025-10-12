@@ -10,8 +10,137 @@ import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
 import { JwtUtil } from '../../utils/jwt.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
+import { EmailService } from '../email/email.service';
+
+// Simple in-memory OTP storage (in production, use Redis or database)
+const otpStorage = new Map<string, { otp: string; expiresAt: Date; userData: ICreateUserDTO }>();
 
 export class UserService {
+  /**
+   * Generate a 6-digit OTP
+   */
+  private static generateOtp(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  /**
+   * Send OTP to email using SMTP
+   */
+  private static async sendOtpToEmail(email: string, otp: string, companyName: string): Promise<void> {
+    try {
+      await EmailService.sendOtpEmail(email, otp, companyName);
+    } catch (error) {
+      console.error('Failed to send OTP email:', error);
+      // In development, don't fail registration if email fails
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📧 DEVELOPMENT MODE - OTP for ${email}: ${otp}`);
+        return;
+      }
+      throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Initiate registration by sending OTP
+   */
+  static async initiateRegistration(userData: ICreateUserDTO): Promise<{ email: string; otpSent: boolean }> {
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: userData.email });
+    if (existingUser) {
+      throw new AppError(ERROR_MESSAGES.EMAIL_ALREADY_IN_USE, ERROR_CODES.CONFLICT);
+    }
+
+    // Generate OTP
+    const otp = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store OTP with user data
+    otpStorage.set(userData.email, { otp, expiresAt, userData });
+
+    // Send OTP to email
+    await this.sendOtpToEmail(userData.email, otp, userData.companyName);
+
+    return {
+      email: userData.email,
+      otpSent: true
+    };
+  }
+
+  /**
+   * Verify OTP and complete registration
+   */
+  @Transaction('Failed to complete registration')
+  static async verifyOtpAndCompleteRegistration(email: string, otp: string, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+    const { session } = options;
+
+    // Get stored OTP data
+    const otpData = otpStorage.get(email);
+    if (!otpData) {
+      throw new AppError('OTP not found or expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Check if OTP is expired
+    if (new Date() > otpData.expiresAt) {
+      otpStorage.delete(email);
+      throw new AppError('OTP expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Verify OTP
+    if (otpData.otp !== otp) {
+      throw new AppError('OTP incorrect', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Create user with the stored data
+    const user = new User(otpData.userData);
+    await user.save({ session });
+
+    // Clean up OTP data
+    otpStorage.delete(email);
+
+    // Generate token
+    const token = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+    });
+
+    // Send welcome email
+    try {
+      await EmailService.sendWelcomeEmail(user.email, user.companyName);
+    } catch (error) {
+      console.error('Failed to send welcome email:', error);
+      // Don't fail registration if welcome email fails
+    }
+
+    return {
+      user: user.getPublicProfile(),
+      token,
+    };
+  }
+
+  /**
+   * Resend OTP
+   */
+  static async resendOtp(email: string): Promise<{ message: string }> {
+    // Get stored OTP data
+    const otpData = otpStorage.get(email);
+    if (!otpData) {
+      throw new AppError('No pending registration found for this email', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Generate new OTP
+    const newOtp = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update stored OTP
+    otpStorage.set(email, { ...otpData, otp: newOtp, expiresAt });
+
+    // Send new OTP to email
+    await this.sendOtpToEmail(email, newOtp, otpData.userData.companyName);
+
+    return {
+      message: 'OTP resent successfully'
+    };
+  }
   /**
    * Create a new user
    */
@@ -141,7 +270,7 @@ export class UserService {
     const [users, total] = await Promise.all([
       User.find(filter)
         .select('-password')
-        .populate('deletedBy', 'firstName lastName email')
+        .populate('deletedBy', 'companyName email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
