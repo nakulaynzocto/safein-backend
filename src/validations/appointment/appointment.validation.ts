@@ -58,18 +58,71 @@ const appointmentDetailsValidation = Joi.object({
             'string.max': 'Purpose cannot exceed 200 characters',
             'any.required': 'Appointment purpose is required'
         }),
-    scheduledDate: Joi.date()
+    scheduledDate: Joi.alternatives()
+        .try(
+            Joi.date().custom((value, helpers) => {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const selectedDate = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+                
+                if (selectedDate < today) {
+                    return helpers.error('date.min');
+                }
+                return value;
+            }).messages({
+                'date.min': 'Scheduled date cannot be in the past',
+                'any.required': 'Scheduled date is required'
+            }),
+            Joi.string().custom((value, helpers) => {
+                const date = new Date(value);
+                if (isNaN(date.getTime())) {
+                    return helpers.error('date.invalid');
+                }
+                
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                
+                if (selectedDate < today) {
+                    return helpers.error('date.min');
+                }
+                return date;
+            }).messages({
+                'date.min': 'Scheduled date cannot be in the past',
+                'date.invalid': 'Invalid date format',
+                'any.required': 'Scheduled date is required'
+            })
+        )
         .required()
-        .min('now')
         .messages({
-            'date.min': 'Scheduled date cannot be in the past',
             'any.required': 'Scheduled date is required'
         }),
     scheduledTime: Joi.string()
         .required()
         .pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+        .custom((value, helpers) => {
+            const scheduledDate = helpers.state.ancestors[0]?.scheduledDate;
+            if (scheduledDate) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const selectedDate = new Date(scheduledDate);
+                const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+                
+                // If the selected date is today, check if time is in the future
+                if (selectedDateOnly.getTime() === today.getTime()) {
+                    const [hours, minutes] = value.split(':').map(Number);
+                    const selectedDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+                    
+                    if (selectedDateTime <= now) {
+                        return helpers.error('time.min');
+                    }
+                }
+            }
+            return value;
+        })
         .messages({
             'string.pattern.base': 'Invalid time format (HH:MM)',
+            'time.min': 'Scheduled time cannot be in the past for today\'s date',
             'any.required': 'Scheduled time is required'
         }),
     duration: Joi.number()
