@@ -3,6 +3,7 @@ import userRoutes from './user/user.routes';
 import employeeRoutes from './employee/employee.routes';
 import appointmentRoutes from './appointment/appointment.routes';
 import visitorRoutes from './visitor/visitor.routes';
+import subscriptionRoutes from './subscription/subscription.routes';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/users', userRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/visitors', visitorRoutes);
+router.use('/subscription-plans', subscriptionRoutes);
 
 export default router;

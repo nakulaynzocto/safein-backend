@@ -8,7 +8,9 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts",
+    "seed:subscription-plans:clear": "ts-node scripts/seed-subscription-plans.ts --clear",
   },
   "dependencies": {
     "@types/nodemailer": "^7.0.2",
