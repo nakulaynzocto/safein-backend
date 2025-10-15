@@ -15,6 +15,7 @@ import employeeRoutes from './routes/employee/employee.routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
+import { StripeService } from './services/stripe/stripe.service';
 
 const app: Express = express();
 
@@ -30,6 +31,15 @@ EmailService.verifyConnection().then((isConnected) => {
     console.log('⚠️ Email service initialization failed - OTP emails may not work');
   }
 });
+
+// Initialize Stripe Service
+try {
+  StripeService.initialize();
+  console.log('✅ Stripe service initialized successfully');
+} catch (error) {
+  console.log('⚠️ Stripe service initialization failed - Payment features may not work');
+  console.error('Stripe error:', error);
+}
 
 // Security middleware
 app.use(helmet());

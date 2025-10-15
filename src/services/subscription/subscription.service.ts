@@ -118,6 +118,7 @@ export class SubscriptionPlanService {
      * Get subscription plan by ID
      */
     static async getSubscriptionPlanById(planId: string): Promise<ISubscriptionPlanResponse> {
+        console.log(planId, "planIdplanIdplanId>>>>>");
         const subscriptionPlan = await SubscriptionPlan.findOne({
             _id: planId,
             isDeleted: false

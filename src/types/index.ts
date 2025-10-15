@@ -3,3 +3,4 @@ export * from './employee/employee.types';
 export * from './appointment/appointment.types';
 export * from './visitor/visitor.types';
 export * from './subscription/subscription.types';
+export * from './userSubscription/userSubscription.types';

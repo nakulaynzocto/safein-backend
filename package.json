@@ -11,9 +11,11 @@
     "test": "jest",
     "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts",
     "seed:subscription-plans:clear": "ts-node scripts/seed-subscription-plans.ts --clear",
+    "test:user-subscription": "ts-node scripts/test-user-subscription-system.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^7.0.2",
+    "@types/stripe": "^8.0.416",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -25,6 +27,7 @@
     "mongoose": "^8.0.3",
     "morgan": "^1.10.1",
     "nodemailer": "^7.0.9",
+    "stripe": "^19.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0"
   },

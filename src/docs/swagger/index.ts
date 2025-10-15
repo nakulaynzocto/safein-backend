@@ -9,6 +9,8 @@ import { visitorSchemas } from './schemas/visitor/visitor.schema';
 import { visitorPaths } from './paths/visitor/visitor.paths';
 import { subscriptionSchemas } from './schemas/subscription/subscription.schema';
 import { subscriptionPaths } from './paths/subscription/subscription.paths';
+import { userSubscriptionSchemas } from './schemas/userSubscription/userSubscription.schema';
+import { userSubscriptionPaths } from './paths/userSubscription/userSubscription.paths';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -34,7 +36,8 @@ const options: swaggerJsdoc.Options = {
         ...employeeSchemas,
         ...appointmentSchemas,
         ...visitorSchemas,
-        ...subscriptionSchemas
+        ...subscriptionSchemas,
+        ...userSubscriptionSchemas
       },
       securitySchemes: {
         bearerAuth: {
@@ -50,7 +53,8 @@ const options: swaggerJsdoc.Options = {
       ...employeePaths,
       ...appointmentPaths,
       ...visitorPaths,
-      ...subscriptionPaths
+      ...subscriptionPaths,
+      ...userSubscriptionPaths
     },
     tags: [
       {
@@ -72,6 +76,14 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Subscription Plans',
         description: 'Subscription plan management endpoints'
+      },
+      {
+        name: 'User Subscriptions',
+        description: 'User subscription management endpoints'
+      },
+      {
+        name: 'Stripe Integration',
+        description: 'Stripe payment and webhook integration endpoints'
       }
     ]
   },
