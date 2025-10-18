@@ -7,7 +7,7 @@ export interface IUser extends Document {
     password: string;
     profilePicture?: string;
     companyId?: string; // Reference to Company
-    role: "admin" | "gatekeeper" | "employee" | "visitor";
+    role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -34,7 +34,7 @@ export interface ICreateUserDTO {
     email: string;
     password: string;
     companyId?: string;
-    role: "admin" | "gatekeeper" | "employee" | "visitor";
+    role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -43,7 +43,7 @@ export interface ICreateUserDTO {
 export interface IUpdateUserDTO {
     profilePicture?: string;
     companyId?: string;
-    role?: "admin" | "gatekeeper" | "employee" | "visitor";
+    role?: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -74,7 +74,7 @@ export interface IUserResponse {
     email: string;
     profilePicture?: string;
     companyId?: string;
-    role: "admin" | "gatekeeper" | "employee" | "visitor";
+    role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
     employeeId?: string;

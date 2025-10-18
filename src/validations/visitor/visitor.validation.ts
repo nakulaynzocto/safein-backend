@@ -41,16 +41,6 @@ const addressValidation = Joi.object({
             'string.empty': 'Country is required',
             'string.min': 'Country must be at least 2 characters long',
             'string.max': 'Country cannot exceed 100 characters'
-        }),
-    zipCode: Joi.string()
-        .required()
-        .trim()
-        .min(3)
-        .max(20)
-        .messages({
-            'string.empty': 'ZIP code is required',
-            'string.min': 'ZIP code must be at least 3 characters long',
-            'string.max': 'ZIP code cannot exceed 20 characters'
         })
 });
 
@@ -115,26 +105,6 @@ export const createVisitorValidation = Joi.object({
             'string.empty': 'Phone number is required',
             'string.pattern.base': 'Please enter a valid phone number'
         }),
-    company: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.empty': 'Company is required',
-            'string.min': 'Company must be at least 2 characters long',
-            'string.max': 'Company cannot exceed 100 characters'
-        }),
-    designation: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.empty': 'Designation is required',
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 100 characters'
-        }),
     address: addressValidation.required().messages({
         'any.required': 'Address is required'
     }),
@@ -176,24 +146,6 @@ export const updateVisitorValidation = Joi.object({
         .pattern(/^[\+]?[1-9][\d]{0,15}$/)
         .messages({
             'string.pattern.base': 'Please enter a valid phone number'
-        }),
-    company: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Company must be at least 2 characters long',
-            'string.max': 'Company cannot exceed 100 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 100 characters'
         }),
     address: addressValidation.optional(),
     idProof: idProofValidation.optional(),

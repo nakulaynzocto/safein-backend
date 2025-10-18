@@ -57,8 +57,6 @@ export class VisitorService {
             page = 1,
             limit = 10,
             search = '',
-            company = '',
-            designation = '',
             city = '',
             state = '',
             country = '',
@@ -86,19 +84,11 @@ export class VisitorService {
                 { 'address.city': { $regex: search, $options: 'i' } },
                 { 'address.state': { $regex: search, $options: 'i' } },
                 { 'address.country': { $regex: search, $options: 'i' } },
-                { 'address.zipCode': { $regex: search, $options: 'i' } },
                 { 'idProof.type': { $regex: search, $options: 'i' } },
                 { 'idProof.number': { $regex: search, $options: 'i' } }
             ];
         }
 
-        if (company) {
-            filter.company = { $regex: company, $options: 'i' };
-        }
-
-        if (designation) {
-            filter.designation = { $regex: designation, $options: 'i' };
-        }
 
         if (city) {
             filter['address.city'] = { $regex: city, $options: 'i' };
@@ -220,8 +210,6 @@ export class VisitorService {
             page = 1,
             limit = 10,
             search = '',
-            company = '',
-            designation = '',
             city = '',
             state = '',
             country = '',
@@ -237,8 +225,6 @@ export class VisitorService {
                 { name: { $regex: search, $options: 'i' } },
                 { email: { $regex: search, $options: 'i' } },
                 { phone: { $regex: search, $options: 'i' } },
-                { company: { $regex: search, $options: 'i' } },
-                { designation: { $regex: search, $options: 'i' } },
                 { 'address.street': { $regex: search, $options: 'i' } },
                 { 'address.city': { $regex: search, $options: 'i' } },
                 { 'address.state': { $regex: search, $options: 'i' } },
@@ -249,13 +235,6 @@ export class VisitorService {
             ];
         }
 
-        if (company) {
-            filter.company = { $regex: company, $options: 'i' };
-        }
-
-        if (designation) {
-            filter.designation = { $regex: designation, $options: 'i' };
-        }
 
         if (city) {
             filter['address.city'] = { $regex: city, $options: 'i' };
@@ -402,7 +381,6 @@ export class VisitorService {
         const [
             totalVisitors,
             deletedVisitors,
-            visitorsByCompany,
             visitorsByCity,
             visitorsByState,
             visitorsByCountry,
@@ -412,7 +390,7 @@ export class VisitorService {
             Visitor.countDocuments({ ...baseFilter, isDeleted: true }),
             Visitor.aggregate([
                 { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$company', count: { $sum: 1 } } },
+                { $group: { _id: '$address.city', count: { $sum: 1 } } },
                 { $sort: { count: -1 } },
                 { $limit: 10 }
             ]),
@@ -445,10 +423,6 @@ export class VisitorService {
         return {
             totalVisitors,
             deletedVisitors,
-            visitorsByCompany: visitorsByCompany.map((item: any) => ({
-                company: item._id,
-                count: item.count
-            })),
             visitorsByCity: visitorsByCity.map((item: any) => ({
                 city: item._id,
                 count: item.count

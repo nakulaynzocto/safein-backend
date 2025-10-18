@@ -1,6 +1,6 @@
 # 📋 Subscription Plans System
 
-This document describes the subscription plans system integrated into the Gatekeeper Visitor Appointment System.
+This document describes the subscription plans system integrated into the SafeIn Visitor Appointment System.
 
 ## 🎯 Overview
 

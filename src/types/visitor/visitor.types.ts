@@ -6,8 +6,6 @@ export interface ICreateVisitorDTO {
     name: string;
     email: string;
     phone: string;
-    company: string;
-    designation: string;
     address: IAddress;
     idProof: IIdProof;
     photo?: string;
@@ -18,8 +16,6 @@ export interface IUpdateVisitorDTO {
     name?: string;
     email?: string;
     phone?: string;
-    company?: string;
-    designation?: string;
     address?: IAddress;
     idProof?: IIdProof;
     photo?: string;
@@ -32,8 +28,6 @@ export interface IVisitorResponse {
     name: string;
     email: string;
     phone: string;
-    company: string;
-    designation: string;
     address: IAddress;
     idProof: IIdProof;
     photo?: string;
@@ -50,8 +44,6 @@ export interface IGetVisitorsQuery {
     page?: number;
     limit?: number;
     search?: string;
-    company?: string;
-    designation?: string;
     city?: string;
     state?: string;
     country?: string;
@@ -75,8 +67,6 @@ export interface IVisitorListResponse {
 // Bulk operations DTO
 export interface IBulkUpdateVisitorsDTO {
     visitorIds: string[];
-    company?: string;
-    designation?: string;
 }
 
 // Search query interface for visitor search
@@ -96,10 +86,6 @@ export interface IVisitorSearchResponse {
 export interface IVisitorStats {
     totalVisitors: number;
     deletedVisitors: number;
-    visitorsByCompany: Array<{
-        company: string;
-        count: number;
-    }>;
     visitorsByCity: Array<{
         city: string;
         count: number;

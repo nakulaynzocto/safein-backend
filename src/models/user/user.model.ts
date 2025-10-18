@@ -40,8 +40,8 @@ const userSchema = new Schema<IUser>(
         role: {
             type: String,
             enum: {
-                values: ['admin', 'gatekeeper', 'employee', 'visitor'],
-                message: 'Role must be admin, gatekeeper, employee, or visitor'
+                values: ['admin', 'safein', 'employee', 'visitor'],
+                message: 'Role must be admin, safein, employee, or visitor'
             },
             default: 'visitor'
         },

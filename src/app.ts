@@ -44,7 +44,7 @@ try {
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: CONSTANTS.FRONTEND_URL,
+  origin: CONSTANTS.FRONTEND_URLS,
   credentials: true
 }));
 

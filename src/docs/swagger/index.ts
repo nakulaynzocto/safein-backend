@@ -16,12 +16,12 @@ const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Gatekeeper Visitor Appointment System API',
+      title: 'SafeIn Visitor Appointment System API',
       version: '1.0.0',
       description: 'SaaS visitor appointment management system with user authentication and appointment booking',
       contact: {
         name: 'API Support',
-        email: 'support@gatekeeper.com'
+        email: 'support@safein.com'
       }
     },
     servers: [

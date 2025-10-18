@@ -143,6 +143,7 @@ const appointmentDetailsValidation = Joi.object({
         }),
     notes: Joi.string()
         .optional()
+        .allow('')
         .trim()
         .max(500)
         .messages({
@@ -285,6 +286,7 @@ export const checkOutValidation = Joi.object({
         }),
     notes: Joi.string()
         .optional()
+        .allow('')
         .trim()
         .max(500)
         .messages({

@@ -1,5 +1,6 @@
 import { Appointment } from '../../models/appointment/appointment.model';
 import { Employee } from '../../models/employee/employee.model';
+import { Visitor } from '../../models/visitor/visitor.model';
 import { EmailService } from '../email/email.service';
 import {
     ICreateAppointmentDTO,
@@ -85,7 +86,8 @@ export class AppointmentService {
      */
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
-            .populate('employeeId', 'name email department designation')
+            .populate('employeeId', 'name email department designation phone')
+            .populate('visitorId', 'name email phone company purposeOfVisit')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -101,7 +103,8 @@ export class AppointmentService {
      */
     static async getAppointmentByAppointmentId(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ appointmentId, isDeleted: false })
-            .populate('employeeId', 'name email department designation')
+            .populate('employeeId', 'name email department designation phone')
+            .populate('visitorId', 'name email phone company purposeOfVisit')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -138,14 +141,47 @@ export class AppointmentService {
         }
 
         if (search) {
+            // Create a more comprehensive search that works with populated data
+            const searchRegex = { $regex: search, $options: 'i' };
+            
+            // First, try to find visitors that match the search criteria
+            const matchingVisitors = await Visitor.find({
+                $or: [
+                    { name: searchRegex },
+                    { phone: searchRegex },
+                    { email: searchRegex },
+                    { company: searchRegex }
+                ]
+            }).select('_id').lean();
+            
+            const visitorIds = matchingVisitors.map((v: any) => v._id);
+            
+            // Also search for employees that match
+            const matchingEmployees = await Employee.find({
+                $or: [
+                    { name: searchRegex },
+                    { email: searchRegex },
+                    { department: searchRegex }
+                ]
+            }).select('_id').lean();
+            
+            const employeeIds = matchingEmployees.map((e: any) => e._id);
+            
             filter.$or = [
-                { appointmentId: { $regex: search, $options: 'i' } },
-                { 'visitorDetails.name': { $regex: search, $options: 'i' } },
-                { 'visitorDetails.phone': { $regex: search, $options: 'i' } },
-                { 'visitorDetails.email': { $regex: search, $options: 'i' } },
-                { 'visitorDetails.company': { $regex: search, $options: 'i' } },
-                { 'appointmentDetails.purpose': { $regex: search, $options: 'i' } }
+                { appointmentId: searchRegex },
+                { 'appointmentDetails.purpose': searchRegex },
+                { 'appointmentDetails.meetingRoom': searchRegex },
+                { 'appointmentDetails.notes': searchRegex }
             ];
+            
+            // Add visitor and employee ID searches if we found matches
+            if (visitorIds.length > 0) {
+                filter.$or.push({ visitorId: { $in: visitorIds } });
+            }
+            
+            if (employeeIds.length > 0) {
+                filter.$or.push({ employeeId: { $in: employeeIds } });
+            }
         }
 
         if (employeeId) {
@@ -184,7 +220,8 @@ export class AppointmentService {
         // Execute queries
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
-                .populate('employeeId', 'name email department designation')
+                .populate('employeeId', 'name email department designation phone')
+                .populate('visitorId', 'name email phone company purposeOfVisit')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
                 .sort(sort)
@@ -499,7 +536,8 @@ export class AppointmentService {
 
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
-                .populate('employeeId', 'name email department designation')
+                .populate('employeeId', 'name email department designation phone')
+                .populate('visitorId', 'name email phone company purposeOfVisit')
                 .populate('createdBy', 'firstName lastName email')
                 .sort({ createdAt: -1 })
                 .skip(skip)

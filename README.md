@@ -121,6 +121,8 @@ my-project/
    PORT=3000
    NODE_ENV=development
    FRONTEND_URL=http://localhost:3000
+   # REQUIRED: Multiple frontend URLs (comma-separated)
+   FRONTEND_URLS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003
    ```
 
 4. **Start MongoDB**

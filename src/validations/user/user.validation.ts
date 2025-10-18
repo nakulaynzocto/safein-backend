@@ -63,10 +63,10 @@ export const updateUserValidation = Joi.object({
       'string.pattern.base': 'Invalid company ID format'
     }),
   role: Joi.string()
-    .valid('admin', 'gatekeeper', 'employee', 'visitor')
+    .valid('admin', 'safein', 'employee', 'visitor')
     .optional()
     .messages({
-      'any.only': 'Role must be admin, gatekeeper, employee, or visitor'
+      'any.only': 'Role must be admin, safein, employee, or visitor'
     }),
   department: Joi.string()
     .max(100)
