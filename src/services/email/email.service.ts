@@ -1030,7 +1030,7 @@ Need help? Contact us at support@safein.com
   static async sendNewAppointmentRequestEmail(
     employeeEmail: string,
     employeeName: string,
-    visitorName: string,
+    visitorDetails: any,
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
@@ -1042,8 +1042,8 @@ Need help? Contact us at support@safein.com
       from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
       to: employeeEmail,
       subject: 'New Appointment Request - SafeIn',
-      html: this.getNewAppointmentRequestEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime, purpose, appointmentId),
-      text: this.getNewAppointmentRequestEmailText(employeeName, visitorName, scheduledDate, scheduledTime, purpose, appointmentId)
+      html: this.getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
+      text: this.getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId)
     };
 
     try {
@@ -1060,7 +1060,7 @@ Need help? Contact us at support@safein.com
    */
   private static getNewAppointmentRequestEmailTemplate(
     employeeName: string,
-    visitorName: string,
+    visitorDetails: any,
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
@@ -1125,8 +1125,41 @@ Need help? Contact us at support@safein.com
                     <h3>Appointment Details:</h3>
                     <p><strong>Date:</strong> ${formattedDate}</p>
                     <p><strong>Time:</strong> ${scheduledTime}</p>
-                    <p><strong>Visitor:</strong> ${visitorName}</p>
                     <p><strong>Purpose:</strong> ${purpose}</p>
+                </div>
+                
+                <div class="visitor-details">
+                    <h3>Visitor Information:</h3>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p><strong>Name:</strong> ${visitorDetails.name}</p>
+                        <p><strong>Email:</strong> ${visitorDetails.email}</p>
+                        <p><strong>Phone:</strong> ${visitorDetails.phone}</p>
+                        <p><strong>Company:</strong> ${visitorDetails.company || 'Not provided'}</p>
+                        <p><strong>Designation:</strong> ${visitorDetails.designation || 'Not provided'}</p>
+                        <p><strong>Visitor ID:</strong> ${visitorDetails.visitorId || 'Not assigned'}</p>
+                    </div>
+                    
+                    <div style="background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <h4>Address Details:</h4>
+                        <p><strong>Street:</strong> ${visitorDetails.address?.street || 'Not provided'}</p>
+                        <p><strong>City:</strong> ${visitorDetails.address?.city || 'Not provided'}</p>
+                        <p><strong>State:</strong> ${visitorDetails.address?.state || 'Not provided'}</p>
+                        <p><strong>Country:</strong> ${visitorDetails.address?.country || 'Not provided'}</p>
+                    </div>
+                    
+                    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <h4>ID Proof Details:</h4>
+                        <p><strong>ID Type:</strong> ${visitorDetails.idProof?.type || 'Not provided'}</p>
+                        <p><strong>ID Number:</strong> ${visitorDetails.idProof?.number || 'Not provided'}</p>
+                        ${visitorDetails.idProof?.image ? `<p><strong>ID Document:</strong> <a href="${visitorDetails.idProof.image}" target="_blank">View ID Document</a></p>` : ''}
+                    </div>
+                    
+                    ${visitorDetails.photo ? `
+                    <div style="background-color: #d1ecf1; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <h4>Visitor Photo:</h4>
+                        <p><a href="${visitorDetails.photo}" target="_blank">View Visitor Photo</a></p>
+                    </div>
+                    ` : ''}
                 </div>
                 
                 <div class="action-buttons">
@@ -1162,7 +1195,7 @@ Need help? Contact us at support@safein.com
    */
   private static getNewAppointmentRequestEmailText(
     employeeName: string,
-    visitorName: string,
+    visitorDetails: any,
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
@@ -1189,8 +1222,28 @@ You have a new appointment request! Please review the details below and take act
 Appointment Details:
 - Date: ${formattedDate}
 - Time: ${scheduledTime}
-- Visitor: ${visitorName}
 - Purpose: ${purpose}
+
+Visitor Information:
+- Name: ${visitorDetails.name}
+- Email: ${visitorDetails.email}
+- Phone: ${visitorDetails.phone}
+- Company: ${visitorDetails.company || 'Not provided'}
+- Designation: ${visitorDetails.designation || 'Not provided'}
+- Visitor ID: ${visitorDetails.visitorId || 'Not assigned'}
+
+Address Details:
+- Street: ${visitorDetails.address?.street || 'Not provided'}
+- City: ${visitorDetails.address?.city || 'Not provided'}
+- State: ${visitorDetails.address?.state || 'Not provided'}
+- Country: ${visitorDetails.address?.country || 'Not provided'}
+
+ID Proof Details:
+- ID Type: ${visitorDetails.idProof?.type || 'Not provided'}
+- ID Number: ${visitorDetails.idProof?.number || 'Not provided'}
+${visitorDetails.idProof?.image ? `- ID Document: ${visitorDetails.idProof.image}` : ''}
+
+${visitorDetails.photo ? `Visitor Photo: ${visitorDetails.photo}` : ''}
 
 Quick Action:
 To approve this appointment, click: ${approveUrl}

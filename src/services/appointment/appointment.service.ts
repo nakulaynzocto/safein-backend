@@ -56,8 +56,8 @@ export class AppointmentService {
 
         // Populate appointment data for email notification
         const populatedAppointment = await Appointment.findById(appointment._id)
-            .populate('employeeId', 'name email')
-            .populate('visitorId', 'name email phone')
+            .populate('employeeId', 'name email phone department')
+            .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
             .session(session);
 
         // Send notification email to employee about new appointment request
@@ -66,7 +66,7 @@ export class AppointmentService {
                 await EmailService.sendNewAppointmentRequestEmail(
                     (populatedAppointment.employeeId as any).email,
                     (populatedAppointment.employeeId as any).name,
-                    (populatedAppointment.visitorId as any).name,
+                    populatedAppointment.visitorId as any,
                     populatedAppointment.appointmentDetails.scheduledDate,
                     populatedAppointment.appointmentDetails.scheduledTime,
                     populatedAppointment.appointmentDetails.purpose,

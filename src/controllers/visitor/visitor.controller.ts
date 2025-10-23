@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { VisitorService } from '../../services/visitor/visitor.service';
 import { Visitor } from '../../models/visitor/visitor.model';
 import { ResponseUtil } from '../../utils';
@@ -72,13 +72,25 @@ export class VisitorController {
     }
 
     /**
-     * Update visitor
+     * Update visitor (user-specific)
      * PUT /api/visitors/:id
      */
     @TryCatch('Failed to update visitor')
-    static async updateVisitor(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async updateVisitor(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
         const updateData: IUpdateVisitorDTO = req.body;
+        const userId = req.user._id.toString();
+        
+        // Verify the visitor belongs to the current user before updating
+        const visitorRecord = await Visitor.findById(id);
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const visitor = await VisitorService.updateVisitor(id, updateData);
         ResponseUtil.success(res, 'Visitor updated successfully', visitor);
     }
@@ -99,46 +111,84 @@ export class VisitorController {
     }
 
     /**
-     * Get trashed visitors
+     * Get trashed visitors (user-specific)
      * GET /api/visitors/trashed
      */
     @TryCatch('Failed to get trashed visitors')
-    static async getTrashedVisitors(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async getTrashedVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const query: IGetVisitorsQuery = req.query;
-        const result = await VisitorService.getTrashedVisitors(query);
+        const userId = req.user._id.toString();
+        const result = await VisitorService.getTrashedVisitors(query, userId);
         ResponseUtil.success(res, 'Trashed visitors retrieved successfully', result);
     }
 
     /**
-     * Restore visitor from trash
+     * Restore visitor from trash (user-specific)
      * PUT /api/visitors/:id/restore
      */
     @TryCatch('Failed to restore visitor')
-    static async restoreVisitor(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async restoreVisitor(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        // Verify the visitor belongs to the current user before restoring
+        const visitorRecord = await Visitor.findById(id);
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const visitor = await VisitorService.restoreVisitor(id);
         ResponseUtil.success(res, 'Visitor restored successfully', visitor);
     }
 
     /**
-     * Bulk update visitors
+     * Bulk update visitors (user-specific)
      * PUT /api/visitors/bulk-update
      */
     @TryCatch('Failed to bulk update visitors')
-    static async bulkUpdateVisitors(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async bulkUpdateVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const bulkData: IBulkUpdateVisitorsDTO = req.body;
+        const userId = req.user._id.toString();
+        
+        // Verify all visitors belong to the current user before bulk updating
+        const visitors = await Visitor.find({ 
+            _id: { $in: bulkData.visitorIds },
+            createdBy: userId 
+        });
+        
+        if (visitors.length !== bulkData.visitorIds.length) {
+            throw new AppError('Some visitors not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
         const result = await VisitorService.bulkUpdateVisitors(bulkData);
         ResponseUtil.success(res, 'Visitors updated successfully', result);
     }
 
     /**
-     * Search visitors by phone or email
+     * Search visitors by phone or email (user-specific)
      * POST /api/visitors/search
      */
     @TryCatch('Failed to search visitors')
-    static async searchVisitors(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async searchVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
         const searchQuery: IVisitorSearchQuery = req.body;
-        const result = await VisitorService.searchVisitors(searchQuery);
+        const userId = req.user._id.toString();
+        const result = await VisitorService.searchVisitors(searchQuery, userId);
         ResponseUtil.success(res, result.message, result);
     }
 

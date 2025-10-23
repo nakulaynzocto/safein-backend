@@ -205,7 +205,7 @@ export class VisitorService {
     /**
      * Get trashed visitors
      */
-    static async getTrashedVisitors(query: IGetVisitorsQuery = {}): Promise<IVisitorListResponse> {
+    static async getTrashedVisitors(query: IGetVisitorsQuery = {}, userId?: string): Promise<IVisitorListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -217,8 +217,13 @@ export class VisitorService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object for deleted visitors
+        // Build filter object for deleted visitors - only show visitors created by the current user
         const filter: any = { isDeleted: true };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            filter.createdBy = userId;
+        }
 
         if (search) {
             filter.$or = [
@@ -334,11 +339,16 @@ export class VisitorService {
     /**
      * Search visitors by phone or email
      */
-    static async searchVisitors(searchQuery: IVisitorSearchQuery): Promise<IVisitorSearchResponse> {
+    static async searchVisitors(searchQuery: IVisitorSearchQuery, userId?: string): Promise<IVisitorSearchResponse> {
         const { phone, email } = searchQuery;
 
-        // Build search criteria
+        // Build search criteria - only show visitors created by the current user
         const searchCriteria: any = { isDeleted: false };
+        
+        // Filter by user if provided (for user-specific access)
+        if (userId) {
+            searchCriteria.createdBy = userId;
+        }
 
         if (phone && email) {
             // Search by both phone OR email
