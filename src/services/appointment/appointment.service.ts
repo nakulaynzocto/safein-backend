@@ -320,6 +320,7 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, badgeNumber, securityNotes } = request;
 
+        // Accept custom appointmentId string (e.g., "APT1760335163234DWU4Z")
         const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
@@ -355,6 +356,7 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, notes } = request;
 
+        // Accept custom appointmentId string (e.g., "APT1760335163234DWU4Z")
         const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);

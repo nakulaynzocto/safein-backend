@@ -8,8 +8,6 @@ import {
     updateAppointmentValidation,
     appointmentParamsValidation,
     appointmentIdParamsValidation,
-    checkInValidation,
-    checkOutValidation,
     getAppointmentsValidation,
     bulkUpdateAppointmentsValidation,
     employeeIdParamsValidation,
@@ -69,14 +67,12 @@ router.get(
 // Check in appointment
 router.post(
     '/check-in',
-    validateRequest(checkInValidation),
     asyncWrapper(AppointmentController.checkInAppointment)
 );
 
 // Check out appointment
 router.post(
     '/check-out',
-    validateRequest(checkOutValidation),
     asyncWrapper(AppointmentController.checkOutAppointment)
 );
 

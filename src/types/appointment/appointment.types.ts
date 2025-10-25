@@ -128,13 +128,13 @@ export interface IAppointmentListResponse {
 }
 
 export interface ICheckInRequest {
-    appointmentId: string;
+    appointmentId: string;  // Custom appointmentId (e.g., "APT1760335163234DWU4Z") - NOT MongoDB _id
     badgeNumber?: string;
     securityNotes?: string;
 }
 
 export interface ICheckOutRequest {
-    appointmentId: string;
+    appointmentId: string;  // Custom appointmentId (e.g., "APT1760335163234DWU4Z") - NOT MongoDB _id
     notes?: string;
 }
 
