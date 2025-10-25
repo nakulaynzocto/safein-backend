@@ -7,6 +7,8 @@ import { ERROR_CODES } from '../utils/constants';
 
 export interface AuthenticatedRequest extends Request {
   user?: IUser;
+  isPremiumUser?: boolean;
+  activeSubscription?: any;
 }
 
 export const verifyToken = async (req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> => {
