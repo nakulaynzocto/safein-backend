@@ -4,11 +4,17 @@ import { ERROR_CODES } from '../../utils/constants';
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
+  private static isEmailServiceAvailable: boolean = false;
 
   /**
    * Initialize email transporter
    */
   static initializeTransporter(): nodemailer.Transporter {
+    // Return existing transporter if already initialized
+    if (this.transporter && this.isEmailServiceAvailable) {
+      return this.transporter;
+    }
+
     // For Gmail, we need to use OAuth2 or App Password
     // Since we have regular credentials, let's try different SMTP configurations
     const smtpConfig = {
@@ -21,10 +27,13 @@ export class EmailService {
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      connectionTimeout: 10000, // 10 seconds timeout
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     };
 
-    // Try Gmail SMTP first, fallback to other configurations
+    // Create transporter
     this.transporter = nodemailer.createTransport(smtpConfig);
     return this.transporter;
   }
@@ -40,9 +49,11 @@ export class EmailService {
       
       await this.transporter.verify();
       console.log('✅ SMTP connection verified successfully');
+      this.isEmailServiceAvailable = true;
       return true;
     } catch (error: any) {
       console.error('❌ SMTP connection failed:', error.message);
+      this.isEmailServiceAvailable = false;
       
       // If Gmail authentication fails, try alternative SMTP configurations
       if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
@@ -85,6 +96,7 @@ export class EmailService {
         this.transporter = nodemailer.createTransport(config);
         await this.transporter.verify();
         console.log(`✅ SMTP connection successful with ${config.host}:${config.port}`);
+        this.isEmailServiceAvailable = true;
         return true;
       } catch (error: any) {
         console.log(`❌ Failed with ${config.host}:${config.port} - ${error.message}`);
@@ -93,6 +105,7 @@ export class EmailService {
     }
 
     console.log('❌ All SMTP configurations failed. Email functionality will be disabled.');
+    this.isEmailServiceAvailable = false;
     return false;
   }
 
@@ -101,6 +114,14 @@ export class EmailService {
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
+      // Check if email service is available
+      if (!this.isEmailServiceAvailable) {
+        console.warn('⚠️ Email service not available. OTP will be logged to console.');
+        // In development or when email is not configured, log OTP to console
+        console.log(`📧 OTP for ${email}: ${otp}`);
+        return;
+      }
+
       if (!this.transporter) {
         this.initializeTransporter();
       }
@@ -118,12 +139,13 @@ export class EmailService {
     } catch (error: any) {
       console.error('❌ Failed to send OTP email:', error.message);
       
-      // If email fails, log the OTP to console for development
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 DEVELOPMENT MODE - OTP for ${email}: ${otp}`);
-      }
+      // If email fails, log the OTP to console for development/testing
+      console.log(`📧 OTP for ${email}: ${otp}`);
       
-      throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      // Don't throw error in production - allow user to continue with logged OTP
+      if (process.env.NODE_ENV !== 'production') {
+        throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      }
     }
   }
 
@@ -474,7 +496,16 @@ Professional Visitor Management Solutions
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    const transporter = this.initializeTransporter();
+    // Check if email service is available
+    if (!this.isEmailServiceAvailable) {
+      console.warn('⚠️ Email service not available. Skipping appointment approval email.');
+      return;
+    }
+
+    // Use existing transporter instead of recreating
+    if (!this.transporter) {
+      this.initializeTransporter();
+    }
     
     const mailOptions = {
       from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
@@ -485,11 +516,11 @@ Professional Visitor Management Solutions
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Appointment approval email sent to ${visitorEmail}`);
-    } catch (error) {
-      console.error('Failed to send appointment approval email:', error);
-      throw error;
+      await this.transporter.sendMail(mailOptions);
+      console.log(`✅ Appointment approval email sent to ${visitorEmail}`);
+    } catch (error: any) {
+      console.error('❌ Failed to send appointment approval email:', error.message);
+      // Don't throw error - just log it
     }
   }
 
@@ -503,7 +534,16 @@ Professional Visitor Management Solutions
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    const transporter = this.initializeTransporter();
+    // Check if email service is available
+    if (!this.isEmailServiceAvailable) {
+      console.warn('⚠️ Email service not available. Skipping appointment rejection email.');
+      return;
+    }
+
+    // Use existing transporter instead of recreating
+    if (!this.transporter) {
+      this.initializeTransporter();
+    }
     
     const mailOptions = {
       from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
@@ -514,11 +554,11 @@ Professional Visitor Management Solutions
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Appointment rejection email sent to ${visitorEmail}`);
-    } catch (error) {
-      console.error('Failed to send appointment rejection email:', error);
-      throw error;
+      await this.transporter.sendMail(mailOptions);
+      console.log(`✅ Appointment rejection email sent to ${visitorEmail}`);
+    } catch (error: any) {
+      console.error('❌ Failed to send appointment rejection email:', error.message);
+      // Don't throw error - just log it
     }
   }
 
@@ -1036,7 +1076,16 @@ Need help? Contact us at support@safein.com
     purpose: string,
     appointmentId: string
   ): Promise<void> {
-    const transporter = this.initializeTransporter();
+    // Check if email service is available
+    if (!this.isEmailServiceAvailable) {
+      console.warn('⚠️ Email service not available. Skipping appointment notification email.');
+      return;
+    }
+
+    // Use existing transporter instead of recreating
+    if (!this.transporter) {
+      this.initializeTransporter();
+    }
     
     const mailOptions = {
       from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
@@ -1047,11 +1096,11 @@ Need help? Contact us at support@safein.com
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      console.log(`New appointment request email sent to employee ${employeeEmail}`);
-    } catch (error) {
-      console.error('Failed to send new appointment request email to employee:', error);
-      throw error;
+      await this.transporter.sendMail(mailOptions);
+      console.log(`✅ New appointment request email sent to employee ${employeeEmail}`);
+    } catch (error: any) {
+      console.error('❌ Failed to send new appointment request email:', error.message);
+      // Don't throw error - just log it so appointment creation continues
     }
   }
 
