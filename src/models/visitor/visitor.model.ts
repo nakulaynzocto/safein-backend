@@ -151,7 +151,7 @@ const visitorSchema = new Schema<IVisitor>({
 });
 
 // Indexes for better performance
-visitorSchema.index({ visitorId: 1 }, { sparse: true });
+// Note: visitorId is already indexed as part of compound index (createdBy, visitorId) below
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
 visitorSchema.index({ company: 1 });

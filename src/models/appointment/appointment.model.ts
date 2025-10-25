@@ -217,7 +217,7 @@ const appointmentSchema = new Schema<IAppointment>(
 );
 
 // Indexes for performance
-appointmentSchema.index({ appointmentId: 1 });
+// Note: appointmentId already has unique index from unique: true in schema definition
 appointmentSchema.index({ employeeId: 1 });
 appointmentSchema.index({ visitorId: 1 });
 appointmentSchema.index({ 'appointmentDetails.scheduledDate': 1 });
