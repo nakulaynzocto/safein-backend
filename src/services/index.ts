@@ -4,4 +4,4 @@ export * from './appointment/appointment.service';
 export * from './visitor/visitor.service';
 export * from './subscription/subscription.service';
 export * from './userSubscription/userSubscription.service';
-export * from './stripe/stripe.service';
+export * from './upload/upload.service';

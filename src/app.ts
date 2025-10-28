@@ -26,18 +26,18 @@ connectDatabase();
 EmailService.initializeTransporter();
 EmailService.verifyConnection().then((isConnected) => {
   if (isConnected) {
-    console.log('✅ Email service initialized successfully');
+    console.log('Email service initialized successfully');
   } else {
-    console.log('⚠️ Email service initialization failed - OTP emails may not work');
+    console.log('Email service initialization failed - OTP emails may not work');
   }
 });
 
 // Initialize Stripe Service
 try {
   StripeService.initialize();
-  console.log('✅ Stripe service initialized successfully');
+  console.log('Stripe service initialized successfully');
 } catch (error) {
-  console.log('⚠️ Stripe service initialization failed - Payment features may not work');
+  console.log('Stripe service initialization failed - Payment features may not work');
   console.error('Stripe error:', error);
 }
 
@@ -91,9 +91,9 @@ app.use(notFoundHandler);
 // Start server
 const PORT = CONSTANTS.PORT;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-  console.log(`🌍 Environment: ${CONSTANTS.NODE_ENV}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`API Documentation: http://localhost:${PORT}/api-docs`);
+  console.log(`Environment: ${CONSTANTS.NODE_ENV}`);
 });
 
 export default app;
