@@ -37,6 +37,8 @@ export interface IGetEmployeesQuery {
     page?: number;
     limit?: number;
     search?: string;
+    startDate?: string;
+    endDate?: string;
     department?: string;
     status?: 'Active' | 'Inactive';
     sortBy?: string;

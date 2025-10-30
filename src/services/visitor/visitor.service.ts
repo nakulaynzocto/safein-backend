@@ -57,6 +57,8 @@ export class VisitorService {
             page = 1,
             limit = 10,
             search = '',
+            startDate = '',
+            endDate = '',
             city = '',
             state = '',
             country = '',
@@ -89,6 +91,22 @@ export class VisitorService {
             ];
         }
 
+        
+        // Date range filter (createdAt)
+        if (startDate || endDate) {
+            const createdAt: any = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                createdAt.$gte = start;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                createdAt.$lte = end;
+            }
+            filter.createdAt = createdAt;
+        }
 
         if (city) {
             filter['address.city'] = { $regex: city, $options: 'i' };

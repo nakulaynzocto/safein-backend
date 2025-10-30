@@ -204,9 +204,14 @@ export class AppointmentService {
         }
 
         if (startDate && endDate) {
+            // Interpret startDate/endDate as local-date (yyyy-mm-dd) and include full end day
+            const start = new Date(startDate)
+            const endExclusive = new Date(endDate)
+            endExclusive.setDate(endExclusive.getDate() + 1)
+
             filter['appointmentDetails.scheduledDate'] = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
+                $gte: start,
+                $lt: endExclusive
             };
         }
 

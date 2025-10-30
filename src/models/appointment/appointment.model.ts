@@ -21,6 +21,8 @@ export interface IAppointment extends mongoose.Document {
         duration: number; // in minutes
         meetingRoom?: string;
         notes?: string;
+        vehicleNumber?: string; // Optional vehicle number
+        vehiclePhoto?: string; // Optional vehicle photo URL
     };
     status: 'pending' | 'approved' | 'rejected' | 'completed';
     checkInTime?: Date;
@@ -133,6 +135,16 @@ const appointmentSchema = new Schema<IAppointment>(
                 type: String,
                 trim: true,
                 maxlength: [500, 'Notes cannot exceed 500 characters']
+            },
+            vehicleNumber: {
+                type: String,
+                trim: true,
+                uppercase: true,
+                maxlength: [20, 'Vehicle number cannot exceed 20 characters']
+            },
+            vehiclePhoto: {
+                type: String,
+                trim: true
             }
         },
         status: {

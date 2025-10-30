@@ -56,6 +56,8 @@ export class EmployeeService {
             page = 1,
             limit = 10,
             search = '',
+            startDate = '',
+            endDate = '',
             department = '',
             status = '',
             sortBy = 'createdAt',
@@ -78,6 +80,22 @@ export class EmployeeService {
                 { department: { $regex: search, $options: 'i' } },
                 { designation: { $regex: search, $options: 'i' } }
             ];
+        }
+
+        // Date range filter (createdAt)
+        if (startDate || endDate) {
+            const createdAt: any = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                createdAt.$gte = start;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                createdAt.$lte = end;
+            }
+            filter.createdAt = createdAt;
         }
 
         if (department) {

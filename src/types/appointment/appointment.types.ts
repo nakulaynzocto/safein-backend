@@ -41,6 +41,8 @@ export interface IAppointmentDetails {
     duration: number; // in minutes
     meetingRoom?: string;
     notes?: string;
+    vehicleNumber?: string; // Optional vehicle number
+    vehiclePhoto?: string; // Optional vehicle photo URL
 }
 
 export interface ISecurityDetails {

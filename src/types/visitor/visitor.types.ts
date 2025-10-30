@@ -44,6 +44,9 @@ export interface IGetVisitorsQuery {
     page?: number;
     limit?: number;
     search?: string;
+    // Optional date range filters (ISO yyyy-mm-dd)
+    startDate?: string;
+    endDate?: string;
     city?: string;
     state?: string;
     country?: string;
