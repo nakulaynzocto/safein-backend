@@ -19,6 +19,7 @@ import {
 export class EmailService {
   private static transporter: nodemailer.Transporter;
   private static isEmailServiceAvailable: boolean = false;
+  private static useHttpFallback: boolean = false; // e.g., Resend HTTP API
 
   /**
    * Initialize email transporter
@@ -29,20 +30,19 @@ export class EmailService {
     }
 
     const smtpConfig = {
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER || 'info@aynzo.com',
-        pass: process.env.SMTP_PASS || 'S#j+#Ap'
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || ''
       },
-      tls: {
-        rejectUnauthorized: false
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
+      tls: { rejectUnauthorized: false },
+      pool: true,
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
       socketTimeout: 10000
-    };
+    } as nodemailer.TransportOptions;
 
     this.transporter = nodemailer.createTransport(smtpConfig);
     return this.transporter;
@@ -56,6 +56,12 @@ export class EmailService {
       if (!this.transporter) {
         this.initializeTransporter();
       }
+      // On Railway, some SMTPs block verify(). Allow skip via env
+      if (process.env.SKIP_SMTP_VERIFY === 'true') {
+        console.log('Skipping SMTP verify as per SKIP_SMTP_VERIFY=true');
+        this.isEmailServiceAvailable = true;
+        return true;
+      }
       
       await this.transporter.verify();
       console.log('SMTP connection verified successfully');
@@ -64,6 +70,11 @@ export class EmailService {
     } catch (error: any) {
       console.error('SMTP connection failed:', error.message);
       this.isEmailServiceAvailable = false;
+      // Enable HTTP fallback (Resend) if configured
+      if (process.env.RESEND_API_KEY) {
+        this.useHttpFallback = true;
+        console.log('Email HTTP fallback (Resend) enabled');
+      }
       
       if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
         console.log('Trying alternative SMTP configurations...');
@@ -80,22 +91,16 @@ export class EmailService {
   private static async tryAlternativeSmtpConfigs(): Promise<boolean> {
     const alternatives = [
       {
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        auth: {
-          user: process.env.SMTP_USER || 'info@aynzo.com',
-          pass: process.env.SMTP_PASS || 'S#j+#Ap'
-        }
-      },
-      {
-        host: 'smtp.outlook.com',
+        host: 'smtp-relay.brevo.com',
         port: 587,
         secure: false,
-        auth: {
-          user: process.env.SMTP_USER || 'info@aynzo.com',
-          pass: process.env.SMTP_PASS || 'S#j+#Ap'
-        }
+        auth: { user: process.env.SMTP_USER || '', pass: process.env.SMTP_PASS || '' }
+      },
+      {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: { user: process.env.SMTP_USER || '', pass: process.env.SMTP_PASS || '' }
       }
     ];
 
@@ -118,12 +123,43 @@ export class EmailService {
     return false;
   }
 
+  private static async sendWithResend(mail: { to: string; subject: string; html: string; from?: string; text?: string }) {
+    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: mail.from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app',
+        to: [mail.to],
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Resend error: ${res.status} ${text}`);
+    }
+  }
+
   /**
    * Send OTP email
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
-      if (!this.isEmailServiceAvailable) {
+      if (!this.isEmailServiceAvailable && this.useHttpFallback) {
+        await this.sendWithResend({
+          to: email,
+          subject: 'SafeIn Registration - Verify Your Email',
+          html: getOtpEmailTemplate(otp, companyName),
+          text: getOtpEmailText(otp, companyName),
+        });
+        console.log('OTP email sent via HTTP fallback');
+        return;
+      } else if (!this.isEmailServiceAvailable) {
         console.warn('Email service not available. OTP will be logged to console.');
         console.log(`OTP for ${email}: ${otp}`);
         return;
@@ -134,7 +170,7 @@ export class EmailService {
       }
 
       const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || 'info@aynzo.com'}>`,
+        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
         to: email,
         subject: 'SafeIn Registration - Verify Your Email',
         html: getOtpEmailTemplate(otp, companyName),
@@ -163,7 +199,7 @@ export class EmailService {
       }
 
       const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || 'info@aynzo.com'}>`,
+        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
         to: email,
         subject: 'Welcome to SafeIn - Your Account is Ready!',
         html: getWelcomeEmailTemplate(companyName),
@@ -197,7 +233,7 @@ export class EmailService {
     }
     
     const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
+      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
       to: visitorEmail,
       subject: 'Appointment Approved - SafeIn',
       html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
@@ -232,7 +268,7 @@ export class EmailService {
     }
     
     const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
+      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
       to: visitorEmail,
       subject: 'Appointment Update - SafeIn',
       html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
@@ -260,7 +296,7 @@ export class EmailService {
     const transporter = this.initializeTransporter();
     
     const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
+      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
       to: employeeEmail,
       subject: 'Appointment Approved - SafeIn',
       html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
@@ -289,7 +325,7 @@ export class EmailService {
     const transporter = this.initializeTransporter();
     
     const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
+      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
       to: employeeEmail,
       subject: 'Appointment Rejected - SafeIn',
       html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
@@ -327,7 +363,7 @@ export class EmailService {
     }
     
     const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || 'noreply@safein.com'}>`,
+      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
       to: employeeEmail,
       subject: 'New Appointment Request - SafeIn',
       html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
