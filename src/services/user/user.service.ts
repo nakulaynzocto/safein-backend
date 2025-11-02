@@ -218,9 +218,41 @@ export class UserService {
   static async updateUser(userId: string, updateData: IUpdateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
 
+    // ✅ Ensure session is not part of updateData and filter only allowed fields
+    // Create a safe copy that only includes allowed fields from IUpdateUserDTO
+    const safeUpdateData: Partial<IUpdateUserDTO> = {};
+    
+    // Copy only allowed fields explicitly to avoid circular references and unwanted fields
+    if (updateData.companyName !== undefined) {
+      safeUpdateData.companyName = updateData.companyName;
+    }
+    // Handle profilePicture - allow empty string or valid URL
+    if (updateData.profilePicture !== undefined) {
+      // Store empty string as is, or valid URL string
+      safeUpdateData.profilePicture = updateData.profilePicture;
+    }
+    if (updateData.companyId !== undefined) {
+      safeUpdateData.companyId = updateData.companyId;
+    }
+    if (updateData.role !== undefined) {
+      safeUpdateData.role = updateData.role;
+    }
+    if (updateData.department !== undefined) {
+      safeUpdateData.department = updateData.department;
+    }
+    if (updateData.designation !== undefined) {
+      safeUpdateData.designation = updateData.designation;
+    }
+    if (updateData.employeeId !== undefined) {
+      safeUpdateData.employeeId = updateData.employeeId;
+    }
+
+    // Explicitly ensure session is never included
+    delete (safeUpdateData as any).session;
+
     const user = await User.findOneAndUpdate(
       { _id: userId, isDeleted: false },
-      updateData,
+      safeUpdateData,
       { new: true, runValidators: true, session }
     );
 

@@ -41,6 +41,7 @@ export interface ICreateUserDTO {
 }
 
 export interface IUpdateUserDTO {
+    companyName?: string;
     profilePicture?: string;
     companyId?: string;
     role?: "admin" | "safein" | "employee" | "visitor";

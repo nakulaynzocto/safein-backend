@@ -30,7 +30,8 @@ const userSchema = new Schema<IUser>(
         },
         profilePicture: {
             type: String,
-            trim: true
+            trim: true,
+            default: null
         },
         companyId: {
             type: Schema.Types.ObjectId,
@@ -133,6 +134,11 @@ userSchema.methods.updateLastLogin = function () {
 userSchema.methods.getPublicProfile = function () {
     const userObject = this.toObject();
     delete userObject.password;
+    // Ensure profilePicture is included even if it's null/undefined
+    // Convert null to empty string for frontend compatibility
+    if (userObject.profilePicture === null || userObject.profilePicture === undefined) {
+        userObject.profilePicture = '';
+    }
     return userObject;
 };
 
