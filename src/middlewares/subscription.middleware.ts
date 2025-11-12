@@ -1,8 +1,9 @@
 import { Response, NextFunction } from 'express';
-import { SubscriptionService } from '../services/userSubscription/userSubscription.service';
+import { UserSubscriptionService } from '../services/userSubscription/userSubscription.service';
 import { AuthenticatedRequest } from './auth.middleware';
 import { AppError } from './errorHandler';
 import { ERROR_CODES } from '../utils/constants';
+import { IUserSubscriptionResponse } from '../types/userSubscription/userSubscription.types';
 
 /**
  * Middleware to check if user has premium subscription
@@ -18,9 +19,7 @@ export const checkPremiumSubscription = async (
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const hasPremium = await SubscriptionService.hasActivePremiumSubscription({
-            userId: req.user._id.toString()
-        });
+        const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(req.user._id.toString());
 
         if (!hasPremium) {
             console.warn(`Premium subscription required for user ${req.user._id}`);
@@ -52,9 +51,7 @@ export const checkActiveSubscription = async (
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const activeSubscription = await SubscriptionService.getUserActiveSubscription({
-            userId: req.user._id.toString()
-        });
+        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
             console.warn(`Active subscription required for user ${req.user._id}`);
@@ -66,7 +63,7 @@ export const checkActiveSubscription = async (
 
         // Add subscription info to request object
         req.activeSubscription = activeSubscription;
-        req.isPremiumUser = activeSubscription.amount > 0;
+        req.isPremiumUser = activeSubscription.planType !== 'free';
         next();
     } catch (error) {
         next(error);
@@ -77,7 +74,7 @@ export const checkActiveSubscription = async (
  * Middleware to check if user has specific subscription plan
  * This middleware should be used on routes that require a specific plan
  */
-export const checkSpecificPlan = (requiredPlanId: string) => {
+export const checkSpecificPlan = (requiredPlanType: string) => {
     return async (
         req: AuthenticatedRequest,
         _res: Response,
@@ -88,9 +85,7 @@ export const checkSpecificPlan = (requiredPlanId: string) => {
                 throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
             }
 
-            const activeSubscription = await SubscriptionService.getUserActiveSubscription({
-                userId: req.user._id.toString()
-            });
+            const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
             if (!activeSubscription) {
                 console.warn(`Active subscription required for user ${req.user._id}`);
@@ -100,8 +95,8 @@ export const checkSpecificPlan = (requiredPlanId: string) => {
                 );
             }
 
-            if (activeSubscription.planId !== requiredPlanId) {
-                console.warn(`Specific plan ${requiredPlanId} required for user ${req.user._id}`);
+            if (activeSubscription.planType !== requiredPlanType) {
+                console.warn(`Specific plan ${requiredPlanType} required for user ${req.user._id}`);
                 throw new AppError(
                     'Specific subscription plan required to access this feature',
                     ERROR_CODES.FORBIDDEN
@@ -110,7 +105,7 @@ export const checkSpecificPlan = (requiredPlanId: string) => {
 
             // Add subscription info to request object
             req.activeSubscription = activeSubscription;
-            req.isPremiumUser = activeSubscription.amount > 0;
+            req.isPremiumUser = activeSubscription.planType !== 'free';
             next();
         } catch (error) {
             next(error);
@@ -132,9 +127,7 @@ export const checkTrialSubscription = async (
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const activeSubscription = await SubscriptionService.getUserActiveSubscription({
-            userId: req.user._id.toString()
-        });
+        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
             console.warn(`Active subscription required for user ${req.user._id}`);
@@ -154,7 +147,7 @@ export const checkTrialSubscription = async (
 
         // Add subscription info to request object
         req.activeSubscription = activeSubscription;
-        req.isPremiumUser = activeSubscription.amount > 0;
+        req.isPremiumUser = activeSubscription.planType !== 'free';
         next();
     } catch (error) {
         next(error);
@@ -175,13 +168,11 @@ export const addSubscriptionInfo = async (
             return next();
         }
 
-        const activeSubscription = await SubscriptionService.getUserActiveSubscription({
-            userId: req.user._id.toString()
-        });
+        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (activeSubscription) {
             req.activeSubscription = activeSubscription;
-            req.isPremiumUser = activeSubscription.amount > 0;
+            req.isPremiumUser = activeSubscription.planType !== 'free';
         } else {
             req.isPremiumUser = false;
         }
@@ -200,7 +191,7 @@ declare global {
     namespace Express {
         interface Request {
             isPremiumUser?: boolean;
-            activeSubscription?: any;
+            activeSubscription?: IUserSubscriptionResponse;
         }
     }
 }

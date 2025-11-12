@@ -13,6 +13,14 @@ import {
 
 const router = Router();
 
+// Public routes (no authentication required)
+// Get all subscription plans with pagination and filtering (for public access to pricing plans)
+router.get(
+    '/',
+    validateRequest(getSubscriptionPlansValidation),
+    asyncWrapper(SubscriptionPlanController.getAllSubscriptionPlans)
+);
+
 // Protected routes (require authentication)
 router.use(verifyToken);
 
@@ -21,13 +29,6 @@ router.post(
     '/',
     validateRequest(createSubscriptionPlanValidation),
     asyncWrapper(SubscriptionPlanController.createSubscriptionPlan)
-);
-
-// Get all subscription plans with pagination and filtering
-router.get(
-    '/',
-    validateRequest(getSubscriptionPlansValidation),
-    asyncWrapper(SubscriptionPlanController.getAllSubscriptionPlans)
 );
 
 // Get subscription plan statistics

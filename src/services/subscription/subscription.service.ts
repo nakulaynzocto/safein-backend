@@ -313,6 +313,7 @@ export class SubscriptionPlanService {
             isPopular: plan.isPopular,
             trialDays: plan.trialDays,
             sortOrder: plan.sortOrder,
+            discountPercentage: plan.discountPercentage,
             metadata: plan.metadata,
             formattedPrice: plan.formattedPrice,
             monthlyEquivalent: plan.monthlyEquivalent,

@@ -70,7 +70,10 @@ app.use(morgan(errorFormat, morganErrorOptions));
 // Rate limiting
 app.use(generalLimiter);
 
-// Body parsing middleware
+// Stripe webhook raw body parser (MUST come before express.json/urlencoded for webhooks)
+app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
+
+// Body parsing middleware (for all other routes)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 

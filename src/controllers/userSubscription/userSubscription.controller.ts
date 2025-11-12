@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { SubscriptionService } from '../../services/userSubscription/userSubscription.service';
+import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 import { StripeService } from '../../services/stripe/stripe.service';
 import { ResponseUtil } from '../../utils';
 import {
@@ -28,10 +28,12 @@ export class UserSubscriptionController {
         }
 
         const request: IAssignFreePlanRequest = {
-            userId: req.user._id.toString()
+            userId: req.user._id.toString(),
+            stripeCustomerId: req.user.stripeCustomerId, // Ensure stripeCustomerId is passed
         };
 
-        const subscription = await SubscriptionService.assignFreePlanToNewUser(request);
+        // The service method is createFreeTrial, not assignFreePlanToNewUser
+        const subscription = await UserSubscriptionService.createFreeTrial(request.userId, request.stripeCustomerId as string);
 
         ResponseUtil.success(res, 'Free plan assigned successfully', subscription, ERROR_CODES.CREATED);
     }
@@ -50,7 +52,7 @@ export class UserSubscriptionController {
             userId: req.user._id.toString()
         };
 
-        const subscription = await SubscriptionService.getUserActiveSubscription(request);
+        const subscription = await UserSubscriptionService.getUserActiveSubscription(request.userId);
 
         ResponseUtil.success(res, 'Active subscription retrieved successfully', subscription);
     }
@@ -69,7 +71,7 @@ export class UserSubscriptionController {
             userId: req.user._id.toString()
         };
 
-        const hasPremium = await SubscriptionService.hasActivePremiumSubscription(request);
+        const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(request.userId);
 
         ResponseUtil.success(res, 'Premium subscription check completed', { hasPremium });
     }
@@ -126,7 +128,7 @@ export class UserSubscriptionController {
             query.userId = req.user._id.toString();
         }
 
-        const result = await SubscriptionService.getAllUserSubscriptions(query);
+        const result = await UserSubscriptionService.getAllUserSubscriptions(query);
 
         ResponseUtil.success(res, 'User subscriptions retrieved successfully', result);
     }
@@ -138,7 +140,7 @@ export class UserSubscriptionController {
     @TryCatch('Failed to get user subscription')
     static async getUserSubscriptionById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const subscription = await SubscriptionService.getUserSubscriptionById(id);
+        const subscription = await UserSubscriptionService.getUserSubscriptionById(id);
 
         ResponseUtil.success(res, 'User subscription retrieved successfully', subscription);
     }
@@ -158,7 +160,7 @@ export class UserSubscriptionController {
             userId: req.body.userId || req.user._id.toString()
         };
 
-        const subscription = await SubscriptionService.createUserSubscription(subscriptionData);
+        const subscription = await UserSubscriptionService.createUserSubscription(subscriptionData);
 
         ResponseUtil.success(res, 'User subscription created successfully', subscription, ERROR_CODES.CREATED);
     }
@@ -171,7 +173,7 @@ export class UserSubscriptionController {
     static async updateUserSubscription(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
         const updateData: IUpdateUserSubscriptionDTO = req.body;
-        const subscription = await SubscriptionService.updateUserSubscription(id, updateData);
+        const subscription = await UserSubscriptionService.updateUserSubscription(id, updateData);
 
         ResponseUtil.success(res, 'User subscription updated successfully', subscription);
     }
@@ -183,7 +185,7 @@ export class UserSubscriptionController {
     @TryCatch('Failed to cancel user subscription')
     static async cancelUserSubscription(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const subscription = await SubscriptionService.cancelUserSubscription(id);
+        const subscription = await UserSubscriptionService.cancelUserSubscription(id);
 
         ResponseUtil.success(res, 'User subscription canceled successfully', subscription);
     }
@@ -194,7 +196,7 @@ export class UserSubscriptionController {
      */
     @TryCatch('Failed to get subscription statistics')
     static async getSubscriptionStats(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        const stats = await SubscriptionService.getSubscriptionStats();
+        const stats = await UserSubscriptionService.getSubscriptionStats();
 
         ResponseUtil.success(res, 'Subscription statistics retrieved successfully', stats);
     }
@@ -209,7 +211,7 @@ export class UserSubscriptionController {
             throw new AppError('Admin access required', ERROR_CODES.FORBIDDEN);
         }
 
-        await SubscriptionService.processExpiredSubscriptions();
+        await UserSubscriptionService.processExpiredSubscriptions();
 
         ResponseUtil.success(res, 'Expired subscriptions processed successfully');
     }

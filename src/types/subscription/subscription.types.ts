@@ -64,6 +64,7 @@ export interface ISubscriptionPlanResponse {
     isPopular: boolean;
     trialDays?: number;
     sortOrder: number;
+    discountPercentage?: number;
     metadata?: IMetadata;
     formattedPrice: string;
     monthlyEquivalent: number;

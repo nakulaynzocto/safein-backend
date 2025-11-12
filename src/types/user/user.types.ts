@@ -1,4 +1,4 @@
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 
 export interface IUser extends Document {
     _id: string;
@@ -6,7 +6,7 @@ export interface IUser extends Document {
     email: string;
     password: string;
     profilePicture?: string;
-    companyId?: string; // Reference to Company
+    companyId?: mongoose.Types.ObjectId; // Reference to Company
     role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
@@ -20,6 +20,8 @@ export interface IUser extends Document {
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
+    activeSubscriptionId?: mongoose.Types.ObjectId;
+    stripeCustomerId?: string; // Stripe Customer ID
 
     // Instance methods
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -74,7 +76,8 @@ export interface IUserResponse {
     companyName: string;
     email: string;
     profilePicture?: string;
-    companyId?: string;
+    stripeCustomerId?: string; // Stripe Customer ID
+    companyId?: mongoose.Types.ObjectId;
     role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;

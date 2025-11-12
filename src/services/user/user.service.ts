@@ -11,6 +11,7 @@ import { JwtUtil } from '../../utils/jwt.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
+import { StripeService } from '../stripe/stripe.service';
 
 // Simple in-memory OTP storage (in production, use Redis or database)
 const otpStorage = new Map<string, { otp: string; expiresAt: Date; userData: ICreateUserDTO }>();
@@ -94,6 +95,15 @@ export class UserService {
     const user = new User(otpData.userData);
     await user.save({ session });
 
+    // Create/find Stripe customer and update user
+    const stripeCustomer = await StripeService.findOrCreateCustomer({
+        email: user.email,
+        name: user.companyName, // Or actual user name if available
+        metadata: { userId: user._id.toString() },
+    });
+    user.stripeCustomerId = stripeCustomer.id;
+    await user.save({ session });
+
     // Clean up OTP data
     otpStorage.delete(email);
 
@@ -165,9 +175,11 @@ export class UserService {
   /**
    * Login user
    */
-  static async loginUser(loginData: ILoginDTO): Promise<{ user: IUserResponse; token: string }> {
+  @Transaction('Failed to login user')
+  static async loginUser(loginData: ILoginDTO, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+    const { session } = options;
     // Find user and include password for comparison
-    const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password');
+    const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password').session(session);
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
@@ -186,7 +198,17 @@ export class UserService {
     }
 
     // Update last login
-    await user.updateLastLogin();
+    user.lastLoginAt = new Date();
+    // Create/find Stripe customer and update user, if not already present
+    if (!user.stripeCustomerId) {
+        const stripeCustomer = await StripeService.findOrCreateCustomer({
+            email: user.email,
+            name: user.companyName, // Or actual user name if available
+            metadata: { userId: user._id.toString() },
+        });
+        user.stripeCustomerId = stripeCustomer.id;
+    }
+    await user.save({ session }); // Save user including lastLoginAt and stripeCustomerId
 
     // Generate token
     const token = JwtUtil.generateToken({

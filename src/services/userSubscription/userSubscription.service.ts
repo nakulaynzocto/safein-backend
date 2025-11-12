@@ -1,94 +1,90 @@
+import mongoose, { Document } from 'mongoose';
 import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
-import { SubscriptionPlan } from '../../models/subscription/subscription.model';
-import { StripeService } from '../stripe/stripe.service';
-import {
-    ICreateUserSubscriptionDTO,
-    IUpdateUserSubscriptionDTO,
-    IUserSubscriptionResponse,
-    IGetUserSubscriptionsQuery,
-    IUserSubscriptionListResponse,
-    IUserSubscriptionStats,
-    IAssignFreePlanRequest,
-    IGetUserActiveSubscriptionRequest,
-    ICheckPremiumSubscriptionRequest
-} from '../../types/userSubscription/userSubscription.types';
-import { ERROR_CODES } from '../../utils/constants';
+import { User } from '../../models/user/user.model';
 import { AppError } from '../../middlewares/errorHandler';
-import { Transaction } from '../../decorators';
+import { ERROR_CODES } from '../../utils/constants';
+import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats } from '../../types/userSubscription/userSubscription.types';
 
-export class SubscriptionService {
+export class UserSubscriptionService {
     /**
-     * Assign free plan to new user
+     * Activate a free trial for a user.
+     * This is typically called after successful payment method verification via Stripe Setup Intent.
      */
-    @Transaction('Failed to assign free plan to user')
-    static async assignFreePlanToNewUser(
-        request: IAssignFreePlanRequest,
-        options: { session?: any } = {}
-    ): Promise<IUserSubscriptionResponse> {
-        const { session } = options;
-
+    static async createFreeTrial(userId: string, stripeCustomerId: string, trialDays: number = 3): Promise<IUserSubscription & Document> {
+        const session = await mongoose.startSession();
+        session.startTransaction();
         try {
-            // Check if user already has a subscription
+            const user = await User.findById(userId).session(session);
+            if (!user) {
+                throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
+            }
+
+            // Check if user already has an active subscription
             const existingSubscription = await UserSubscription.findOne({
-                userId: request.userId,
-                isDeleted: false
+                userId: new mongoose.Types.ObjectId(userId),
+                isActive: true,
+                isDeleted: false,
             }).session(session);
 
             if (existingSubscription) {
-                console.warn(`User ${request.userId} already has a subscription`);
-                return this.formatUserSubscriptionResponse(existingSubscription);
+                // If there's an active subscription, ensure it's not a free trial before proceeding
+                if (existingSubscription.planType === 'free') {
+                    // Update existing free trial rather than creating a new one
+                    existingSubscription.startDate = new Date();
+                    existingSubscription.endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+                    await existingSubscription.save({ session });
+                    await session.commitTransaction();
+                    return existingSubscription;
+                } else {
+                    throw new AppError('User already has an active subscription.', ERROR_CODES.CONFLICT);
+                }
             }
 
-            // Find free plan
-            const freePlan = await SubscriptionPlan.findOne({
+            const startDate = new Date();
+            const endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000); // 3 days from now
+
+            const newSubscription = new UserSubscription({
+                userId: new mongoose.Types.ObjectId(userId),
                 planType: 'free',
+                startDate,
+                endDate,
                 isActive: true,
-                isDeleted: false
-            }).session(session);
-
-            if (!freePlan) {
-                throw new AppError('Free plan not found', ERROR_CODES.NOT_FOUND);
-            }
-
-            // Create free subscription
-            const subscription = new UserSubscription({
-                userId: request.userId,
-                planId: freePlan._id,
-                status: 'active',
-                startDate: new Date(),
-                isAutoRenew: false,
-                amount: 0,
-                currency: 'usd',
-                billingCycle: 'monthly'
+                paymentStatus: 'succeeded', // Payment method verified
+                stripeCustomerId,
+                trialDays,
             });
 
-            await subscription.save({ session });
+            await newSubscription.save({ session });
 
-            console.log(`Free plan assigned to user ${request.userId}`);
+            // Update user's activeSubscriptionId
+            user.activeSubscriptionId = newSubscription._id as mongoose.Types.ObjectId;
+            await user.save({ session });
 
-            return this.formatUserSubscriptionResponse(subscription);
+            await session.commitTransaction();
+            return newSubscription;
         } catch (error) {
-            console.error('Error assigning free plan:', error);
-            throw error;
+            await session.abortTransaction();
+            console.error('Error creating free trial:', error);
+            if (error instanceof AppError) {
+                throw error;
+            }
+            throw new AppError('Failed to activate free trial', ERROR_CODES.INTERNAL_SERVER_ERROR);
+        } finally {
+            session.endSession();
         }
     }
 
     /**
      * Get user's active subscription
      */
-    static async getUserActiveSubscription(
-        request: IGetUserActiveSubscriptionRequest
-    ): Promise<IUserSubscriptionResponse | null> {
+    static async getUserActiveSubscription(userId: string): Promise<IUserSubscriptionResponse | null> {
         try {
             const subscription = await UserSubscription.findOne({
-                userId: request.userId,
-                status: 'active',
+                userId: new mongoose.Types.ObjectId(userId),
+                isActive: true,
                 isDeleted: false,
-                $or: [
-                    { endDate: { $exists: false } },
-                    { endDate: { $gt: new Date() } }
-                ]
-            }).populate('planId', 'name planType amount features');
+                endDate: { $gt: new Date() }, // Ensure not expired
+            });
 
             if (!subscription) {
                 return null;
@@ -104,22 +100,13 @@ export class SubscriptionService {
     /**
      * Check if user has active premium subscription
      */
-    static async hasActivePremiumSubscription(
-        request: ICheckPremiumSubscriptionRequest
-    ): Promise<boolean> {
+    static async hasActivePremiumSubscription(userId: string): Promise<boolean> {
         try {
-            const subscription = await UserSubscription.findOne({
-                userId: request.userId,
-                status: 'active',
-                amount: { $gt: 0 },
-                isDeleted: false,
-                $or: [
-                    { endDate: { $exists: false } },
-                    { endDate: { $gt: new Date() } }
-                ]
-            });
-
-            return !!subscription;
+            const activeSubscription = await this.getUserActiveSubscription(userId);
+            if (!activeSubscription) {
+                return false;
+            }
+            return activeSubscription.planType !== 'free';
         } catch (error) {
             console.error('Error checking premium subscription:', error);
             throw error;
@@ -127,52 +114,93 @@ export class SubscriptionService {
     }
 
     /**
-     * Create user subscription
+     * Get all user subscriptions with pagination, filtering, and sorting.
      */
-    @Transaction('Failed to create user subscription')
-    static async createUserSubscription(
-        subscriptionData: ICreateUserSubscriptionDTO,
-        options: { session?: any } = {}
-    ): Promise<IUserSubscriptionResponse> {
-        const { session } = options;
-
+    static async getAllUserSubscriptions(
+        query: IGetUserSubscriptionsQuery
+    ): Promise<IUserSubscriptionListResponse> {
         try {
-            // Verify plan exists
-            const plan = await SubscriptionPlan.findOne({
-                _id: subscriptionData.planId,
-                isActive: true,
-                isDeleted: false
-            }).session(session);
+            const { page = 1, limit = 10, userId, planType, status, sortBy, sortOrder } = query;
+            const skip = (page - 1) * limit;
 
-            if (!plan) {
-                throw new AppError('Subscription plan not found', ERROR_CODES.NOT_FOUND);
+            const filter: any = { isDeleted: false };
+            if (userId) {
+                filter.userId = new mongoose.Types.ObjectId(userId);
+            }
+            if (planType) {
+                filter.planType = planType;
+            }
+            if (status) { // This maps to paymentStatus in our model
+                filter.paymentStatus = status;
             }
 
-            // Check if user already has an active subscription
-            const existingSubscription = await UserSubscription.findOne({
-                userId: subscriptionData.userId,
-                status: 'active',
-                isDeleted: false
-            }).session(session);
-
-            if (existingSubscription) {
-                throw new AppError('User already has an active subscription', ERROR_CODES.CONFLICT);
+            const sort: any = {};
+            if (sortBy && sortOrder) {
+                sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+            } else {
+                sort.createdAt = -1; // Default sort
             }
 
-            // Create subscription
-            const subscription = new UserSubscription({
-                ...subscriptionData,
-                currency: subscriptionData.currency || 'usd',
-                status: subscriptionData.status || 'pending',
-                startDate: subscriptionData.startDate || new Date(),
-                isAutoRenew: subscriptionData.isAutoRenew ?? true
-            });
+            const subscriptions = await UserSubscription.find(filter)
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .populate('userId', 'email companyId') // Populate user details if needed
+                .exec();
 
-            await subscription.save({ session });
+            const totalSubscriptions = await UserSubscription.countDocuments(filter);
 
-            console.log(`User subscription created: ${subscription._id}`);
+            const formattedSubscriptions = subscriptions.map(sub => this.formatUserSubscriptionResponse(sub));
+
+            return {
+                subscriptions: formattedSubscriptions,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(totalSubscriptions / limit),
+                    totalSubscriptions,
+                    hasNextPage: totalSubscriptions > skip + subscriptions.length,
+                    hasPrevPage: page > 1,
+                },
+            };
+        } catch (error) {
+            console.error('Error getting all user subscriptions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get user subscription by ID.
+     */
+    static async getUserSubscriptionById(id: string): Promise<IUserSubscriptionResponse | null> {
+        try {
+            const subscription = await UserSubscription.findById(id).populate('userId', 'email companyId');
+
+            if (!subscription) {
+                throw new AppError('User subscription not found', ERROR_CODES.NOT_FOUND);
+            }
 
             return this.formatUserSubscriptionResponse(subscription);
+        } catch (error) {
+            console.error(`Error getting user subscription by ID ${id}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create a new user subscription.
+     */
+    static async createUserSubscription(
+        subscriptionData: ICreateUserSubscriptionDTO
+    ): Promise<IUserSubscriptionResponse> {
+        try {
+            const newSubscriptionData = {
+                ...subscriptionData,
+                userId: new mongoose.Types.ObjectId(subscriptionData.userId),
+            };
+
+            const newSubscription = await UserSubscription.create(newSubscriptionData);
+
+            return this.formatUserSubscriptionResponse(newSubscription);
         } catch (error) {
             console.error('Error creating user subscription:', error);
             throw error;
@@ -180,223 +208,78 @@ export class SubscriptionService {
     }
 
     /**
-     * Update user subscription
+     * Update an existing user subscription.
      */
-    @Transaction('Failed to update user subscription')
     static async updateUserSubscription(
-        subscriptionId: string,
-        updateData: IUpdateUserSubscriptionDTO,
-        options: { session?: any } = {}
+        id: string,
+        updateData: IUpdateUserSubscriptionDTO
     ): Promise<IUserSubscriptionResponse> {
-        const { session } = options;
-
         try {
-            const subscription = await UserSubscription.findOne({
-                _id: subscriptionId,
-                isDeleted: false
-            }).session(session);
+            const updatedSubscriptionData: any = { ...updateData };
 
-            if (!subscription) {
-                throw new AppError('User subscription not found', ERROR_CODES.NOT_FOUND);
+            if (updatedSubscriptionData.userId) {
+                updatedSubscriptionData.userId = new mongoose.Types.ObjectId(updatedSubscriptionData.userId);
+            }
+            if (updatedSubscriptionData.deletedBy) {
+                updatedSubscriptionData.deletedBy = new mongoose.Types.ObjectId(updatedSubscriptionData.deletedBy);
             }
 
-            // Update subscription
-            Object.assign(subscription, updateData);
-            await subscription.save({ session });
-
-            console.log(`User subscription updated: ${subscriptionId}`);
-
-            return this.formatUserSubscriptionResponse(subscription);
-        } catch (error) {
-            console.error('Error updating user subscription:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Get all user subscriptions with pagination
-     */
-    static async getAllUserSubscriptions(
-        query: IGetUserSubscriptionsQuery
-    ): Promise<IUserSubscriptionListResponse> {
-        try {
-            const {
-                page = 1,
-                limit = 10,
-                status,
-                userId,
-                planId,
-                sortBy = 'createdAt',
-                sortOrder = 'desc'
-            } = query;
-
-            // Build filter object
-            const filter: any = { isDeleted: false };
-
-            if (status) {
-                filter.status = status;
-            }
-
-            if (userId) {
-                filter.userId = userId;
-            }
-
-            if (planId) {
-                filter.planId = planId;
-            }
-
-            // Build sort object
-            const sort: any = {};
-            sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-            // Calculate pagination
-            const skip = (page - 1) * limit;
-
-            // Execute queries
-            const [subscriptions, totalSubscriptions] = await Promise.all([
-                UserSubscription.find(filter)
-                    .populate('userId', 'name email')
-                    .populate('planId', 'name planType amount features')
-                    .sort(sort)
-                    .skip(skip)
-                    .limit(limit)
-                    .lean(),
-                UserSubscription.countDocuments(filter)
-            ]);
-
-            // Format response
-            const formattedSubscriptions = subscriptions.map(subscription =>
-                this.formatUserSubscriptionResponse(subscription)
+            const updatedSubscription = await UserSubscription.findByIdAndUpdate(
+                id,
+                updatedSubscriptionData,
+                { new: true }
             );
 
-            const totalPages = Math.ceil(totalSubscriptions / limit);
+            if (!updatedSubscription) {
+                throw new AppError('User subscription not found', ERROR_CODES.NOT_FOUND);
+            }
 
-            return {
-                subscriptions: formattedSubscriptions,
-                pagination: {
-                    currentPage: page,
-                    totalPages,
-                    totalSubscriptions,
-                    hasNextPage: page < totalPages,
-                    hasPrevPage: page > 1
-                }
-            };
+            return this.formatUserSubscriptionResponse(updatedSubscription);
         } catch (error) {
-            console.error('Error getting user subscriptions:', error);
+            console.error(`Error updating user subscription with ID ${id}:`, error);
             throw error;
         }
     }
 
     /**
-     * Get user subscription by ID
+     * Cancel a user subscription (soft delete).
      */
-    static async getUserSubscriptionById(subscriptionId: string): Promise<IUserSubscriptionResponse> {
+    static async cancelUserSubscription(id: string): Promise<IUserSubscriptionResponse> {
         try {
-            const subscription = await UserSubscription.findOne({
-                _id: subscriptionId,
-                isDeleted: false
-            }).populate('userId', 'name email')
-                .populate('planId', 'name planType amount features');
+            const subscription = await UserSubscription.findById(id);
 
             if (!subscription) {
                 throw new AppError('User subscription not found', ERROR_CODES.NOT_FOUND);
             }
 
+            subscription.isDeleted = true;
+            subscription.deletedAt = new Date();
+            subscription.isActive = false; // Mark as inactive upon cancellation
+            // subscription.deletedBy = userId; // Optional: if userId is passed to this method
+
+            await subscription.save();
+
             return this.formatUserSubscriptionResponse(subscription);
         } catch (error) {
-            console.error('Error getting user subscription by ID:', error);
+            console.error(`Error canceling user subscription with ID ${id}:`, error);
             throw error;
         }
     }
 
     /**
-     * Cancel user subscription
-     */
-    @Transaction('Failed to cancel user subscription')
-    static async cancelUserSubscription(
-        subscriptionId: string,
-        options: { session?: any } = {}
-    ): Promise<IUserSubscriptionResponse> {
-        const { session } = options;
-
-        try {
-            const subscription = await UserSubscription.findOne({
-                _id: subscriptionId,
-                isDeleted: false
-            }).session(session);
-
-            if (!subscription) {
-                throw new AppError('User subscription not found', ERROR_CODES.NOT_FOUND);
-            }
-
-            // Cancel Stripe subscription if exists
-            if (subscription.stripeSubscriptionId) {
-                await StripeService.cancelSubscription(subscription.stripeSubscriptionId);
-            }
-
-            // Update subscription status
-            subscription.status = 'canceled';
-            subscription.isAutoRenew = false;
-            await subscription.save({ session });
-
-            console.log(`User subscription canceled: ${subscriptionId}`);
-
-            return this.formatUserSubscriptionResponse(subscription);
-        } catch (error) {
-            console.error('Error canceling user subscription:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Get subscription statistics
+     * Get subscription statistics.
      */
     static async getSubscriptionStats(): Promise<IUserSubscriptionStats> {
         try {
-            const [
-                totalSubscriptions,
-                activeSubscriptions,
-                canceledSubscriptions,
-                expiredSubscriptions,
-                trialingSubscriptions,
-                subscriptionsByStatus,
-                revenueData
-            ] = await Promise.all([
-                UserSubscription.countDocuments({ isDeleted: false }),
-                UserSubscription.countDocuments({
-                    status: 'active',
-                    isDeleted: false,
-                    $or: [
-                        { endDate: { $exists: false } },
-                        { endDate: { $gt: new Date() } }
-                    ]
-                }),
-                UserSubscription.countDocuments({ status: 'canceled', isDeleted: false }),
-                UserSubscription.countDocuments({ status: 'expired', isDeleted: false }),
-                UserSubscription.countDocuments({ status: 'trialing', isDeleted: false }),
-                UserSubscription.aggregate([
-                    { $match: { isDeleted: false } },
-                    { $group: { _id: '$status', count: { $sum: 1 } } }
-                ]),
-                UserSubscription.aggregate([
-                    { $match: { isDeleted: false, status: 'active' } },
-                    { $group: { _id: null, totalRevenue: { $sum: '$amount' }, avgValue: { $avg: '$amount' } } }
-                ])
-            ]);
+            const totalSubscriptions = await UserSubscription.countDocuments({ isDeleted: false });
+            const activeSubscriptions = await UserSubscription.countDocuments({ isActive: true, isDeleted: false });
+            const canceledSubscriptions = await UserSubscription.countDocuments({ isDeleted: true });
+            const expiredSubscriptions = await UserSubscription.countDocuments({ isActive: false, endDate: { $lte: new Date() }, isDeleted: false });
+            const trialingSubscriptions = await UserSubscription.countDocuments({ planType: 'free', isActive: true, endDate: { $gt: new Date() }, isDeleted: false });
 
-            // Format subscriptions by status
-            const subscriptionsByStatusFormatted = {
-                active: 0,
-                canceled: 0,
-                expired: 0,
-                pending: 0,
-                past_due: 0,
-                trialing: 0
-            };
-
-            subscriptionsByStatus.forEach((item: any) => {
-                subscriptionsByStatusFormatted[item._id as keyof typeof subscriptionsByStatusFormatted] = item.count;
-            });
+            // For now, revenue calculations are placeholder as plan amounts are dynamic.
+            const totalRevenue = 0;
+            const averageSubscriptionValue = 0;
 
             return {
                 totalSubscriptions,
@@ -404,36 +287,44 @@ export class SubscriptionService {
                 canceledSubscriptions,
                 expiredSubscriptions,
                 trialingSubscriptions,
-                subscriptionsByStatus: subscriptionsByStatusFormatted,
-                totalRevenue: revenueData[0]?.totalRevenue || 0,
-                averageSubscriptionValue: revenueData[0]?.avgValue || 0
+                subscriptionsByStatus: {
+                    active: activeSubscriptions,
+                    canceled: canceledSubscriptions,
+                    expired: expiredSubscriptions,
+                    pending: await UserSubscription.countDocuments({ paymentStatus: 'pending', isDeleted: false }),
+                    past_due: 0, // Not explicitly handled yet
+                    trialing: trialingSubscriptions,
+                },
+                totalRevenue,
+                averageSubscriptionValue,
             };
         } catch (error) {
-            console.error('Error getting subscription stats:', error);
+            console.error('Error getting subscription statistics:', error);
             throw error;
         }
     }
 
     /**
-     * Process expired subscriptions
+     * Process expired subscriptions (e.g., set to inactive, update payment status).
+     * This method would typically be called by a cron job.
      */
     static async processExpiredSubscriptions(): Promise<void> {
         try {
+            const now = new Date();
             const expiredSubscriptions = await UserSubscription.find({
-                status: 'active',
-                endDate: { $lt: new Date() },
-                isDeleted: false
+                isActive: true,
+                endDate: { $lte: now },
+                isDeleted: false,
             });
 
             for (const subscription of expiredSubscriptions) {
-                subscription.status = 'expired';
-                subscription.isAutoRenew = false;
+                subscription.isActive = false;
+                subscription.paymentStatus = 'failed'; // Assuming expiry due to failed payment/non-renewal
                 await subscription.save();
-
-                console.log(`Subscription expired: ${subscription._id}`);
+                console.log(`Processed expired subscription for user ${subscription.userId}. Set to inactive.`);
             }
+            console.log(`Processed ${expiredSubscriptions.length} expired subscriptions.`);
 
-            console.log(`Processed ${expiredSubscriptions.length} expired subscriptions`);
         } catch (error) {
             console.error('Error processing expired subscriptions:', error);
             throw error;
@@ -443,31 +334,27 @@ export class SubscriptionService {
     /**
      * Format user subscription response
      */
-    private static formatUserSubscriptionResponse(subscription: any): IUserSubscriptionResponse {
+    private static formatUserSubscriptionResponse(subscription: IUserSubscription & Document): IUserSubscriptionResponse {
+        // Ensure endDate is a Date object before comparison
+        const isTrialing = subscription.planType === 'free' && subscription.endDate > new Date();
+
         return {
-            _id: subscription._id.toString(),
-            userId: subscription.userId?.toString() || subscription.userId,
-            planId: subscription.planId?.toString() || subscription.planId,
-            status: subscription.status,
+            _id: (subscription._id as mongoose.Types.ObjectId).toString(),
+            userId: subscription.userId.toString(),
+            planType: subscription.planType,
             startDate: subscription.startDate,
             endDate: subscription.endDate,
-            trialEndDate: subscription.trialEndDate,
-            isAutoRenew: subscription.isAutoRenew,
-            amount: subscription.amount,
-            currency: subscription.currency,
-            billingCycle: subscription.billingCycle,
-            stripeSubscriptionId: subscription.stripeSubscriptionId,
+            isActive: subscription.isActive,
+            paymentStatus: subscription.paymentStatus,
             stripeCustomerId: subscription.stripeCustomerId,
-            stripePriceId: subscription.stripePriceId,
-            stripePaymentMethodId: subscription.stripePaymentMethodId,
-            stripeInvoiceId: subscription.stripeInvoiceId,
-            metadata: subscription.metadata,
-            formattedAmount: subscription.formattedAmount || `$${(subscription.amount / 100).toFixed(2)}`,
-            daysRemaining: subscription.daysRemaining,
-            isExpired: subscription.isExpired || false,
-            isTrialing: subscription.isTrialing || false,
+            stripeSubscriptionId: subscription.stripeSubscriptionId,
+            trialDays: subscription.trialDays || 0,
+            isTrialing,
+            isDeleted: subscription.isDeleted,
+            deletedAt: subscription.deletedAt,
+            deletedBy: subscription.deletedBy ? (subscription.deletedBy as mongoose.Types.ObjectId).toString() : undefined,
             createdAt: subscription.createdAt,
-            updatedAt: subscription.updatedAt
+            updatedAt: subscription.updatedAt,
         };
     }
 }

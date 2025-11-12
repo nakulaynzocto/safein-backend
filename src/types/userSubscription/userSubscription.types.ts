@@ -1,22 +1,60 @@
-import { Document } from 'mongoose';
+import mongoose, { Document } from 'mongoose';
 
 export interface IUserSubscription extends Document {
-    userId: string;
-    planId: string;
-    status: 'active' | 'canceled' | 'expired' | 'pending' | 'past_due' | 'trialing';
+    userId: mongoose.Types.ObjectId; // Reference to the User model
+    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     startDate: Date;
+    endDate: Date;
+    isActive: boolean;
+    paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    stripeCustomerId?: string; // Stripe Customer ID associated with the user
+    stripeSubscriptionId?: string; // Stripe Subscription ID for recurring payments
+    trialDays?: number; // Number of trial days, if applicable
+    isDeleted: boolean; // For soft deletion
+    deletedAt?: Date;
+    deletedBy?: mongoose.Types.ObjectId; // User who deleted this subscription
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface ICreateUserSubscriptionDTO {
+    userId: string; // Will be converted to ObjectId in service
+    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    startDate?: Date;
     endDate?: Date;
-    trialEndDate?: Date;
-    isAutoRenew: boolean;
-    amount: number;
-    currency: string;
-    billingCycle: 'monthly' | 'quarterly' | 'yearly';
-    stripeSubscriptionId?: string;
+    isActive?: boolean;
+    paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'cancelled';
     stripeCustomerId?: string;
-    stripePriceId?: string;
-    stripePaymentMethodId?: string;
-    stripeInvoiceId?: string;
-    metadata?: { [key: string]: any };
+    stripeSubscriptionId?: string;
+    trialDays?: number;
+}
+
+export interface IUpdateUserSubscriptionDTO {
+    planType?: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    startDate?: Date;
+    endDate?: Date;
+    isActive?: boolean;
+    paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    trialDays?: number;
+    isDeleted?: boolean;
+    deletedAt?: Date;
+    deletedBy?: string; // Will be converted to ObjectId in service
+}
+
+export interface IUserSubscriptionResponse {
+    _id: string;
+    userId: string;
+    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    startDate: Date;
+    endDate: Date;
+    isActive: boolean;
+    paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    trialDays: number;
+    isTrialing: boolean; // Derived field
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: string;
@@ -24,73 +62,12 @@ export interface IUserSubscription extends Document {
     updatedAt: Date;
 }
 
-export interface ICreateUserSubscriptionDTO {
-    userId: string;
-    planId: string;
-    status?: 'active' | 'canceled' | 'expired' | 'pending' | 'past_due' | 'trialing';
-    startDate?: Date;
-    endDate?: Date;
-    trialEndDate?: Date;
-    isAutoRenew?: boolean;
-    amount: number;
-    currency?: string;
-    billingCycle: 'monthly' | 'quarterly' | 'yearly';
-    stripeSubscriptionId?: string;
-    stripeCustomerId?: string;
-    stripePriceId?: string;
-    stripePaymentMethodId?: string;
-    stripeInvoiceId?: string;
-    metadata?: { [key: string]: any };
-}
-
-export interface IUpdateUserSubscriptionDTO {
-    status?: 'active' | 'canceled' | 'expired' | 'pending' | 'past_due' | 'trialing';
-    endDate?: Date;
-    trialEndDate?: Date;
-    isAutoRenew?: boolean;
-    amount?: number;
-    currency?: string;
-    billingCycle?: 'monthly' | 'quarterly' | 'yearly';
-    stripeSubscriptionId?: string;
-    stripeCustomerId?: string;
-    stripePriceId?: string;
-    stripePaymentMethodId?: string;
-    stripeInvoiceId?: string;
-    metadata?: { [key: string]: any };
-}
-
-export interface IUserSubscriptionResponse {
-    _id: string;
-    userId: string;
-    planId: string;
-    status: string;
-    startDate: Date;
-    endDate?: Date;
-    trialEndDate?: Date;
-    isAutoRenew: boolean;
-    amount: number;
-    currency: string;
-    billingCycle: string;
-    stripeSubscriptionId?: string;
-    stripeCustomerId?: string;
-    stripePriceId?: string;
-    stripePaymentMethodId?: string;
-    stripeInvoiceId?: string;
-    metadata?: { [key: string]: any };
-    formattedAmount: string;
-    daysRemaining?: number;
-    isExpired: boolean;
-    isTrialing: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
 export interface IGetUserSubscriptionsQuery {
     page?: number;
     limit?: number;
-    status?: string;
+    status?: string; // paymentStatus
     userId?: string;
-    planId?: string;
+    planType?: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'; // Use planType instead of planId
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
 }
@@ -199,6 +176,7 @@ export interface IStripeProduct {
 // Service method types
 export interface IAssignFreePlanRequest {
     userId: string;
+    stripeCustomerId?: string; // Add this field
 }
 
 export interface IGetUserActiveSubscriptionRequest {

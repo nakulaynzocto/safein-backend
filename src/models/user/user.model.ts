@@ -87,6 +87,12 @@ const userSchema = new Schema<IUser>(
         },
         lastLoginAt: {
             type: Date
+        },
+        activeSubscriptionId: {
+            type: Schema.Types.ObjectId,
+            ref: 'UserSubscription',
+            default: null,
+            sparse: true,
         }
     },
     {

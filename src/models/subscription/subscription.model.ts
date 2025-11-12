@@ -16,6 +16,7 @@ export interface ISubscriptionPlan extends Document {
     isPopular: boolean;
     trialDays?: number;
     sortOrder: number;
+    discountPercentage?: number;
     metadata?: IMetadata;
     isDeleted: boolean;
     deletedAt?: Date;
