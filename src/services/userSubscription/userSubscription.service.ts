@@ -1,6 +1,9 @@
 import mongoose, { Document } from 'mongoose';
 import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
 import { User } from '../../models/user/user.model';
+import { Employee } from '../../models/employee/employee.model';
+import { Visitor } from '../../models/visitor/visitor.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
 import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats } from '../../types/userSubscription/userSubscription.types';
@@ -19,7 +22,6 @@ export class UserSubscriptionService {
                 throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
             }
 
-            // Check if user already has an active subscription
             const existingSubscription = await UserSubscription.findOne({
                 userId: new mongoose.Types.ObjectId(userId),
                 isActive: true,
@@ -27,9 +29,7 @@ export class UserSubscriptionService {
             }).session(session);
 
             if (existingSubscription) {
-                // If there's an active subscription, ensure it's not a free trial before proceeding
                 if (existingSubscription.planType === 'free') {
-                    // Update existing free trial rather than creating a new one
                     existingSubscription.startDate = new Date();
                     existingSubscription.endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
                     await existingSubscription.save({ session });
@@ -41,7 +41,7 @@ export class UserSubscriptionService {
             }
 
             const startDate = new Date();
-            const endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000); // 3 days from now
+            const endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
             const newSubscription = new UserSubscription({
                 userId: new mongoose.Types.ObjectId(userId),
@@ -49,14 +49,13 @@ export class UserSubscriptionService {
                 startDate,
                 endDate,
                 isActive: true,
-                paymentStatus: 'succeeded', // Payment method verified
+                paymentStatus: 'succeeded',
                 stripeCustomerId,
                 trialDays,
             });
 
             await newSubscription.save({ session });
 
-            // Update user's activeSubscriptionId
             user.activeSubscriptionId = newSubscription._id as mongoose.Types.ObjectId;
             await user.save({ session });
 
@@ -64,7 +63,6 @@ export class UserSubscriptionService {
             return newSubscription;
         } catch (error) {
             await session.abortTransaction();
-            console.error('Error creating free trial:', error);
             if (error instanceof AppError) {
                 throw error;
             }
@@ -92,7 +90,6 @@ export class UserSubscriptionService {
 
             return this.formatUserSubscriptionResponse(subscription);
         } catch (error) {
-            console.error('Error getting user active subscription:', error);
             throw error;
         }
     }
@@ -108,7 +105,6 @@ export class UserSubscriptionService {
             }
             return activeSubscription.planType !== 'free';
         } catch (error) {
-            console.error('Error checking premium subscription:', error);
             throw error;
         }
     }
@@ -163,7 +159,6 @@ export class UserSubscriptionService {
                 },
             };
         } catch (error) {
-            console.error('Error getting all user subscriptions:', error);
             throw error;
         }
     }
@@ -181,7 +176,6 @@ export class UserSubscriptionService {
 
             return this.formatUserSubscriptionResponse(subscription);
         } catch (error) {
-            console.error(`Error getting user subscription by ID ${id}:`, error);
             throw error;
         }
     }
@@ -202,7 +196,6 @@ export class UserSubscriptionService {
 
             return this.formatUserSubscriptionResponse(newSubscription);
         } catch (error) {
-            console.error('Error creating user subscription:', error);
             throw error;
         }
     }
@@ -236,7 +229,6 @@ export class UserSubscriptionService {
 
             return this.formatUserSubscriptionResponse(updatedSubscription);
         } catch (error) {
-            console.error(`Error updating user subscription with ID ${id}:`, error);
             throw error;
         }
     }
@@ -254,14 +246,12 @@ export class UserSubscriptionService {
 
             subscription.isDeleted = true;
             subscription.deletedAt = new Date();
-            subscription.isActive = false; // Mark as inactive upon cancellation
-            // subscription.deletedBy = userId; // Optional: if userId is passed to this method
+            subscription.isActive = false;
 
             await subscription.save();
 
             return this.formatUserSubscriptionResponse(subscription);
         } catch (error) {
-            console.error(`Error canceling user subscription with ID ${id}:`, error);
             throw error;
         }
     }
@@ -277,7 +267,6 @@ export class UserSubscriptionService {
             const expiredSubscriptions = await UserSubscription.countDocuments({ isActive: false, endDate: { $lte: new Date() }, isDeleted: false });
             const trialingSubscriptions = await UserSubscription.countDocuments({ planType: 'free', isActive: true, endDate: { $gt: new Date() }, isDeleted: false });
 
-            // For now, revenue calculations are placeholder as plan amounts are dynamic.
             const totalRevenue = 0;
             const averageSubscriptionValue = 0;
 
@@ -299,9 +288,30 @@ export class UserSubscriptionService {
                 averageSubscriptionValue,
             };
         } catch (error) {
-            console.error('Error getting subscription statistics:', error);
             throw error;
         }
+    }
+
+    /**
+     * Get trial limits counts for a company
+     */
+    static async getTrialLimitsCounts(companyId: string): Promise<{
+        employees: number;
+        visitors: number;
+        appointments: number;
+    }> {
+        const companyObjectId = new mongoose.Types.ObjectId(companyId);
+        const [employeeCount, visitorCount, appointmentCount] = await Promise.all([
+            Employee.countDocuments({ companyId: companyObjectId, isDeleted: false }),
+            Visitor.countDocuments({ companyId: companyObjectId, isDeleted: false }),
+            Appointment.countDocuments({ companyId: companyObjectId, isDeleted: false }),
+        ]);
+
+        return {
+            employees: employeeCount,
+            visitors: visitorCount,
+            appointments: appointmentCount,
+        };
     }
 
     /**
@@ -321,12 +331,9 @@ export class UserSubscriptionService {
                 subscription.isActive = false;
                 subscription.paymentStatus = 'failed'; // Assuming expiry due to failed payment/non-renewal
                 await subscription.save();
-                console.log(`Processed expired subscription for user ${subscription.userId}. Set to inactive.`);
             }
-            console.log(`Processed ${expiredSubscriptions.length} expired subscriptions.`);
 
         } catch (error) {
-            console.error('Error processing expired subscriptions:', error);
             throw error;
         }
     }
@@ -335,7 +342,6 @@ export class UserSubscriptionService {
      * Format user subscription response
      */
     private static formatUserSubscriptionResponse(subscription: IUserSubscription & Document): IUserSubscriptionResponse {
-        // Ensure endDate is a Date object before comparison
         const isTrialing = subscription.planType === 'free' && subscription.endDate > new Date();
 
         return {

@@ -59,10 +59,8 @@ export class EmployeeController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Get employee and verify it belongs to the current user
         const employee = await EmployeeService.getEmployeeById(id);
         
-        // Additional check: verify the employee was created by the current user
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -85,7 +83,6 @@ export class EmployeeController {
         const updateData: IUpdateEmployeeDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the employee belongs to the current user before updating
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -108,7 +105,6 @@ export class EmployeeController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the employee belongs to the current user before deleting
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -148,7 +144,6 @@ export class EmployeeController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the employee belongs to the current user before restoring
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -172,7 +167,6 @@ export class EmployeeController {
         const statusData: IUpdateEmployeeStatusDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the employee belongs to the current user before updating status
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -195,7 +189,6 @@ export class EmployeeController {
         const bulkData: IBulkUpdateEmployeesDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify all employees belong to the current user before bulk updating
         const employees = await Employee.find({ 
             _id: { $in: bulkData.employeeIds },
             createdBy: userId 

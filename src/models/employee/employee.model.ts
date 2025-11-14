@@ -71,37 +71,30 @@ const employeeSchema = new Schema<IEmployee>({
     toObject: { virtuals: true }
 });
 
-// Indexes for better performance
 employeeSchema.index({ department: 1 });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ isDeleted: 1 });
 employeeSchema.index({ deletedAt: 1 });
 employeeSchema.index({ createdBy: 1 });
 
-// Compound indexes for user-specific uniqueness
 employeeSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
-// Virtual for full name
 employeeSchema.virtual('fullName').get(function () {
     return this.name;
 });
 
-// Pre-save middleware
 employeeSchema.pre('save', function (next) {
     next();
 });
 
-// Static method to find active employees
 employeeSchema.statics.findActive = function () {
     return this.find({ isDeleted: false, status: 'Active' });
 };
 
-// Static method to find deleted employees
 employeeSchema.statics.findDeleted = function () {
     return this.find({ isDeleted: true });
 };
 
-// Instance method to soft delete
 employeeSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
@@ -109,7 +102,6 @@ employeeSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId
     return this.save();
 };
 
-// Instance method to restore
 employeeSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;

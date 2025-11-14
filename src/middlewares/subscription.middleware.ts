@@ -22,14 +22,12 @@ export const checkPremiumSubscription = async (
         const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(req.user._id.toString());
 
         if (!hasPremium) {
-            console.warn(`Premium subscription required for user ${req.user._id}`);
             throw new AppError(
                 'Premium subscription required to access this feature',
                 ERROR_CODES.FORBIDDEN
             );
         }
 
-        // Add premium status to request object for use in controllers
         req.isPremiumUser = true;
         next();
     } catch (error) {
@@ -54,14 +52,12 @@ export const checkActiveSubscription = async (
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
-            console.warn(`Active subscription required for user ${req.user._id}`);
             throw new AppError(
                 'Active subscription required to access this feature',
                 ERROR_CODES.FORBIDDEN
             );
         }
 
-        // Add subscription info to request object
         req.activeSubscription = activeSubscription;
         req.isPremiumUser = activeSubscription.planType !== 'free';
         next();
@@ -70,10 +66,6 @@ export const checkActiveSubscription = async (
     }
 };
 
-/**
- * Middleware to check if user has specific subscription plan
- * This middleware should be used on routes that require a specific plan
- */
 export const checkSpecificPlan = (requiredPlanType: string) => {
     return async (
         req: AuthenticatedRequest,
@@ -88,7 +80,6 @@ export const checkSpecificPlan = (requiredPlanType: string) => {
             const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
             if (!activeSubscription) {
-                console.warn(`Active subscription required for user ${req.user._id}`);
                 throw new AppError(
                     'Active subscription required to access this feature',
                     ERROR_CODES.FORBIDDEN
@@ -96,14 +87,12 @@ export const checkSpecificPlan = (requiredPlanType: string) => {
             }
 
             if (activeSubscription.planType !== requiredPlanType) {
-                console.warn(`Specific plan ${requiredPlanType} required for user ${req.user._id}`);
                 throw new AppError(
                     'Specific subscription plan required to access this feature',
                     ERROR_CODES.FORBIDDEN
                 );
             }
 
-            // Add subscription info to request object
             req.activeSubscription = activeSubscription;
             req.isPremiumUser = activeSubscription.planType !== 'free';
             next();
@@ -113,10 +102,6 @@ export const checkSpecificPlan = (requiredPlanType: string) => {
     };
 };
 
-/**
- * Middleware to check if user has trial subscription
- * This middleware should be used on routes that require trial access
- */
 export const checkTrialSubscription = async (
     req: AuthenticatedRequest,
     _res: Response,
@@ -130,7 +115,6 @@ export const checkTrialSubscription = async (
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
-            console.warn(`Active subscription required for user ${req.user._id}`);
             throw new AppError(
                 'Active subscription required to access this feature',
                 ERROR_CODES.FORBIDDEN
@@ -138,14 +122,12 @@ export const checkTrialSubscription = async (
         }
 
         if (!activeSubscription.isTrialing) {
-            console.warn(`Trial subscription required for user ${req.user._id}`);
             throw new AppError(
                 'Trial subscription required to access this feature',
                 ERROR_CODES.FORBIDDEN
             );
         }
 
-        // Add subscription info to request object
         req.activeSubscription = activeSubscription;
         req.isPremiumUser = activeSubscription.planType !== 'free';
         next();
@@ -154,10 +136,6 @@ export const checkTrialSubscription = async (
     }
 };
 
-/**
- * Optional middleware to add subscription info to request without blocking
- * This middleware adds subscription info to request object but doesn't block access
- */
 export const addSubscriptionInfo = async (
     req: AuthenticatedRequest,
     _res: Response,
@@ -179,14 +157,10 @@ export const addSubscriptionInfo = async (
 
         next();
     } catch (error) {
-        // Don't block request if subscription check fails
-        console.error('Error adding subscription info:', error);
         req.isPremiumUser = false;
         next();
     }
 };
-
-// Extend the AuthenticatedRequest interface to include subscription info
 declare global {
     namespace Express {
         interface Request {

@@ -94,7 +94,6 @@ export class UserController {
   static async getUserById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const { id } = req.params;
     
-    // Check if user is trying to access their own profile or if they are admin
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
@@ -102,7 +101,6 @@ export class UserController {
     const currentUserId = req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
     
-    // Only allow users to access their own profile unless they are admin
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only access your own profile.', ERROR_CODES.FORBIDDEN);
     }
@@ -116,7 +114,6 @@ export class UserController {
    */
   @TryCatch('Failed to get users')
   static async getAllUsers(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-    // Check if user is admin
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
@@ -141,7 +138,6 @@ export class UserController {
   static async updateUserById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const { id } = req.params;
     
-    // Check if user is trying to update their own profile or if they are admin
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
@@ -149,7 +145,6 @@ export class UserController {
     const currentUserId = req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
     
-    // Only allow users to update their own profile unless they are admin
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only update your own profile.', ERROR_CODES.FORBIDDEN);
     }
@@ -168,7 +163,6 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
     
-    // Only admin can delete users
     if (req.user.role !== 'admin') {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
@@ -188,7 +182,6 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
     
-    // Only admin can restore users
     if (req.user.role !== 'admin') {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
@@ -213,27 +206,16 @@ export class UserController {
    */
   @TryCatch('Failed to send password reset email')
   static async forgotPassword(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-    // This would typically send an email with reset link
-    // For now, just return success message
     ResponseUtil.success(res, 'Password reset email sent successfully');
   }
 
-  /**
-   * Reset password
-   */
   @TryCatch('Failed to reset password')
   static async resetPassword(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-    // This would typically validate the reset token and update password
-    // For now, just return success message
     ResponseUtil.success(res, 'Password reset successfully');
   }
 
-  /**
-   * Logout user
-   */
   @TryCatch('Failed to logout')
   static async logout(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-    // In a real application, you might want to blacklist the token
     ResponseUtil.success(res, 'Logout successful');
   }
 }

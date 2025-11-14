@@ -11,13 +11,10 @@ export function Transaction(_errorMessage: string = 'Transaction failed') {
 
         descriptor.value = async function (...args: any[]) {
             return TransactionUtil.executeTransaction(async (session) => {
-                // Create a copy of args to avoid mutating the original
                 const newArgs = [...args];
                 
-                // Add session to the last argument (usually the service method)
                 const lastArg = newArgs[newArgs.length - 1];
                 if (typeof lastArg === 'object' && lastArg !== null && !lastArg.session) {
-                    // Create a new object to avoid mutating the original
                     newArgs[newArgs.length - 1] = { ...lastArg, session };
                 } else {
                     newArgs.push({ session });

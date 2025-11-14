@@ -1,13 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
 
-// ==========================================
-// Configuration
-// ==========================================
-
-/**
- * Parse Cloudinary configuration from environment variables
- * Supports both connection URL format and individual credentials
- */
 const getCloudCreds = () => {
   const cloudNameUrl = process.env.CLOUDINARY_CLOUD_NAME || '';
   
@@ -15,27 +7,22 @@ const getCloudCreds = () => {
   let apiKey = process.env.CLOUDINARY_API_KEY || '';
   let apiSecret = process.env.CLOUDINARY_API_SECRET || '';
   
-  // If CLOUDINARY_CLOUD_NAME is a full connection URL, extract everything
   if (cloudNameUrl.startsWith('cloudinary://')) {
     const match = cloudNameUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
     if (match && match.length >= 4) {
       cloudName = match[3].trim();
       apiKey = match[1];
       apiSecret = match[2];
-      
-      // Cloudinary config extracted from connection URL
     } else {
       console.error('Failed to parse Cloudinary connection URL');
     }
   } else {
-    // Individual credentials provided
     cloudName = cloudNameUrl;
   }
   
   return { cloudName, apiKey, apiSecret };
 };
 
-// Initialize Cloudinary configuration
 const { cloudName, apiKey, apiSecret } = getCloudCreds();
 
 if (cloudName && apiKey && apiSecret) {
@@ -48,20 +35,12 @@ if (cloudName && apiKey && apiSecret) {
   console.error('Cloudinary configuration incomplete');
 }
 
-// ==========================================
-// Constants
-// ==========================================
-
 export const UPLOAD_CONFIG = {
-  MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+  MAX_FILE_SIZE: 5 * 1024 * 1024,
   ALLOWED_FILE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
   UPLOAD_FOLDER: 'visitor-appointments',
   QUALITY: 'auto',
 } as const;
-
-// ==========================================
-// Types
-// ==========================================
 
 export interface UploadResult {
   success: boolean;
@@ -81,21 +60,11 @@ export interface CloudinaryUploadOptions {
   flags?: string;
 }
 
-// ==========================================
-// Helper Functions
-// ==========================================
-
-/**
- * Convert buffer to data URI for Cloudinary upload
- */
 export const bufferToDataUri = (buffer: Buffer, mimetype: string): string => {
   const base64String = buffer.toString('base64');
   return `data:${mimetype};base64,${base64String}`;
 };
 
-/**
- * Generate optimized upload options for Cloudinary
- */
 export const generateUploadOptions = (
   folder?: string,
   quality: string = UPLOAD_CONFIG.QUALITY
@@ -103,31 +72,17 @@ export const generateUploadOptions = (
   return {
     folder: folder || UPLOAD_CONFIG.UPLOAD_FOLDER,
     resource_type: 'auto',
-    // Quality optimization
     quality: quality,
-    // Auto-optimize format based on browser support
     fetch_format: 'auto',
-    // Optimization flags
     flags: 'progressive'
   };
 };
 
-// ==========================================
-// Main Upload Function
-// ==========================================
-
-/**
- * Upload a file to Cloudinary with optimization
- * @param file - File buffer or object
- * @param options - Optional upload options
- * @returns UploadResult
- */
 export const uploadToCloudinary = async (
   file: Express.Multer.File,
   options?: CloudinaryUploadOptions
 ): Promise<UploadResult> => {
   try {
-    // Validate file exists
     if (!file) {
       return {
         success: false,
@@ -135,16 +90,13 @@ export const uploadToCloudinary = async (
       };
     }
 
-    // Convert buffer to data URI
     const dataUri = bufferToDataUri(file.buffer, file.mimetype);
 
-    // Generate upload options with optimization
     const uploadOptions = generateUploadOptions(
       options?.folder,
       options?.quality
     );
 
-    // Upload to Cloudinary
     const result = await new Promise<UploadResult>((resolve) => {
       cloudinary.uploader.upload(
         dataUri,
@@ -191,7 +143,6 @@ export const uploadToCloudinary = async (
  */
 export const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
   try {
-    // Extract public_id from URL if full URL is provided
     const actualPublicId = publicId.includes('/') 
       ? publicId.split('/').pop()?.split('.')[0] || publicId
       : publicId;
@@ -212,5 +163,4 @@ export const deleteFromCloudinary = async (publicId: string): Promise<boolean> =
   }
 };
 
-// Export cloudinary instance for other uses
 export { cloudinary };

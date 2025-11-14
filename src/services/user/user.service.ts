@@ -12,8 +12,8 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
 import { StripeService } from '../stripe/stripe.service';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 
-// Simple in-memory OTP storage (in production, use Redis or database)
 const otpStorage = new Map<string, { otp: string; expiresAt: Date; userData: ICreateUserDTO }>();
 
 export class UserService {
@@ -30,11 +30,8 @@ export class UserService {
   private static async sendOtpToEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
       await EmailService.sendOtpEmail(email, otp, companyName);
-    } catch (error) {
-      console.error('Failed to send OTP email:', error);
-      // In development, don't fail registration if email fails
+    } catch (error: any) {
       if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 DEVELOPMENT MODE - OTP for ${email}: ${otp}`);
         return;
       }
       throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
@@ -45,20 +42,16 @@ export class UserService {
    * Initiate registration by sending OTP
    */
   static async initiateRegistration(userData: ICreateUserDTO): Promise<{ email: string; otpSent: boolean }> {
-    // Check if user already exists
     const existingUser = await User.findOne({ email: userData.email });
     if (existingUser) {
       throw new AppError(ERROR_MESSAGES.EMAIL_ALREADY_IN_USE, ERROR_CODES.CONFLICT);
     }
 
-    // Generate OTP
     const otp = this.generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Store OTP with user data
     otpStorage.set(userData.email, { otp, expiresAt, userData });
 
-    // Send OTP to email
     await this.sendOtpToEmail(userData.email, otp, userData.companyName);
 
     return {
@@ -74,51 +67,41 @@ export class UserService {
   static async verifyOtpAndCompleteRegistration(email: string, otp: string, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
 
-    // Get stored OTP data
     const otpData = otpStorage.get(email);
     if (!otpData) {
       throw new AppError('OTP not found or expired', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Check if OTP is expired
     if (new Date() > otpData.expiresAt) {
       otpStorage.delete(email);
       throw new AppError('OTP expired', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Verify OTP
     if (otpData.otp !== otp) {
       throw new AppError('OTP incorrect', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Create user with the stored data
     const user = new User(otpData.userData);
     await user.save({ session });
 
-    // Create/find Stripe customer and update user
     const stripeCustomer = await StripeService.findOrCreateCustomer({
         email: user.email,
-        name: user.companyName, // Or actual user name if available
+        name: user.companyName,
         metadata: { userId: user._id.toString() },
     });
     user.stripeCustomerId = stripeCustomer.id;
     await user.save({ session });
 
-    // Clean up OTP data
     otpStorage.delete(email);
 
-    // Generate token
     const token = JwtUtil.generateToken({
       userId: user._id.toString(),
       email: user.email,
     });
 
-    // Send welcome email
     try {
       await EmailService.sendWelcomeEmail(user.email, user.companyName);
     } catch (error) {
-      console.error('Failed to send welcome email:', error);
-      // Don't fail registration if welcome email fails
     }
 
     return {
@@ -131,20 +114,16 @@ export class UserService {
    * Resend OTP
    */
   static async resendOtp(email: string): Promise<{ message: string }> {
-    // Get stored OTP data
     const otpData = otpStorage.get(email);
     if (!otpData) {
       throw new AppError('No pending registration found for this email', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Generate new OTP
     const newOtp = this.generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Update stored OTP
     otpStorage.set(email, { ...otpData, otp: newOtp, expiresAt });
 
-    // Send new OTP to email
     await this.sendOtpToEmail(email, newOtp, otpData.userData.companyName);
 
     return {
@@ -158,17 +137,14 @@ export class UserService {
   static async createUser(userData: ICreateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email: userData.email }).session(session);
     if (existingUser) {
       throw new AppError(ERROR_MESSAGES.EMAIL_ALREADY_IN_USE, ERROR_CODES.CONFLICT);
     }
 
-    // Create new user
     const user = new User(userData);
     await user.save({ session });
 
-    // Return user without password
     return user.getPublicProfile();
   }
 
@@ -178,39 +154,45 @@ export class UserService {
   @Transaction('Failed to login user')
   static async loginUser(loginData: ILoginDTO, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
-    // Find user and include password for comparison
     const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password').session(session);
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
 
-    // Check if account is active
     if (!user.isActive) {
       throw new AppError(ERROR_MESSAGES.ACCOUNT_DISABLED, ERROR_CODES.UNAUTHORIZED);
     }
 
-    // Compare password
     const isPasswordValid = await user.comparePassword(loginData.password);
 
     if (!isPasswordValid) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
 
-    // Update last login
     user.lastLoginAt = new Date();
-    // Create/find Stripe customer and update user, if not already present
     if (!user.stripeCustomerId) {
         const stripeCustomer = await StripeService.findOrCreateCustomer({
             email: user.email,
-            name: user.companyName, // Or actual user name if available
+            name: user.companyName,
             metadata: { userId: user._id.toString() },
         });
         user.stripeCustomerId = stripeCustomer.id;
     }
-    await user.save({ session }); // Save user including lastLoginAt and stripeCustomerId
+    await user.save({ session });
 
-    // Generate token
+    try {
+      const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(user._id.toString());
+      if (!activeSubscription && user.stripeCustomerId) {
+        await UserSubscriptionService.createFreeTrial(
+          user._id.toString(),
+          user.stripeCustomerId,
+          3
+        );
+      }
+    } catch (error) {
+    }
+
     const token = JwtUtil.generateToken({
       userId: user._id.toString(),
       email: user.email,
@@ -240,17 +222,12 @@ export class UserService {
   static async updateUser(userId: string, updateData: IUpdateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
 
-    // ✅ Ensure session is not part of updateData and filter only allowed fields
-    // Create a safe copy that only includes allowed fields from IUpdateUserDTO
     const safeUpdateData: Partial<IUpdateUserDTO> = {};
     
-    // Copy only allowed fields explicitly to avoid circular references and unwanted fields
     if (updateData.companyName !== undefined) {
       safeUpdateData.companyName = updateData.companyName;
     }
-    // Handle profilePicture - allow empty string or valid URL
     if (updateData.profilePicture !== undefined) {
-      // Store empty string as is, or valid URL string
       safeUpdateData.profilePicture = updateData.profilePicture;
     }
     if (updateData.companyId !== undefined) {
@@ -269,7 +246,6 @@ export class UserService {
       safeUpdateData.employeeId = updateData.employeeId;
     }
 
-    // Explicitly ensure session is never included
     delete (safeUpdateData as any).session;
 
     const user = await User.findOneAndUpdate(
@@ -298,13 +274,11 @@ export class UserService {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
 
-    // Verify current password
     const isCurrentPasswordValid = await user.comparePassword(passwordData.currentPassword);
     if (!isCurrentPasswordValid) {
       throw new AppError(ERROR_MESSAGES.PASSWORD_MISMATCH, ERROR_CODES.UNAUTHORIZED);
     }
 
-    // Update password
     user.password = passwordData.newPassword;
     await user.save({ session });
   }

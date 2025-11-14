@@ -1,6 +1,5 @@
 import Joi from 'joi';
 
-// Validation for creating employee
 export const createEmployeeValidation = Joi.object({
     name: Joi.string()
         .required()
@@ -48,7 +47,6 @@ export const createEmployeeValidation = Joi.object({
         })
 });
 
-// Validation for updating employee
 export const updateEmployeeValidation = Joi.object({
     name: Joi.string()
         .optional()
@@ -91,7 +89,6 @@ export const updateEmployeeValidation = Joi.object({
         })
 });
 
-// Validation for employee ID parameter
 export const employeeParamsValidation = Joi.object({
     id: Joi.string()
         .required()
@@ -102,7 +99,6 @@ export const employeeParamsValidation = Joi.object({
         })
 });
 
-// Validation for query parameters
 export const getEmployeesValidation = Joi.object({
     page: Joi.number()
         .optional()
@@ -156,7 +152,6 @@ export const getEmployeesValidation = Joi.object({
         })
 });
 
-// Validation for status update
 export const updateEmployeeStatusValidation = Joi.object({
     status: Joi.string()
         .required()
@@ -167,7 +162,6 @@ export const updateEmployeeStatusValidation = Joi.object({
         })
 });
 
-// Validation for bulk operations
 export const bulkUpdateEmployeesValidation = Joi.object({
     employeeIds: Joi.array()
         .required()

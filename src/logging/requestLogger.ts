@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from './logger';
 
-// Extend Request interface to include requestId
 declare global {
     namespace Express {
         interface Request {
@@ -12,11 +11,9 @@ declare global {
 }
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
-    // Generate unique request ID
     req.requestId = logger.generateRequestId();
     req.startTime = Date.now();
 
-    // Log request details
     const requestPayload = {
         body: req.body,
         query: req.query,
@@ -40,10 +37,8 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
         requestPayload: logger.sanitizePayload(requestPayload)
     });
 
-    // Override res.json to capture response
     const originalJson = res.json;
     res.json = function (body: any) {
-        // Log response
         const responseTime = req.startTime ? Date.now() - req.startTime : undefined;
 
         logger.logResponse({
@@ -58,14 +53,11 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
             responseTime: responseTime
         });
 
-        // Call original json method
         return originalJson.call(this, body);
     };
 
-    // Override res.send to capture response
     const originalSend = res.send;
     res.send = function (body: any) {
-        // Log response
         const responseTime = req.startTime ? Date.now() - req.startTime : undefined;
 
         logger.logResponse({
@@ -80,7 +72,6 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
             responseTime: responseTime
         });
 
-        // Call original send method
         return originalSend.call(this, body);
     };
 

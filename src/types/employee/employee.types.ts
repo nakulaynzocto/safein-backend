@@ -1,4 +1,3 @@
-// DTOs for creating employee
 export interface ICreateEmployeeDTO {
     name: string;
     email: string;
@@ -7,7 +6,6 @@ export interface ICreateEmployeeDTO {
     status?: 'Active' | 'Inactive';
 }
 
-// DTOs for updating employee
 export interface IUpdateEmployeeDTO {
     name?: string;
     email?: string;
@@ -16,7 +14,6 @@ export interface IUpdateEmployeeDTO {
     status?: 'Active' | 'Inactive';
 }
 
-// Response interface for employee
 export interface IEmployeeResponse {
     _id: string;
     name: string;
@@ -24,15 +21,14 @@ export interface IEmployeeResponse {
     phone: string;
     department: string;
     status: 'Active' | 'Inactive';
-    createdBy: string; // Reference to User who created the employee
+    createdBy: string;
     isDeleted: boolean;
     deletedAt?: Date;
-    deletedBy?: string; // Reference to User who deleted the employee
+    deletedBy?: string;
     createdAt: Date;
     updatedAt: Date;
 }
 
-// Query parameters for getting employees
 export interface IGetEmployeesQuery {
     page?: number;
     limit?: number;
@@ -45,7 +41,6 @@ export interface IGetEmployeesQuery {
     sortOrder?: 'asc' | 'desc';
 }
 
-// Response for paginated employees
 export interface IEmployeeListResponse {
     employees: IEmployeeResponse[];
     pagination: {
@@ -57,19 +52,16 @@ export interface IEmployeeListResponse {
     };
 }
 
-// Status update DTO
 export interface IUpdateEmployeeStatusDTO {
     status: 'Active' | 'Inactive';
 }
 
-// Bulk operations DTO
 export interface IBulkUpdateEmployeesDTO {
     employeeIds: string[];
     status?: 'Active' | 'Inactive';
     department?: string;
 }
 
-// Employee statistics interface
 export interface IEmployeeStats {
     totalEmployees: number;
     activeEmployees: number;

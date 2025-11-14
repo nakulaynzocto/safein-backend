@@ -22,7 +22,6 @@ export class VisitorService {
     static async createVisitor(visitorData: ICreateVisitorDTO, createdBy: string, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
-        // Check if email already exists for this user
         const existingEmail = await Visitor.findOne({ 
             email: visitorData.email, 
             createdBy: createdBy 
@@ -31,7 +30,6 @@ export class VisitorService {
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        // Create new visitor with createdBy from authenticated user
         const visitor = new Visitor({ ...visitorData, createdBy });
         await visitor.save({ session });
 
@@ -67,10 +65,8 @@ export class VisitorService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object - only show visitors created by the current user
         const filter: any = { isDeleted: false };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             filter.createdBy = userId;
         }
@@ -91,8 +87,6 @@ export class VisitorService {
             ];
         }
 
-        
-        // Date range filter (createdAt)
         if (startDate || endDate) {
             const createdAt: any = {};
             if (startDate) {
@@ -124,14 +118,11 @@ export class VisitorService {
             filter['idProof.type'] = { $regex: idProofType, $options: 'i' };
         }
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute queries
         const [visitors, totalVisitors] = await Promise.all([
             Visitor.find(filter)
                 .sort(sort)
@@ -162,17 +153,14 @@ export class VisitorService {
     static async updateVisitor(visitorId: string, updateData: IUpdateVisitorDTO, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
-        // ✅ Ensure session is not part of updateData
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        // 🔍 Get the existing visitor to check createdBy
         const existingVisitor = await Visitor.findById(visitorId).session(session);
         if (!existingVisitor) {
             throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        // 🔍 Check if email already exists for this user (excluding current visitor)
         if (safeUpdateData.email) {
             const existingEmail = await Visitor.findOne({
                 email: safeUpdateData.email,
@@ -188,7 +176,6 @@ export class VisitorService {
             }
         }
 
-        // 🔄 Update visitor
         const visitor = await Visitor.findByIdAndUpdate(
             visitorId,
             safeUpdateData,
@@ -235,10 +222,8 @@ export class VisitorService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object for deleted visitors - only show visitors created by the current user
         const filter: any = { isDeleted: true };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             filter.createdBy = userId;
         }
@@ -271,14 +256,11 @@ export class VisitorService {
             filter['address.country'] = { $regex: country, $options: 'i' };
         }
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute queries
         const [visitors, totalVisitors] = await Promise.all([
             Visitor.find(filter)
                 .sort(sort)
@@ -332,7 +314,6 @@ export class VisitorService {
         const { session } = options;
         const { visitorIds, ...updateData } = bulkData;
 
-        // Remove empty values
         const cleanUpdateData = Object.fromEntries(
             Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
         );
@@ -360,25 +341,20 @@ export class VisitorService {
     static async searchVisitors(searchQuery: IVisitorSearchQuery, userId?: string): Promise<IVisitorSearchResponse> {
         const { phone, email } = searchQuery;
 
-        // Build search criteria - only show visitors created by the current user
         const searchCriteria: any = { isDeleted: false };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             searchCriteria.createdBy = userId;
         }
 
         if (phone && email) {
-            // Search by both phone OR email
             searchCriteria.$or = [
                 { phone: phone },
                 { email: email }
             ];
         } else if (phone) {
-            // Search by phone only
             searchCriteria.phone = phone;
         } else if (email) {
-            // Search by email only
             searchCriteria.email = email;
         } else {
             throw new AppError('Either phone or email must be provided for search', ERROR_CODES.BAD_REQUEST);
@@ -400,7 +376,6 @@ export class VisitorService {
      * Get visitor statistics (user-specific)
      */
     static async getVisitorStats(userId?: string): Promise<IVisitorStats> {
-        // Build base filter - only show visitors created by the current user
         const baseFilter: any = {};
         if (userId) {
             baseFilter.createdBy = userId;

@@ -101,7 +101,6 @@ export interface IUserSubscriptionStats {
     averageSubscriptionValue: number;
 }
 
-// Stripe-related types
 export interface IStripeCheckoutSessionRequest {
     planId: string;
     successUrl?: string;
@@ -173,10 +172,9 @@ export interface IStripeProduct {
     metadata?: { [key: string]: string };
 }
 
-// Service method types
 export interface IAssignFreePlanRequest {
     userId: string;
-    stripeCustomerId?: string; // Add this field
+    stripeCustomerId?: string;
 }
 
 export interface IGetUserActiveSubscriptionRequest {

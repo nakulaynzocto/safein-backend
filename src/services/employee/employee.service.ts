@@ -21,7 +21,6 @@ export class EmployeeService {
     static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        // Check if email already exists for this user
         const existingEmail = await Employee.findOne({ 
             email: employeeData.email, 
             createdBy: createdBy 
@@ -30,7 +29,6 @@ export class EmployeeService {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        // Create new employee with createdBy from authenticated user
         const employee = new Employee({ ...employeeData, createdBy });
         await employee.save({ session });
 
@@ -64,10 +62,8 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object - only show employees created by the current user
         const filter: any = { isDeleted: false };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             filter.createdBy = userId;
         }
@@ -82,7 +78,6 @@ export class EmployeeService {
             ];
         }
 
-        // Date range filter (createdAt)
         if (startDate || endDate) {
             const createdAt: any = {};
             if (startDate) {
@@ -106,14 +101,11 @@ export class EmployeeService {
             filter.status = status;
         }
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute queries
         const [employees, totalEmployees] = await Promise.all([
             Employee.find(filter)
                 .sort(sort)
@@ -144,17 +136,14 @@ export class EmployeeService {
     static async updateEmployee( employeeId: string,updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        // ✅ Ensure session is not part of updateData
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        // 🔍 Get the existing employee to check createdBy
         const existingEmployee = await Employee.findById(employeeId).session(session);
         if (!existingEmployee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        // 🔍 Check if email already exists for this user (excluding current employee)
         if (safeUpdateData.email) {
             const existingEmail = await Employee.findOne({
                 email: safeUpdateData.email,
@@ -170,7 +159,6 @@ export class EmployeeService {
             }
         }
 
-        // 🔄 Update employee
         const employee = await Employee.findByIdAndUpdate(
             employeeId,
             safeUpdateData,
@@ -215,10 +203,8 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object for deleted employees - only show employees created by the current user
         const filter: any = { isDeleted: true };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             filter.createdBy = userId;
         }
@@ -237,14 +223,11 @@ export class EmployeeService {
             filter.department = { $regex: department, $options: 'i' };
         }
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute queries
         const [employees, totalEmployees] = await Promise.all([
             Employee.find(filter)
                 .sort(sort)
@@ -318,7 +301,6 @@ export class EmployeeService {
         const { session } = options;
         const { employeeIds, ...updateData } = bulkData;
 
-        // Remove empty values
         const cleanUpdateData = Object.fromEntries(
             Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
         );
@@ -344,7 +326,6 @@ export class EmployeeService {
      * Get employee statistics (user-specific)
      */
     static async getEmployeeStats(userId?: string): Promise<IEmployeeStats> {
-        // Build base filter - only show employees created by the current user
         const baseFilter: any = {};
         if (userId) {
             baseFilter.createdBy = userId;

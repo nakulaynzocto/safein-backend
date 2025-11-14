@@ -228,8 +228,6 @@ const appointmentSchema = new Schema<IAppointment>(
     }
 );
 
-// Indexes for performance
-// Note: appointmentId already has unique index from unique: true in schema definition
 appointmentSchema.index({ employeeId: 1 });
 appointmentSchema.index({ visitorId: 1 });
 appointmentSchema.index({ 'appointmentDetails.scheduledDate': 1 });
@@ -239,10 +237,8 @@ appointmentSchema.index({ isDeleted: 1 });
 appointmentSchema.index({ createdAt: -1 });
 appointmentSchema.index({ employeeId: 1, 'appointmentDetails.scheduledDate': 1 });
 
-// Pre-save middleware to generate appointment ID if not provided
 appointmentSchema.pre('save', function (next) {
     if (!this.appointmentId) {
-        // Generate appointment ID: APT + timestamp + random 3 digits
         const timestamp = Date.now().toString().slice(-6);
         const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         this.appointmentId = `APT${timestamp}${random}`;
@@ -250,29 +246,23 @@ appointmentSchema.pre('save', function (next) {
     next();
 });
 
-// Virtual for full visitor name (requires population)
 appointmentSchema.virtual('visitorFullName').get(function () {
-    // This will work when the visitor is populated
     return this.populated('visitorId')?.name || 'Visitor not loaded';
 });
 
-// Virtual for appointment date and time
 appointmentSchema.virtual('appointmentDateTime').get(function () {
     const date = this.appointmentDetails.scheduledDate.toISOString().split('T')[0];
     return `${date} ${this.appointmentDetails.scheduledTime}`;
 });
 
-// Static method to find active appointments
 appointmentSchema.statics.findActive = function () {
     return this.find({ isDeleted: false });
 };
 
-// Static method to find appointments by employee
 appointmentSchema.statics.findByEmployee = function (employeeId: string) {
     return this.find({ employeeId, isDeleted: false });
 };
 
-// Static method to find appointments by date range
 appointmentSchema.statics.findByDateRange = function (startDate: Date, endDate: Date) {
     return this.find({
         'appointmentDetails.scheduledDate': {
@@ -283,7 +273,6 @@ appointmentSchema.statics.findByDateRange = function (startDate: Date, endDate: 
     });
 };
 
-// Instance method to soft delete
 appointmentSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
@@ -291,7 +280,6 @@ appointmentSchema.methods.softDelete = function (deletedBy: mongoose.Types.Objec
     return this.save();
 };
 
-// Instance method to restore
 appointmentSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;
@@ -299,14 +287,11 @@ appointmentSchema.methods.restore = function () {
     return this.save();
 };
 
-// Instance method to check in
 appointmentSchema.methods.checkIn = function () {
     this.status = 'checked_in';
     this.checkInTime = new Date();
     return this.save();
 };
-
-// Instance method to check out
 appointmentSchema.methods.checkOut = function () {
     this.status = 'completed';
     this.checkOutTime = new Date();

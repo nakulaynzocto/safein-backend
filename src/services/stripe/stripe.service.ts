@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import mongoose from 'mongoose';
 import { CONSTANTS, ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import { stripe } from '../../config/stripe.config'; // Import the pre-initialized Stripe instance
@@ -47,7 +48,6 @@ export class StripeService {
             });
             return setupIntent;
         } catch (error) {
-            console.error('Error creating Setup Intent:', error);
             throw new AppError('Failed to create Setup Intent for payment method verification', ERROR_CODES.INTERNAL_SERVER_ERROR);
         }
     }
@@ -57,21 +57,16 @@ export class StripeService {
      */
     private static async handleSetupIntentSucceeded(setupIntent: Stripe.SetupIntent): Promise<void> {
         try {
-            console.log(`Setup Intent succeeded: ${setupIntent.id}`);
             const userId = setupIntent.metadata?.userId as string;
             const stripeCustomerId = setupIntent.customer as string;
 
             if (!userId || !stripeCustomerId) {
-                console.error('Missing userId or stripeCustomerId in Setup Intent metadata');
                 return;
             }
 
-            // Activate a free trial for the user
             await UserSubscriptionService.createFreeTrial(userId, stripeCustomerId);
-            console.log(`Free trial activated for user ${userId}`);
 
         } catch (error) {
-            console.error('Error handling setup_intent.succeeded:', error);
             throw error;
         }
     }
@@ -85,8 +80,6 @@ export class StripeService {
     ): Promise<IStripeCheckoutSessionResponse> {
         try {
 
-            console.log(data, userId, "datadatadatadata>>>>>");
-            // Get the subscription plan
             const plan = await SubscriptionPlan.findById(data.planId).where({
                 isDeleted: false,
                 isActive: true,
@@ -100,12 +93,10 @@ export class StripeService {
 
             const user = await User.findOne({ _id: userId });
 
-            console.log(user, "useruseruser");
             if (!user) {
                 throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
             }
 
-            // Handle email for Stripe customer
             let customerEmail: string;
             if (user.email) {
                 customerEmail = user.email;
@@ -116,7 +107,6 @@ export class StripeService {
                 );
             }
 
-            // Create or get Stripe customer
             let customerId: string;
             try {
                 const existingCustomers = await this.getStripe().customers.list({
@@ -136,25 +126,20 @@ export class StripeService {
                     customerId = customer.id;
                 }
             } catch (error) {
-                console.log(error);
                 throw new AppError(
                     'Failed to create Stripe customer',
                     ERROR_CODES.INTERNAL_SERVER_ERROR
                 );
             }
 
-            // Create Stripe product and price if they don't exist
             let priceId: string;
             try {
-                // First, create or get Stripe product
                 let productId: string;
                 try {
                     const existingProducts = await this.getStripe().products.list({
                         active: true,
                         limit: 100,
                     });
-
-                    console.log(existingProducts.data);
 
                     const existingProduct = existingProducts.data.find(
                         (p) => p.id === (plan.metadata?.stripeProductId as any).toString()
@@ -172,7 +157,6 @@ export class StripeService {
                     );
                 }
 
-                // Then, create or get Stripe price
                 const prices = await this.getStripe().prices.list({
                     product: productId,
                     active: true,
@@ -182,7 +166,6 @@ export class StripeService {
                 if (prices.data.length > 0) {
                     priceId = prices.data[0].id;
                 } else {
-                    // Create a new price
                     const price = await this.getStripe().prices.create({
                         unit_amount: plan.amount,
                         currency: plan.currency,
@@ -199,14 +182,12 @@ export class StripeService {
                     priceId = price.id;
                 }
             } catch (error) {
-                console.log(error);
                 throw new AppError(
                     'Failed to create Stripe price',
                     ERROR_CODES.INTERNAL_SERVER_ERROR
                 );
             }
 
-            // Create checkout session
             const session = await this.getStripe().checkout.sessions.create({
                 mode: 'subscription',
                 payment_method_types: ['card'],
@@ -260,10 +241,7 @@ export class StripeService {
         signature: string
     ): Promise<void> {
         try {
-            // Verify webhook signature
             const event = this.verifyWebhookSignature(payload, signature);
-
-            console.log(`Processing webhook event: ${event.type}`);
 
             switch (event.type) {
                 case 'checkout.session.completed':
@@ -295,10 +273,9 @@ export class StripeService {
                     break;
 
                 default:
-                    console.log(`Unhandled event type: ${event.type}`);
+                    break;
             }
         } catch (error) {
-            console.error('Error handling webhook event:', error);
             throw error;
         }
     }
@@ -325,7 +302,6 @@ export class StripeService {
 
             return event;
         } catch (error) {
-            console.error('Webhook signature verification failed:', error);
             throw new Error('Invalid webhook signature');
         }
     }
@@ -339,7 +315,6 @@ export class StripeService {
         try {
             const stripe = this.getStripe();
 
-            // First, try to find existing customer
             const existingCustomers = await stripe.customers.list({
                 email: request.email,
                 limit: 1,
@@ -349,17 +324,14 @@ export class StripeService {
                 return existingCustomers.data[0] as IStripeCustomer;
             }
 
-            // Create new customer
             const customer = await stripe.customers.create({
                 email: request.email,
                 name: request.name,
                 metadata: request.metadata || {},
             });
 
-            console.log(`Customer created: ${customer.id}`);
             return customer as IStripeCustomer;
         } catch (error) {
-            console.error('Error creating/finding customer:', error);
             throw error;
         }
     }
@@ -379,10 +351,8 @@ export class StripeService {
                 metadata: request.metadata,
             });
 
-            console.log(`Customer updated: ${customer.id}`);
             return customer as IStripeCustomer;
         } catch (error) {
-            console.error('Error updating customer:', error);
             throw error;
         }
     }
@@ -390,32 +360,82 @@ export class StripeService {
     /**
      * Handle checkout session completed
      */
-    private static async handleCheckoutSessionCompleted(session: any): Promise<void> {
+    private static async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
         try {
-            console.log(`Checkout session completed: ${session.id}`);
+            const subscriptionId = session.subscription as string;
+            if (!subscriptionId) {
+                return;
+            }
 
-            // Here you would typically:
-            // 1. Get the subscription from Stripe
-            // 2. Create/update user subscription in your database
-            // 3. Send confirmation email
+            const subscription = await this.getStripe().subscriptions.retrieve(subscriptionId, {
+                expand: ['items.data.price.product']
+            });
 
-            // This will be implemented in the SubscriptionService
+            const userId = subscription.metadata?.userId || session.metadata?.userId;
+            const planId = subscription.metadata?.planId || session.metadata?.planId;
+
+            if (!userId || !planId) {
+                return;
+            }
+
+            const subscriptionPlan = await SubscriptionPlan.findById(planId);
+            if (!subscriptionPlan) {
+                return;
+            }
+
+            const user = await User.findById(userId);
+            if (!user) {
+                return;
+            }
+
+            const customerId = subscription.customer as string;
+            if (customerId && !user.stripeCustomerId) {
+                user.stripeCustomerId = customerId;
+                await user.save();
+            }
+
+            const existingSubscription = await UserSubscription.findOne({
+                userId: new mongoose.Types.ObjectId(userId),
+                stripeSubscriptionId: subscription.id
+            });
+
+            if (existingSubscription) {
+                existingSubscription.isActive = subscription.status === 'active' || subscription.status === 'trialing';
+                existingSubscription.paymentStatus = subscription.status === 'active' ? 'succeeded' : 'pending';
+                existingSubscription.startDate = new Date((subscription as any).current_period_start * 1000);
+                existingSubscription.endDate = new Date((subscription as any).current_period_end * 1000);
+                existingSubscription.stripeCustomerId = customerId;
+                await existingSubscription.save();
+
+                user.activeSubscriptionId = existingSubscription._id as unknown as mongoose.Types.ObjectId;
+                await user.save();
+            } else {
+                const newSubscription = await UserSubscriptionService.createUserSubscription({
+                    userId: userId,
+                    planType: subscriptionPlan.planType,
+                    startDate: new Date((subscription as any).current_period_start * 1000),
+                    endDate: new Date((subscription as any).current_period_end * 1000),
+                    isActive: subscription.status === 'active' || subscription.status === 'trialing',
+                    paymentStatus: subscription.status === 'active' ? 'succeeded' : 'pending',
+                    stripeCustomerId: customerId,
+                    stripeSubscriptionId: subscription.id,
+                });
+
+                user.activeSubscriptionId = (newSubscription as any)._id as unknown as mongoose.Types.ObjectId;
+                await user.save();
+            }
+
         } catch (error) {
-            console.error('Error handling checkout session completed:', error);
             throw error;
         }
     }
 
-    /**
-     * Handle subscription created
-     */
     private static async handleCustomerSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
         const customerId = subscription.customer as string;
-        const userId = subscription.metadata?.userId; // Assuming userId is in metadata
-        const planId = subscription.items.data[0].price.product as string; // Stripe product ID
+        const userId = subscription.metadata?.userId;
+        const planId = subscription.items.data[0].price.product as string;
 
         if (!userId || !customerId || !planId) {
-            console.error('Missing userId, customerId, or planId in Stripe subscription created event.');
             return;
         }
 
@@ -423,11 +443,9 @@ export class StripeService {
         const subscriptionPlan = await SubscriptionPlan.findOne({ 'metadata.stripeProductId': planId });
 
         if (!user || !subscriptionPlan) {
-            console.error(`User or SubscriptionPlan not found for userId: ${userId}, planId: ${planId}`);
             return;
         }
 
-        // Create or update our internal UserSubscription record
         await UserSubscriptionService.createUserSubscription({
             userId: userId,
             planType: subscriptionPlan.planType,
@@ -438,7 +456,6 @@ export class StripeService {
             stripeCustomerId: customerId,
             stripeSubscriptionId: subscription.id,
         });
-        console.log(`Internal user subscription created/updated for user ${userId} and Stripe subscription ${subscription.id}`);
     }
 
     /**
@@ -452,7 +469,6 @@ export class StripeService {
             return;
         }
 
-        // Update relevant fields based on Stripe subscription status
         userSubscription.isActive = subscription.status === 'active' || subscription.status === 'trialing';
         userSubscription.paymentStatus = subscription.status === 'active' ? 'succeeded' : 'failed';
         userSubscription.endDate = new Date(((subscription as any).current_period_end) * 1000);
@@ -460,7 +476,6 @@ export class StripeService {
             userSubscription.trialDays = Math.ceil(((new Date((subscription.trial_end as number) * 1000)).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
         }
         await userSubscription.save();
-        console.log(`Internal user subscription updated for Stripe subscription ${subscription.id}`);
     }
 
     /**
@@ -470,17 +485,14 @@ export class StripeService {
         const userSubscription = await UserSubscription.findOne({ stripeSubscriptionId: subscription.id });
 
         if (!userSubscription) {
-            console.warn(`User subscription not found for Stripe subscription ID: ${subscription.id}`);
             return;
         }
 
-        // Mark as deleted/inactive in our system
         userSubscription.isDeleted = true;
         userSubscription.deletedAt = new Date();
         userSubscription.isActive = false;
         userSubscription.paymentStatus = 'cancelled';
         await userSubscription.save();
-        console.log(`Internal user subscription marked as deleted for Stripe subscription ${subscription.id}`);
     }
 
     /**
@@ -491,7 +503,6 @@ export class StripeService {
         const subscriptionId = (invoice as any).subscription;
 
         if (!customerId || !subscriptionId) {
-            console.error('Missing customerId or subscriptionId in invoice.');
             return;
         }
 
@@ -502,9 +513,6 @@ export class StripeService {
             userSubscription.paymentStatus = 'succeeded';
             userSubscription.endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
             await userSubscription.save();
-            console.log(`Subscription ${subscriptionId} for customer ${customerId} renewed successfully.`);
-        } else {
-            console.warn(`User subscription not found for Stripe subscription ID: ${subscriptionId}`);
         }
     }
 
@@ -516,7 +524,6 @@ export class StripeService {
         const subscriptionId = (invoice as any).subscription;
 
         if (!customerId || !subscriptionId) {
-            console.error('Missing customerId or subscriptionId in invoice.');
             return;
         }
 
@@ -526,9 +533,6 @@ export class StripeService {
             userSubscription.isActive = false;
             userSubscription.paymentStatus = 'failed';
             await userSubscription.save();
-            console.warn(`Subscription ${subscriptionId} for customer ${customerId} payment failed. Set to inactive.`);
-        } else {
-            console.warn(`User subscription not found for Stripe subscription ID: ${subscriptionId}`);
         }
     }
 
@@ -540,10 +544,7 @@ export class StripeService {
             const stripe = this.getStripe();
 
             await stripe.subscriptions.cancel(subscriptionId);
-
-            console.log(`Subscription canceled: ${subscriptionId}`);
         } catch (error) {
-            console.error('Error canceling subscription:', error);
             throw error;
         }
     }
@@ -559,7 +560,6 @@ export class StripeService {
 
             return subscription as unknown as IStripeSubscription;
         } catch (error) {
-            console.error('Error getting subscription:', error);
             throw error;
         }
     }
@@ -575,7 +575,6 @@ export class StripeService {
 
             return customer as IStripeCustomer;
         } catch (error) {
-            console.error('Error getting customer:', error);
             throw error;
         }
     }
@@ -591,7 +590,6 @@ export class StripeService {
 
             return price as IStripePrice;
         } catch (error) {
-            console.error('Error getting price:', error);
             throw error;
         }
     }
@@ -607,7 +605,6 @@ export class StripeService {
 
             return product as IStripeProduct;
         } catch (error) {
-            console.error('Error getting product:', error);
             throw error;
         }
     }

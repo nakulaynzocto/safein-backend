@@ -24,7 +24,6 @@ export const errorHandler = (
     let statusCode = ERROR_CODES.INTERNAL_SERVER_ERROR;
     let message = 'Internal Server Error';
 
-    // Handle known errors
     if (error instanceof AppError) {
         statusCode = error.statusCode;
         message = error.message;
@@ -45,7 +44,6 @@ export const errorHandler = (
         message = 'Token expired';
     }
 
-    // Log error in development
     if (process.env.NODE_ENV === 'development') {
         console.error('Error:', error);
     }

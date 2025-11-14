@@ -19,7 +19,6 @@ export function getNewAppointmentRequestEmailTemplate(
     day: 'numeric'
   });
 
-  // Create approve and reject URLs
   const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
   const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;

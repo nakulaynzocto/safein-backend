@@ -17,7 +17,6 @@ export class UploadService {
       throw new AppError('No file uploaded', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Validate file type - check if it's an image
     if (!file.mimetype.startsWith('image/')) {
       throw new AppError(
         'Invalid file type. Only images are allowed (JPEG, PNG, GIF, WebP)',
@@ -25,7 +24,6 @@ export class UploadService {
       );
     }
 
-    // Validate file size
     if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
       const maxSizeMB = UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024);
       throw new AppError(
@@ -34,7 +32,6 @@ export class UploadService {
       );
     }
 
-    // Additional validation: ensure buffer exists
     if (!file.buffer || file.buffer.length === 0) {
       throw new AppError('File buffer is empty', ERROR_CODES.BAD_REQUEST);
     }
@@ -68,23 +65,12 @@ export class UploadService {
     filename: string; 
     size: number;
   }> {
-    // Validate file
     this.validateFile(file);
 
-    // Log file metadata
-    const metadata = this.getFileMetadata(file);
-    console.log('Uploading file:', {
-      name: metadata.originalName,
-      type: metadata.mimeType,
-      size: `${metadata.sizeInMB}MB`
-    });
-
-    // Upload to Cloudinary with optimization
     const result = await uploadToCloudinary(file, {
       folder: customFolder || UPLOAD_CONFIG.UPLOAD_FOLDER
     });
 
-    // Check upload result
     if (!result.success || !result.data) {
       throw new AppError(
         result.message || 'Failed to upload file to Cloudinary',
@@ -109,14 +95,12 @@ export class UploadService {
       files.map(file => this.uploadFile(file, customFolder))
     );
 
-    // Filter successful uploads
     const successful = results
       .filter((result): result is PromiseFulfilledResult<any> => 
         result.status === 'fulfilled'
       )
       .map(result => result.value);
 
-    // Log any failures
     const failures = results.filter(result => result.status === 'rejected');
     if (failures.length > 0) {
       console.error(`${failures.length} file(s) failed to upload`);

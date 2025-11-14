@@ -38,13 +38,11 @@ export class LogRotation {
             const baseName = path.basename(logFile, '.log');
             const dirName = path.dirname(logFile);
 
-            // Remove oldest file if we have reached max files
             const oldestFile = path.join(dirName, `${baseName}.${this.maxFiles - 1}.log`);
             if (fs.existsSync(oldestFile)) {
                 fs.unlinkSync(oldestFile);
             }
 
-            // Shift existing files
             for (let i = this.maxFiles - 2; i >= 0; i--) {
                 const currentFile = path.join(dirName, `${baseName}.${i}.log`);
                 const nextFile = path.join(dirName, `${baseName}.${i + 1}.log`);
@@ -54,7 +52,6 @@ export class LogRotation {
                 }
             }
 
-            // Move current log to .0.log
             const rotatedFile = path.join(dirName, `${baseName}.0.log`);
             fs.renameSync(logFile, rotatedFile);
 
@@ -81,7 +78,6 @@ export class LogRotation {
                 const stats = fs.statSync(filePath);
                 const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
 
-                // Delete files older than 30 days
                 if (ageInDays > 30) {
                     fs.unlinkSync(filePath);
                     console.log(`Deleted old log file: ${file}`);

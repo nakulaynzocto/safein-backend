@@ -19,84 +19,56 @@ import { StripeService } from './services/stripe/stripe.service';
 
 const app: Express = express();
 
-// Connect to MongoDB
 connectDatabase();
 
-// Initialize Email Service
 EmailService.initializeTransporter();
-EmailService.verifyConnection().then((isConnected) => {
-  if (isConnected) {
-    console.log('Email service initialized successfully');
-  } else {
-    console.log('Email service initialization failed - OTP emails may not work');
-  }
+EmailService.verifyConnection().catch((error) => {
+  console.error('Email service initialization error:', error);
 });
 
-// Initialize Stripe Service
 try {
   StripeService.initialize();
-  console.log('Stripe service initialized successfully');
 } catch (error) {
-  console.log('Stripe service initialization failed - Payment features may not work');
-  console.error('Stripe error:', error);
+  console.error('Stripe service initialization failed:', error);
 }
 
-// Security middleware
 app.use(helmet());
 app.use(cors({
   origin: CONSTANTS.FRONTEND_URLS,
   credentials: true
 }));
 
-// Custom request logging middleware (logs request/response payloads)
 app.use(requestLogger);
 
-// HTTP request logging with Morgan
 if (CONSTANTS.NODE_ENV === 'development') {
-  // Console logging for development
   app.use(morgan(devFormat, morganOptions));
-  // File logging for development
   app.use(morgan(devFormat, morganFileOptions));
 } else {
-  // Console logging for production
   app.use(morgan(combinedFormat, morganOptions));
-  // File logging for production
   app.use(morgan(combinedFormat, morganFileOptions));
 }
 
-// Error logging with Morgan
 app.use(morgan(errorFormat, morganErrorOptions));
 
-// Rate limiting
 app.use(generalLimiter);
 
-// Stripe webhook raw body parser (MUST come before express.json/urlencoded for webhooks)
 app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
 
-// Body parsing middleware (for all other routes)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Routes
 app.use('/api/v1', routes);
-
-// Employee routes without /api/v1 prefix
 app.use('/employees', employeeRoutes);
 
-// Error handling middleware (must be last)
-app.use(errorLogger); // Log errors before handling them
+app.use(errorLogger);
 app.use(errorHandler);
 app.use(notFoundHandler);
 
-// Start server
 const PORT = CONSTANTS.PORT;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API Documentation: http://localhost:${PORT}/api-docs`);
-  console.log(`Environment: ${CONSTANTS.NODE_ENV}`);
+  console.log(`Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
 });
 
 export default app;

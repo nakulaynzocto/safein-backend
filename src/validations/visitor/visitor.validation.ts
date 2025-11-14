@@ -1,6 +1,5 @@
 import Joi from 'joi';
 
-// Validation for address
 const addressValidation = Joi.object({
     street: Joi.string()
         .required()
@@ -44,7 +43,6 @@ const addressValidation = Joi.object({
         })
 });
 
-// Validation for ID proof
 const idProofValidation = Joi.object({
     type: Joi.string()
         .required()
@@ -76,7 +74,6 @@ const idProofValidation = Joi.object({
         })
 });
 
-// Validation for creating visitor
 export const createVisitorValidation = Joi.object({
     name: Joi.string()
         .required()
@@ -121,7 +118,6 @@ export const createVisitorValidation = Joi.object({
         })
 });
 
-// Validation for updating visitor
 export const updateVisitorValidation = Joi.object({
     name: Joi.string()
         .optional()
@@ -159,7 +155,6 @@ export const updateVisitorValidation = Joi.object({
         })
 });
 
-// Validation for visitor ID parameter
 export const visitorParamsValidation = Joi.object({
     id: Joi.string()
         .required()
@@ -170,7 +165,6 @@ export const visitorParamsValidation = Joi.object({
         })
 });
 
-// Validation for query parameters
 export const getVisitorsValidation = Joi.object({
     page: Joi.number()
         .optional()
@@ -253,7 +247,6 @@ export const getVisitorsValidation = Joi.object({
         })
 });
 
-// Validation for bulk operations
 export const bulkUpdateVisitorsValidation = Joi.object({
     visitorIds: Joi.array()
         .required()
@@ -285,7 +278,6 @@ export const bulkUpdateVisitorsValidation = Joi.object({
         })
 });
 
-// Validation for visitor search
 export const visitorSearchValidation = Joi.object({
     phone: Joi.string()
         .optional()
@@ -300,7 +292,6 @@ export const visitorSearchValidation = Joi.object({
             'string.email': 'Please provide a valid email address'
         })
 }).custom((value, helpers) => {
-    // At least one of phone or email must be provided
     if (!value.phone && !value.email) {
         return helpers.error('custom.atLeastOne');
     }

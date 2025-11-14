@@ -31,7 +31,6 @@ class Logger {
         this.errorLogFile = path.join(this.logDir, 'error.log');
         this.accessLogFile = path.join(this.logDir, 'access.log');
 
-        // Create logs directory if it doesn't exist
         this.ensureLogDirectory();
     }
 
@@ -43,7 +42,6 @@ class Logger {
             }
         } catch (error) {
             console.error('Failed to create logs directory:', error);
-            // Fallback to console logging if directory creation fails
             this.logDir = process.cwd();
             this.logFile = path.join(this.logDir, 'api.log');
             this.errorLogFile = path.join(this.logDir, 'error.log');
@@ -52,7 +50,6 @@ class Logger {
     }
 
     private formatLogEntry(entry: LogEntry): string {
-        // Create a clean, production-ready log entry
         const logData: any = {
             timestamp: entry.timestamp,
             level: entry.level,
@@ -64,7 +61,6 @@ class Logger {
             userAgent: entry.userAgent
         };
 
-        // Add type-specific fields
         if (entry.type === 'REQUEST') {
             logData.requestPayload = entry.requestPayload;
         } else if (entry.type === 'RESPONSE') {
@@ -86,7 +82,6 @@ class Logger {
 
     private writeToFile(filename: string, message: string): void {
         try {
-            // Ensure directory exists before writing
             const dir = path.dirname(filename);
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
@@ -96,7 +91,6 @@ class Logger {
             fs.appendFileSync(filename, message + '\n');
         } catch (error) {
             console.error('Failed to write to log file:', error);
-            // Fallback to console logging
             console.log('LOG:', message);
         }
     }
@@ -161,13 +155,11 @@ class Logger {
         }
     }
 
-    // Utility method to sanitize sensitive data
     public sanitizePayload(payload: any, visited = new WeakSet()): any {
         if (!payload || typeof payload !== 'object') {
             return payload;
         }
 
-        // Check for circular references
         if (visited.has(payload)) {
             return '[Circular Reference]';
         }
@@ -182,7 +174,6 @@ class Logger {
             }
         }
 
-        // Recursively sanitize nested objects
         for (const key in sanitized) {
             if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
                 sanitized[key] = this.sanitizePayload(sanitized[key], visited);
@@ -192,7 +183,6 @@ class Logger {
         return sanitized;
     }
 
-    // Method to get log file paths
     public getLogPaths() {
         return {
             apiLog: this.logFile,
@@ -202,7 +192,6 @@ class Logger {
         };
     }
 
-    // Method to generate unique request ID
     public generateRequestId(): string {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     }

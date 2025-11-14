@@ -93,6 +93,12 @@ const userSchema = new Schema<IUser>(
             ref: 'UserSubscription',
             default: null,
             sparse: true,
+        },
+        stripeCustomerId: {
+            type: String,
+            trim: true,
+            default: null,
+            sparse: true,
         }
     },
     {
@@ -101,7 +107,6 @@ const userSchema = new Schema<IUser>(
     }
 );
 
-// Indexes for performance
 userSchema.index({ isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });
@@ -110,13 +115,10 @@ userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ isDeleted: 1 });
 userSchema.index({ deletedAt: 1 });
 
-// Pre-save middleware to hash password
 userSchema.pre('save', async function (next) {
-    // Only hash password if it's modified
     if (!this.isModified('password')) return next();
 
     try {
-        // Hash password with cost of 12
         const hashedPassword = await bcrypt.hash(this.password, 12);
         this.password = hashedPassword;
         next();
@@ -125,40 +127,32 @@ userSchema.pre('save', async function (next) {
     }
 });
 
-// Method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to update last login
 userSchema.methods.updateLastLogin = function () {
     this.lastLoginAt = new Date();
     return this.save();
 };
 
-// Method to get public profile (without sensitive data)
 userSchema.methods.getPublicProfile = function () {
     const userObject = this.toObject();
     delete userObject.password;
-    // Ensure profilePicture is included even if it's null/undefined
-    // Convert null to empty string for frontend compatibility
     if (userObject.profilePicture === null || userObject.profilePicture === undefined) {
         userObject.profilePicture = '';
     }
     return userObject;
 };
 
-// Static method to find active users
 userSchema.statics.findActive = function () {
     return this.find({ isDeleted: false, isActive: true });
 };
 
-// Static method to find deleted users
 userSchema.statics.findDeleted = function () {
     return this.find({ isDeleted: true });
 };
 
-// Instance method to soft delete
 userSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
@@ -166,7 +160,6 @@ userSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     return this.save();
 };
 
-// Instance method to restore
 userSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;

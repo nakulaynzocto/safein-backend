@@ -56,28 +56,22 @@ export class EmailService {
       if (!this.transporter) {
         this.initializeTransporter();
       }
-      // On Railway, some SMTPs block verify(). Allow skip via env
       if (process.env.SKIP_SMTP_VERIFY === 'true') {
-        console.log('Skipping SMTP verify as per SKIP_SMTP_VERIFY=true');
         this.isEmailServiceAvailable = true;
         return true;
       }
       
       await this.transporter.verify();
-      console.log('SMTP connection verified successfully');
       this.isEmailServiceAvailable = true;
       return true;
     } catch (error: any) {
       console.error('SMTP connection failed:', error.message);
       this.isEmailServiceAvailable = false;
-      // Enable HTTP fallback (Resend) if configured
       if (process.env.RESEND_API_KEY) {
         this.useHttpFallback = true;
-        console.log('Email HTTP fallback (Resend) enabled');
       }
       
       if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
-        console.log('Trying alternative SMTP configurations...');
         return await this.tryAlternativeSmtpConfigs();
       }
       
@@ -106,19 +100,15 @@ export class EmailService {
 
     for (const config of alternatives) {
       try {
-        console.log(`Trying ${config.host}:${config.port}...`);
         this.transporter = nodemailer.createTransport(config);
         await this.transporter.verify();
-        console.log(`SMTP connection successful with ${config.host}:${config.port}`);
         this.isEmailServiceAvailable = true;
         return true;
       } catch (error: any) {
-        console.log(`Failed with ${config.host}:${config.port} - ${error.message}`);
         continue;
       }
     }
 
-    console.log('All SMTP configurations failed. Email functionality will be disabled.');
     this.isEmailServiceAvailable = false;
     return false;
   }
@@ -151,41 +141,61 @@ export class EmailService {
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
       if (!this.isEmailServiceAvailable && this.useHttpFallback) {
-        await this.sendWithResend({
-          to: email,
-          subject: 'SafeIn Registration - Verify Your Email',
-          html: getOtpEmailTemplate(otp, companyName),
-          text: getOtpEmailText(otp, companyName),
-        });
-        console.log('OTP email sent via HTTP fallback');
-        return;
-      } else if (!this.isEmailServiceAvailable) {
-        console.warn('Email service not available. OTP will be logged to console.');
-        console.log(`OTP for ${email}: ${otp}`);
-        return;
+        try {
+          await this.sendWithResend({
+            to: email,
+            subject: 'SafeIn Registration - Verify Your Email',
+            html: getOtpEmailTemplate(otp, companyName),
+            text: getOtpEmailText(otp, companyName),
+          });
+          return;
+        } catch (resendError: any) {
+          console.error('Resend fallback failed:', resendError.message);
+        }
       }
 
       if (!this.transporter) {
         this.initializeTransporter();
       }
 
-      const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-        to: email,
-        subject: 'SafeIn Registration - Verify Your Email',
-        html: getOtpEmailTemplate(otp, companyName),
-        text: getOtpEmailText(otp, companyName)
-      };
+      if (this.isEmailServiceAvailable) {
+        const mailOptions = {
+          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+          to: email,
+          subject: 'SafeIn Registration - Verify Your Email',
+          html: getOtpEmailTemplate(otp, companyName),
+          text: getOtpEmailText(otp, companyName)
+        };
 
-      const result = await this.transporter.sendMail(mailOptions);
-      console.log('OTP email sent successfully:', result.messageId);
+        await this.transporter.sendMail(mailOptions);
+        return;
+      }
+
+      const isConnected = await this.verifyConnection();
+      if (isConnected) {
+        const mailOptions = {
+          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+          to: email,
+          subject: 'SafeIn Registration - Verify Your Email',
+          html: getOtpEmailTemplate(otp, companyName),
+          text: getOtpEmailText(otp, companyName)
+        };
+
+        await this.transporter.sendMail(mailOptions);
+        return;
+      }
+
+      if (process.env.NODE_ENV === 'production') {
+        throw new AppError('Failed to send OTP email. Please check email service configuration.', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      }
     } catch (error: any) {
       console.error('Failed to send OTP email:', error.message);
-      console.log(`OTP for ${email}: ${otp}`);
       
-      if (process.env.NODE_ENV !== 'production') {
-        throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      if (process.env.NODE_ENV === 'development') {
+        return;
       }
+      
+      throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -206,8 +216,7 @@ export class EmailService {
         text: getWelcomeEmailText(companyName)
       };
 
-      const result = await this.transporter.sendMail(mailOptions);
-      console.log('Welcome email sent successfully:', result.messageId);
+      await this.transporter.sendMail(mailOptions);
     } catch (error) {
       console.error('Failed to send welcome email:', error);
     }
@@ -224,7 +233,6 @@ export class EmailService {
     scheduledTime: string
   ): Promise<void> {
     if (!this.isEmailServiceAvailable) {
-      console.warn('Email service not available. Skipping appointment approval email.');
       return;
     }
 
@@ -242,7 +250,6 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`Appointment approval email sent to ${visitorEmail}`);
     } catch (error: any) {
       console.error('Failed to send appointment approval email:', error.message);
     }
@@ -259,7 +266,6 @@ export class EmailService {
     scheduledTime: string
   ): Promise<void> {
     if (!this.isEmailServiceAvailable) {
-      console.warn('Email service not available. Skipping appointment rejection email.');
       return;
     }
 
@@ -277,7 +283,6 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`Appointment rejection email sent to ${visitorEmail}`);
     } catch (error: any) {
       console.error('Failed to send appointment rejection email:', error.message);
     }
@@ -305,7 +310,6 @@ export class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`Appointment approval email sent to employee ${employeeEmail}`);
     } catch (error) {
       console.error('Failed to send appointment approval email to employee:', error);
       throw error;
@@ -334,7 +338,6 @@ export class EmailService {
 
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`Appointment rejection email sent to employee ${employeeEmail}`);
     } catch (error) {
       console.error('Failed to send appointment rejection email to employee:', error);
       throw error;
@@ -354,7 +357,6 @@ export class EmailService {
     appointmentId: string
   ): Promise<void> {
     if (!this.isEmailServiceAvailable) {
-      console.warn('Email service not available. Skipping appointment notification email.');
       return;
     }
 
@@ -372,7 +374,6 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`New appointment request email sent to employee ${employeeEmail}`);
     } catch (error: any) {
       console.error('Failed to send new appointment request email:', error.message);
     }

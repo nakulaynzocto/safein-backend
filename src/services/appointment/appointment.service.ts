@@ -27,13 +27,11 @@ export class AppointmentService {
     static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
 
-        // Verify employee exists
         const employee = await Employee.findOne({ _id: appointmentData.employeeId, isDeleted: false }).session(session);
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        // Check for scheduling conflicts
         const conflictAppointment = await Appointment.findOne({
             employeeId: appointmentData.employeeId,
             'appointmentDetails.scheduledDate': appointmentData.appointmentDetails.scheduledDate,
@@ -46,7 +44,6 @@ export class AppointmentService {
             throw new AppError('Employee already has an appointment at this time', ERROR_CODES.CONFLICT);
         }
 
-        // Create new appointment
         const appointment = new Appointment({
             ...appointmentData,
             createdBy
@@ -54,13 +51,11 @@ export class AppointmentService {
 
         await appointment.save({ session });
 
-        // Populate appointment data for email notification
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
             .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
             .session(session);
 
-        // Send notification email to employee about new appointment request
         try {
             if (populatedAppointment) {
                 await EmailService.sendNewAppointmentRequestEmail(
@@ -75,7 +70,6 @@ export class AppointmentService {
             }
         } catch (error) {
             console.error('Failed to send new appointment request email to employee:', error);
-            // Don't throw error - appointment is still created
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
@@ -132,19 +126,15 @@ export class AppointmentService {
             sortOrder = 'desc'
         } = query;
 
-        // Build filter object - only show appointments created by the current user
         const filter: any = { isDeleted: false };
         
-        // Filter by user if provided (for user-specific access)
         if (userId) {
             filter.createdBy = userId;
         }
 
         if (search) {
-            // Create a more comprehensive search that works with populated data
             const searchRegex = { $regex: search, $options: 'i' };
             
-            // First, try to find visitors that match the search criteria
             const matchingVisitors = await Visitor.find({
                 $or: [
                     { name: searchRegex },
@@ -156,7 +146,6 @@ export class AppointmentService {
             
             const visitorIds = matchingVisitors.map((v: any) => v._id);
             
-            // Also search for employees that match
             const matchingEmployees = await Employee.find({
                 $or: [
                     { name: searchRegex },
@@ -174,7 +163,6 @@ export class AppointmentService {
                 { 'appointmentDetails.notes': searchRegex }
             ];
             
-            // Add visitor and employee ID searches if we found matches
             if (visitorIds.length > 0) {
                 filter.$or.push({ visitorId: { $in: visitorIds } });
             }
@@ -204,7 +192,6 @@ export class AppointmentService {
         }
 
         if (startDate && endDate) {
-            // Interpret startDate/endDate as local-date (yyyy-mm-dd) and include full end day
             const start = new Date(startDate)
             const endExclusive = new Date(endDate)
             endExclusive.setDate(endExclusive.getDate() + 1)
@@ -215,14 +202,11 @@ export class AppointmentService {
             };
         }
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute queries
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
@@ -257,11 +241,9 @@ export class AppointmentService {
     static async updateAppointment(appointmentId: string, updateData: IUpdateAppointmentDTO, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
         
-        // Remove session from updateData if it exists to prevent circular reference
         const cleanUpdateData = { ...updateData };
         delete (cleanUpdateData as any).session;
 
-        // Check for scheduling conflicts if updating time/date
         if (updateData.appointmentDetails?.scheduledDate || updateData.appointmentDetails?.scheduledTime) {
             const appointment = await Appointment.findById(appointmentId).session(session);
             if (!appointment) {
@@ -325,7 +307,6 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, badgeNumber, securityNotes } = request;
 
-        // Accept custom appointmentId string (e.g., "APT1760335163234DWU4Z")
         const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
@@ -335,7 +316,6 @@ export class AppointmentService {
             throw new AppError('Appointment is not in pending status', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Update appointment
         appointment.status = 'approved';
         appointment.checkInTime = new Date();
 
@@ -361,15 +341,11 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, notes } = request;
 
-        // Accept custom appointmentId string (e.g., "APT1760335163234DWU4Z")
         const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        // Allow check-out for any status
-
-        // Update appointment
         appointment.status = 'completed';
         appointment.checkOutTime = new Date();
 
@@ -392,7 +368,6 @@ export class AppointmentService {
      * Get appointment statistics (user-specific)
      */
     static async getAppointmentStats(userId?: string): Promise<IAppointmentStats> {
-        // Build base filter - only show appointments created by the current user
         const baseFilter: any = {};
         if (userId) {
             baseFilter.createdBy = userId;
@@ -485,7 +460,6 @@ export class AppointmentService {
             .sort({ 'appointmentDetails.scheduledDate': 1, 'appointmentDetails.scheduledTime': 1 })
             .lean();
 
-        // Group appointments by date
         const appointmentsByDate = appointments.reduce((acc: any, appointment: any) => {
             const date = appointment.appointmentDetails.scheduledDate.toISOString().split('T')[0];
 
@@ -534,7 +508,6 @@ export class AppointmentService {
                 filter.appointmentId = { $regex: query, $options: 'i' };
                 break;
             case 'employee_name':
-                // This would require a more complex query with population
                 filter['employeeId'] = { $exists: true };
                 break;
         }
@@ -575,7 +548,6 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentIds, ...updateData } = bulkData;
 
-        // Remove empty values
         const cleanUpdateData = Object.fromEntries(
             Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
         );
@@ -625,7 +597,6 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        // Check if appointment can be cancelled (only pending or approved appointments can be cancelled)
         if (appointment.status === 'completed') {
             throw new AppError('Cannot cancel a completed appointment', ERROR_CODES.BAD_REQUEST);
         }
@@ -634,7 +605,6 @@ export class AppointmentService {
             throw new AppError('Appointment is already cancelled', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Update status to rejected (cancelled)
         appointment.status = 'rejected';
         await appointment.save({ session });
 
@@ -656,16 +626,13 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        // Check if appointment can be approved (only pending appointments can be approved)
         if (appointment.status !== 'pending') {
             throw new AppError('Only pending appointments can be approved', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Update status to approved
         appointment.status = 'approved';
         await appointment.save({ session });
 
-        // Send notification to visitor
         try {
             await EmailService.sendAppointmentApprovalEmail(
                 (appointment.visitorId as any).email,
@@ -676,10 +643,8 @@ export class AppointmentService {
             );
         } catch (error) {
             console.error('Failed to send approval email to visitor:', error);
-            // Don't throw error - appointment is still approved
         }
 
-        // Send notification to employee
         try {
             await EmailService.sendEmployeeAppointmentApprovalEmail(
                 (appointment.employeeId as any).email,
@@ -690,7 +655,6 @@ export class AppointmentService {
             );
         } catch (error) {
             console.error('Failed to send approval email to employee:', error);
-            // Don't throw error - appointment is still approved
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
@@ -711,16 +675,13 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        // Check if appointment can be rejected (only pending appointments can be rejected)
         if (appointment.status !== 'pending') {
             throw new AppError('Only pending appointments can be rejected', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Update status to rejected
         appointment.status = 'rejected';
         await appointment.save({ session });
 
-        // Send notification to visitor
         try {
             await EmailService.sendAppointmentRejectionEmail(
                 (appointment.visitorId as any).email,
@@ -731,10 +692,8 @@ export class AppointmentService {
             );
         } catch (error) {
             console.error('Failed to send rejection email to visitor:', error);
-            // Don't throw error - appointment is still rejected
         }
 
-        // Send notification to employee
         try {
             await EmailService.sendEmployeeAppointmentRejectionEmail(
                 (appointment.employeeId as any).email,
@@ -745,7 +704,6 @@ export class AppointmentService {
             );
         } catch (error) {
             console.error('Failed to send rejection email to employee:', error);
-            // Don't throw error - appointment is still rejected
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;

@@ -108,7 +108,6 @@ const appointmentDetailsValidation = Joi.object({
                 const selectedDate = new Date(scheduledDate);
                 const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
                 
-                // If the selected date is today, check if time is in the future
                 if (selectedDateOnly.getTime() === today.getTime()) {
                     const [hours, minutes] = value.split(':').map(Number);
                     const selectedDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);

@@ -22,7 +22,6 @@ import {
 
 const router = Router();
 
-// Public routes
 router.post('/register',
     authLimiter,
     validateRequest(createUserValidation),
@@ -59,10 +58,8 @@ router.post('/resend-otp',
     asyncWrapper(UserController.resendOtp)
 );
 
-// Protected routes (require authentication)
-router.use(protect); // All routes below require authentication
+router.use(protect);
 
-// User profile routes (users can access their own profile)
 router.get('/profile', asyncWrapper(UserController.getProfile));
 router.put('/profile',
     validateRequest(updateUserValidation),
@@ -74,7 +71,6 @@ router.post('/change-password',
 );
 router.post('/logout', asyncWrapper(UserController.logout));
 
-// User access by ID (users can access their own profile, admins can access any)
 router.get('/:id',
     validateRequest(getUserByIdValidation),
     asyncWrapper(UserController.getUserById)
@@ -86,7 +82,6 @@ router.put('/:id',
     asyncWrapper(UserController.updateUserById)
 );
 
-// Admin-only routes (require admin role)
 router.get('/',
     validateRequest(getUsersValidation),
     asyncWrapper(UserController.getAllUsers)

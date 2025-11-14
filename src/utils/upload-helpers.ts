@@ -80,14 +80,14 @@ export const getUploadFolder = (folder?: string): string => {
 };
 
 /**
- * Log upload metadata
+ * Get upload metadata (removed logging for production)
  */
-export const logUploadMetadata = (file: Express.Multer.File, folder?: string) => {
-  console.log('Upload Details:', {
+export const getUploadMetadata = (file: Express.Multer.File, folder?: string) => {
+  return {
     filename: file.originalname,
     type: file.mimetype,
     size: formatFileSize(file.size),
     folder: getUploadFolder(folder)
-  });
+  };
 };
 

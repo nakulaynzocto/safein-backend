@@ -114,20 +114,17 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
     }
 );
 
-// Indexes for performance
 subscriptionPlanSchema.index({ isActive: 1, isDeleted: 1, sortOrder: 1 });
 subscriptionPlanSchema.index({ planType: 1, isActive: 1 });
 subscriptionPlanSchema.index({ amount: 1 });
 subscriptionPlanSchema.index({ createdAt: -1 });
 subscriptionPlanSchema.index({ isPopular: 1 });
 
-// Virtual for formatted price
 subscriptionPlanSchema.virtual('formattedPrice').get(function () {
     const price = (this.amount / 100).toFixed(2);
     return `$${price}`;
 });
 
-// Virtual for price per month (for yearly plans)
 subscriptionPlanSchema.virtual('monthlyEquivalent').get(function () {
     if (this.planType === 'yearly') {
         const monthlyPrice = this.amount / 12;
@@ -139,43 +136,35 @@ subscriptionPlanSchema.virtual('monthlyEquivalent').get(function () {
     return this.amount;
 });
 
-// Virtual for savings percentage (for yearly plans)
 subscriptionPlanSchema.virtual('savingsPercentage').get(function () {
     if (this.planType === 'yearly') {
-        // This would need to be compared with monthly plan in real implementation
-        return 20; // Default 20% savings for yearly
+        return 20;
     } else if (this.planType === 'quarterly') {
-        return 10; // Default 10% savings for quarterly
+        return 10;
     }
     return 0;
 });
 
-// Method to check if plan has trial
 subscriptionPlanSchema.methods.hasTrial = function (): boolean {
     return this.trialDays && this.trialDays > 0;
 };
 
-// Method to get formatted features
 subscriptionPlanSchema.methods.getFormattedFeatures = function (): string[] {
     return this.features.map((feature: string) => `✓ ${feature}`);
 };
 
-// Static method to find active plans
 subscriptionPlanSchema.statics.findActive = function () {
     return this.find({ isDeleted: false, isActive: true }).sort({ sortOrder: 1 });
 };
 
-// Static method to find popular plans
 subscriptionPlanSchema.statics.findPopular = function () {
     return this.find({ isDeleted: false, isActive: true, isPopular: true }).sort({ sortOrder: 1 });
 };
 
-// Static method to find plans by type
 subscriptionPlanSchema.statics.findByType = function (planType: string) {
     return this.find({ planType, isDeleted: false, isActive: true }).sort({ sortOrder: 1 });
 };
 
-// Instance method to soft delete
 subscriptionPlanSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
@@ -183,7 +172,6 @@ subscriptionPlanSchema.methods.softDelete = function (deletedBy: mongoose.Types.
     return this.save();
 };
 
-// Instance method to restore
 subscriptionPlanSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;

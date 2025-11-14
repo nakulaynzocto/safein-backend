@@ -14,10 +14,8 @@ import {
 
 const router = Router();
 
-// Protected routes (require authentication)
 router.use(verifyToken);
 
-// Visitor CRUD operations
 router.post(
     '/',
     validateRequest(createVisitorValidation),

@@ -60,10 +60,8 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentById(id);
         
-        // Additional check: verify the appointment was created by the current user
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -85,10 +83,8 @@ export class AppointmentController {
         const { appointmentId } = req.params;
         const userId = req.user._id.toString();
         
-        // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentByAppointmentId(appointmentId);
         
-        // Additional check: verify the appointment was created by the current user
         const appointmentRecord = await Appointment.findById(appointment._id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -111,7 +107,6 @@ export class AppointmentController {
         const updateData: IUpdateAppointmentDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before updating
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -149,8 +144,6 @@ export class AppointmentController {
         const request: ICheckInRequest = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before checking in
-        // Accept custom appointmentId string
         const appointmentRecord = await Appointment.findOne({ appointmentId: request.appointmentId, isDeleted: false });
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -173,8 +166,6 @@ export class AppointmentController {
         const request: ICheckOutRequest = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before checking out
-        // Accept custom appointmentId string
         const appointmentRecord = await Appointment.findOne({ appointmentId: request.appointmentId, isDeleted: false });
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -214,7 +205,6 @@ export class AppointmentController {
         const bulkData: IBulkUpdateAppointmentsDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify all appointments belong to the current user before bulk updating
         const appointments = await Appointment.find({ 
             _id: { $in: bulkData.appointmentIds },
             createdBy: userId 
@@ -241,7 +231,6 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before restoring
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -307,7 +296,6 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before cancelling
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -330,7 +318,6 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before approving
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -353,7 +340,6 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the appointment belongs to the current user before rejecting
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);

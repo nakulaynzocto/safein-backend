@@ -24,7 +24,6 @@ export class SubscriptionPlanService {
     ): Promise<ISubscriptionPlanResponse> {
         const { session } = options;
 
-        // Check if plan with same name already exists
         const existingPlan = await SubscriptionPlan.findOne({
             name: planData.name,
             isDeleted: false
@@ -34,7 +33,6 @@ export class SubscriptionPlanService {
             throw new AppError('Subscription plan with this name already exists', ERROR_CODES.CONFLICT);
         }
 
-        // Create new subscription plan
         const subscriptionPlan = new SubscriptionPlan({
             ...planData,
             currency: planData.currency || 'usd',
@@ -65,7 +63,6 @@ export class SubscriptionPlanService {
             sortOrder = 'asc'
         } = query;
 
-        // Build filter object
         const filter: any = { isDeleted: false };
 
         if (planType) {
@@ -80,14 +77,11 @@ export class SubscriptionPlanService {
             filter.isPopular = isPopular;
         }
 
-        // Build sort object
         const sort: any = {};
         sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-        // Calculate pagination
         const skip = (page - 1) * limit;
 
-        // Execute queries
         const [plans, totalPlans] = await Promise.all([
             SubscriptionPlan.find(filter)
                 .sort(sort)
@@ -97,7 +91,6 @@ export class SubscriptionPlanService {
             SubscriptionPlan.countDocuments(filter)
         ]);
 
-        // Format response
         const formattedPlans = plans.map(plan => this.formatSubscriptionPlanResponse(plan));
 
         const totalPages = Math.ceil(totalPlans / limit);
@@ -118,7 +111,6 @@ export class SubscriptionPlanService {
      * Get subscription plan by ID
      */
     static async getSubscriptionPlanById(planId: string): Promise<ISubscriptionPlanResponse> {
-        console.log(planId, "planIdplanIdplanId>>>>>");
         const subscriptionPlan = await SubscriptionPlan.findOne({
             _id: planId,
             isDeleted: false
@@ -151,7 +143,6 @@ export class SubscriptionPlanService {
             throw new AppError('Subscription plan not found', ERROR_CODES.NOT_FOUND);
         }
 
-        // Check if name is being updated and if it conflicts
         if (updateData.name && updateData.name !== subscriptionPlan.name) {
             const existingPlan = await SubscriptionPlan.findOne({
                 name: updateData.name,
@@ -164,7 +155,6 @@ export class SubscriptionPlanService {
             }
         }
 
-        // Update plan
         Object.assign(subscriptionPlan, updateData);
         await subscriptionPlan.save({ session });
 
@@ -248,7 +238,6 @@ export class SubscriptionPlanService {
             ])
         ]);
 
-        // Format plans by type
         const plansByTypeFormatted = {
             free: 0,
             weekly: 0,

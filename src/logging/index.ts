@@ -1,4 +1,3 @@
-// Export all logging functionality
 export { logger } from './logger';
 export { requestLogger, errorLogger } from './requestLogger';
 export {
@@ -13,5 +12,4 @@ export {
     errorLogStream
 } from './morgan.config';
 
-// Re-export types
 export type { LogEntry } from './logger';

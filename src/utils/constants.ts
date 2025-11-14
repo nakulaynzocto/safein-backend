@@ -5,7 +5,6 @@ const CONSTANTS = {
     NODE_ENV: process.env.NODE_ENV || "development",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
     FRONTEND_URLS: process.env.FRONTEND_URLS ? process.env.FRONTEND_URLS.split(',') : [],
-    // Stripe configuration
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
@@ -24,14 +23,12 @@ const ERROR_MESSAGES = {
     PASSWORD_MISMATCH: "Current password is incorrect",
     EMAIL_NOT_VERIFIED: "Email not verified",
     ACCOUNT_DISABLED: "Account is disabled",
-    // Employee error messages
     EMPLOYEE_NOT_FOUND: "Employee not found",
     EMPLOYEE_EMAIL_EXISTS: "Employee email already exists",
     EMPLOYEE_ALREADY_DELETED: "Employee is already deleted",
     EMPLOYEE_NOT_DELETED: "Employee is not deleted",
     NO_UPDATE_DATA: "No update data provided",
     NO_EMPLOYEES_FOUND: "No employees found for bulk update",
-    // Visitor error messages
     VISITOR_NOT_FOUND: "Visitor not found",
     VISITOR_EMAIL_EXISTS: "Visitor email already exists",
     VISITOR_ALREADY_DELETED: "Visitor is already deleted",
@@ -52,5 +49,11 @@ const ERROR_CODES = {
     INTERNAL_SERVER_ERROR: 500,
     TOO_MANY_REQUESTS: 429,
 };
+
+export const TRIAL_LIMITS = {
+    employees: 3,
+    visitors: 3,
+    appointments: 3,
+} as const;
 
 export { CONSTANTS, ERROR_MESSAGES, ERROR_CODES };

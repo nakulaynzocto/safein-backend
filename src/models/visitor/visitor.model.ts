@@ -87,9 +87,8 @@ const idProofSchema = new Schema<IIdProof>({
 const visitorSchema = new Schema<IVisitor>({
     visitorId: {
         type: String,
-        sparse: true, // Allow null values but ensure uniqueness when present
+        sparse: true,
         default: function() {
-            // Generate a unique visitor ID
             return 'VIS' + Date.now() + Math.random().toString(36).substr(2, 5).toUpperCase();
         }
     },
@@ -150,8 +149,6 @@ const visitorSchema = new Schema<IVisitor>({
     toObject: { virtuals: true }
 });
 
-// Indexes for better performance
-// Note: visitorId is already indexed as part of compound index (createdBy, visitorId) below
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
 visitorSchema.index({ company: 1 });
@@ -162,26 +159,21 @@ visitorSchema.index({ isDeleted: 1 });
 visitorSchema.index({ deletedAt: 1 });
 visitorSchema.index({ createdBy: 1 });
 
-// Compound indexes for user-specific uniqueness
 visitorSchema.index({ createdBy: 1, visitorId: 1 }, { unique: true, sparse: true });
 visitorSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
-// Virtual for full name
 visitorSchema.virtual('fullName').get(function () {
     return this.name;
 });
 
-// Static method to find active visitors
 visitorSchema.statics.findActive = function () {
     return this.find({ isDeleted: false });
 };
 
-// Static method to find deleted visitors
 visitorSchema.statics.findDeleted = function () {
     return this.find({ isDeleted: true });
 };
 
-// Instance method to soft delete
 visitorSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId) {
     this.isDeleted = true;
     this.deletedAt = new Date();
@@ -189,7 +181,6 @@ visitorSchema.methods.softDelete = function (deletedBy: mongoose.Types.ObjectId)
     return this.save();
 };
 
-// Instance method to restore
 visitorSchema.methods.restore = function () {
     this.isDeleted = false;
     this.deletedAt = null;

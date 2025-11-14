@@ -11,7 +11,7 @@ import {
     IGetUserActiveSubscriptionRequest,
     ICheckPremiumSubscriptionRequest
 } from '../../types/userSubscription/userSubscription.types';
-import { ERROR_CODES } from '../../utils/constants';
+import { ERROR_CODES, TRIAL_LIMITS } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
@@ -29,10 +29,9 @@ export class UserSubscriptionController {
 
         const request: IAssignFreePlanRequest = {
             userId: req.user._id.toString(),
-            stripeCustomerId: req.user.stripeCustomerId, // Ensure stripeCustomerId is passed
+            stripeCustomerId: req.user.stripeCustomerId,
         };
 
-        // The service method is createFreeTrial, not assignFreePlanToNewUser
         const subscription = await UserSubscriptionService.createFreeTrial(request.userId, request.stripeCustomerId as string);
 
         ResponseUtil.success(res, 'Free plan assigned successfully', subscription, ERROR_CODES.CREATED);
@@ -40,7 +39,7 @@ export class UserSubscriptionController {
 
     /**
      * Get user's active subscription
-     * GET /api/v1/user-subscriptions/active
+     * GET /api/v1/user-subscriptions/active/:userId
      */
     @TryCatch('Failed to get active subscription')
     static async getUserActiveSubscription(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
@@ -59,7 +58,7 @@ export class UserSubscriptionController {
 
     /**
      * Check if user has premium subscription
-     * GET /api/v1/user-subscriptions/premium-check
+     * GET /api/v1/user-subscriptions/check-premium/:userId
      */
     @TryCatch('Failed to check premium subscription')
     static async checkPremiumSubscription(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
@@ -74,6 +73,68 @@ export class UserSubscriptionController {
         const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(request.userId);
 
         ResponseUtil.success(res, 'Premium subscription check completed', { hasPremium });
+    }
+
+    /**
+     * Get trial limits status
+     * GET /api/v1/user-subscriptions/trial-limits
+     */
+    @TryCatch('Failed to get trial limits status')
+    static async getTrialLimitsStatus(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user || !req.user._id) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(userId);
+
+        if (!activeSubscription || !activeSubscription.isTrialing) {
+            ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
+                isTrial: false,
+                limits: {
+                    employees: { limit: -1, current: 0, reached: false },
+                    visitors: { limit: -1, current: 0, reached: false },
+                    appointments: { limit: -1, current: 0, reached: false },
+                }
+            });
+            return;
+        }
+
+        const companyId = req.user.companyId;
+        if (!companyId) {
+            ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
+                isTrial: true,
+                limits: {
+                    employees: { limit: TRIAL_LIMITS.employees, current: 0, reached: false },
+                    visitors: { limit: TRIAL_LIMITS.visitors, current: 0, reached: false },
+                    appointments: { limit: TRIAL_LIMITS.appointments, current: 0, reached: false },
+                }
+            });
+            return;
+        }
+
+        const counts = await UserSubscriptionService.getTrialLimitsCounts(companyId.toString());
+
+        ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
+            isTrial: true,
+            limits: {
+                employees: {
+                    limit: TRIAL_LIMITS.employees,
+                    current: counts.employees,
+                    reached: counts.employees >= TRIAL_LIMITS.employees
+                },
+                visitors: {
+                    limit: TRIAL_LIMITS.visitors,
+                    current: counts.visitors,
+                    reached: counts.visitors >= TRIAL_LIMITS.visitors
+                },
+                appointments: {
+                    limit: TRIAL_LIMITS.appointments,
+                    current: counts.appointments,
+                    reached: counts.appointments >= TRIAL_LIMITS.appointments
+                },
+            }
+        });
     }
 
     /**
@@ -123,7 +184,6 @@ export class UserSubscriptionController {
     static async getAllUserSubscriptions(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const query: IGetUserSubscriptionsQuery = req.query;
 
-        // If no userId provided, use authenticated user's ID
         if (!query.userId && req.user) {
             query.userId = req.user._id.toString();
         }

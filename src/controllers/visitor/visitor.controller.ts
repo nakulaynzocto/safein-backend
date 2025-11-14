@@ -59,10 +59,8 @@ export class VisitorController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Get visitor and verify it belongs to the current user
         const visitor = await VisitorService.getVisitorById(id);
         
-        // Additional check: verify the visitor was created by the current user
         const visitorRecord = await Visitor.findById(id);
         if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -85,7 +83,6 @@ export class VisitorController {
         const updateData: IUpdateVisitorDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify the visitor belongs to the current user before updating
         const visitorRecord = await Visitor.findById(id);
         if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -139,7 +136,6 @@ export class VisitorController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
-        // Verify the visitor belongs to the current user before restoring
         const visitorRecord = await Visitor.findById(id);
         if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -162,7 +158,6 @@ export class VisitorController {
         const bulkData: IBulkUpdateVisitorsDTO = req.body;
         const userId = req.user._id.toString();
         
-        // Verify all visitors belong to the current user before bulk updating
         const visitors = await Visitor.find({ 
             _id: { $in: bulkData.visitorIds },
             createdBy: userId 

@@ -14,10 +14,8 @@ import {
 
 const router = Router();
 
-// Protected routes (require authentication)
 router.use(verifyToken);
 
-// Employee CRUD operations
 router.post(
     '/',
     validateRequest(createEmployeeValidation),

@@ -16,14 +16,13 @@ export interface IUser extends Document {
     isActive: boolean;
     isDeleted: boolean;
     deletedAt?: Date;
-    deletedBy?: string; // Reference to User who deleted this user
+    deletedBy?: string;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
     activeSubscriptionId?: mongoose.Types.ObjectId;
-    stripeCustomerId?: string; // Stripe Customer ID
+    stripeCustomerId?: string;
 
-    // Instance methods
     comparePassword(candidatePassword: string): Promise<boolean>;
     updateLastLogin(): Promise<IUser>;
     getPublicProfile(): IUserResponse;

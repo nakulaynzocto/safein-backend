@@ -10,7 +10,6 @@ import stripeRoutes from './stripe/stripe.routes';
 
 const router = Router();
 
-// Health check endpoint
 router.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
@@ -20,7 +19,6 @@ router.get('/health', (_req, res) => {
   });
 });
 
-// API routes
 router.use('/users', userRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/appointments', appointmentRoutes);

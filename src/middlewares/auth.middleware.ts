@@ -22,7 +22,6 @@ export const verifyToken = async (req: AuthenticatedRequest, _res: Response, nex
     const token = JwtUtil.extractTokenFromHeader(authHeader);
     const decoded = JwtUtil.verifyToken(token);
 
-    // Find user and check if still exists and is active
     const user = await User.findById(decoded.userId);
     if (!user || !user.isActive) {
       throw new AppError('User not found or account disabled', ERROR_CODES.UNAUTHORIZED);
