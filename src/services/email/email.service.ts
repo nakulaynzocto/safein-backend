@@ -15,6 +15,10 @@ import {
   getNewAppointmentRequestEmailTemplate, 
   getNewAppointmentRequestEmailText 
 } from '../../templates/email/new-appointment-request-email.template';
+import { 
+  getPasswordResetEmailTemplate, 
+  getPasswordResetEmailText 
+} from '../../templates/email/password-reset-email.template';
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
@@ -376,6 +380,101 @@ export class EmailService {
       await this.transporter.sendMail(mailOptions);
     } catch (error: any) {
       console.error('Failed to send new appointment request email:', error.message);
+    }
+  }
+
+  /**
+   * Send password reset email
+   */
+  static async sendPasswordResetEmail(email: string, resetUrl: string, companyName: string): Promise<void> {
+    try {
+      if (!this.isEmailServiceAvailable && this.useHttpFallback) {
+        try {
+          await this.sendWithResend({
+            to: email,
+            subject: 'Reset Your Password - SafeIn',
+            html: getPasswordResetEmailTemplate(resetUrl, companyName),
+            text: getPasswordResetEmailText(resetUrl, companyName),
+          });
+          return;
+        } catch (resendError: any) {
+          console.error('Resend fallback failed:', resendError.message);
+        }
+      }
+
+      if (!this.transporter) {
+        this.initializeTransporter();
+      }
+
+      if (this.isEmailServiceAvailable) {
+        const mailOptions = {
+          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+          to: email,
+          subject: 'Reset Your Password - SafeIn',
+          html: getPasswordResetEmailTemplate(resetUrl, companyName),
+          text: getPasswordResetEmailText(resetUrl, companyName)
+        };
+
+        await this.transporter.sendMail(mailOptions);
+        return;
+      }
+
+      const isConnected = await this.verifyConnection();
+      if (isConnected) {
+        const mailOptions = {
+          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+          to: email,
+          subject: 'Reset Your Password - SafeIn',
+          html: getPasswordResetEmailTemplate(resetUrl, companyName),
+          text: getPasswordResetEmailText(resetUrl, companyName)
+        };
+
+        await this.transporter.sendMail(mailOptions);
+        return;
+      }
+
+      if (process.env.NODE_ENV === 'production') {
+        throw new AppError('Failed to send password reset email. Please check email service configuration.', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error: any) {
+      console.error('Failed to send password reset email:', error.message);
+      
+      if (process.env.NODE_ENV === 'development') {
+        return;
+      }
+      
+      throw new AppError('Failed to send password reset email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Send password reset confirmation email
+   */
+  static async sendPasswordResetConfirmationEmail(email: string, companyName: string): Promise<void> {
+    try {
+      if (!this.transporter) {
+        this.initializeTransporter();
+      }
+
+      const mailOptions = {
+        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+        to: email,
+        subject: 'Password Reset Successful - SafeIn',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #1A73E8;">Password Reset Successful</h2>
+            <p>Hello ${companyName},</p>
+            <p>Your password has been successfully reset.</p>
+            <p>If you did not make this change, please contact our support team immediately.</p>
+            <p>Best regards,<br/>SafeIn Security Team</p>
+          </div>
+        `,
+        text: `Password Reset Successful\n\nHello ${companyName},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nSafeIn Security Team`
+      };
+
+      await this.transporter.sendMail(mailOptions);
+    } catch (error: any) {
+      console.error('Failed to send password reset confirmation email:', error.message);
     }
   }
 }

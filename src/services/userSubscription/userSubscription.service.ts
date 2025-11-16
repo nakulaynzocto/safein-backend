@@ -292,19 +292,16 @@ export class UserSubscriptionService {
         }
     }
 
-    /**
-     * Get trial limits counts for a company
-     */
-    static async getTrialLimitsCounts(companyId: string): Promise<{
+    static async getTrialLimitsCounts(userId: string): Promise<{
         employees: number;
         visitors: number;
         appointments: number;
     }> {
-        const companyObjectId = new mongoose.Types.ObjectId(companyId);
+        const userObjectId = new mongoose.Types.ObjectId(userId);
         const [employeeCount, visitorCount, appointmentCount] = await Promise.all([
-            Employee.countDocuments({ companyId: companyObjectId, isDeleted: false }),
-            Visitor.countDocuments({ companyId: companyObjectId, isDeleted: false }),
-            Appointment.countDocuments({ companyId: companyObjectId, isDeleted: false }),
+            Employee.countDocuments({ createdBy: userObjectId, isDeleted: false }),
+            Visitor.countDocuments({ createdBy: userObjectId, isDeleted: false }),
+            Appointment.countDocuments({ createdBy: userObjectId, isDeleted: false }),
         ]);
 
         return {

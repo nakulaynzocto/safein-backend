@@ -8,17 +8,18 @@ import { connectDatabase } from '../src/config/database.config';
 // Default subscription plans data
 const defaultPlans = [
     {
-        name: "Free Trial",
+        name: "3 Day Trial",
         description: "Experience full SafeIn features for 3 days",
         planType: 'free',
-        amount: 0,
+        amount: 5000, // ₹50 (5000 paise) for card verification - Stripe minimum requirement
         currency: 'inr',
         features: [
             "Full SafeIn features access",
             "Test visitor tracking",
             "Photo capture & ID verification",
             "Real-time notifications",
-            "No credit card required"
+            "Create only 5 appointments",
+            "3 days trial period"
         ],
         isActive: true,
         isPopular: false,
@@ -124,28 +125,59 @@ async function seedSubscriptionPlans() {
         await connectDatabase();
         console.log('✅ Connected to database');
 
-        // Clear existing plans (optional - remove this if you want to keep existing data)
-        const existingPlans = await SubscriptionPlan.countDocuments();
-        if (existingPlans > 0) {
-            console.log(`⚠️  Found ${existingPlans} existing subscription plans`);
-            const shouldClear = process.argv.includes('--clear');
-            if (shouldClear) {
+        // Clear existing plans if --clear flag is provided
+        const shouldClear = process.argv.includes('--clear');
+        if (shouldClear) {
+            const existingCount = await SubscriptionPlan.countDocuments();
+            if (existingCount > 0) {
                 await SubscriptionPlan.deleteMany({});
-                console.log('🗑️  Cleared existing subscription plans');
-            } else {
-                console.log('ℹ️  Use --clear flag to clear existing plans before seeding');
+                console.log(`🗑️  Cleared ${existingCount} existing subscription plans`);
             }
         }
 
-        // Insert default plans
-        const insertedPlans = await SubscriptionPlan.insertMany(defaultPlans);
-        console.log(`✅ Successfully inserted ${insertedPlans.length} subscription plans`);
+        // Check for existing plans and prevent duplicates
+        const existingPlans = await SubscriptionPlan.find({});
+        const existingPlanTypes = new Set(existingPlans.map(p => p.planType as string));
+        const existingNames = new Set(existingPlans.map(p => p.name));
 
-        // Display inserted plans
-        console.log('\n📋 Inserted Subscription Plans:');
-        insertedPlans.forEach((plan, index) => {
-            console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+        // Filter out plans that already exist (by planType or name)
+        const plansToInsert = defaultPlans.filter(plan => {
+            const existsByType = existingPlanTypes.has(plan.planType as string);
+            const existsByName = existingNames.has(plan.name);
+            return !existsByType && !existsByName;
         });
+
+        if (plansToInsert.length === 0) {
+            console.log('ℹ️  All subscription plans already exist. No new plans to insert.');
+            console.log('\n📋 Existing Subscription Plans:');
+            existingPlans.forEach((plan, index) => {
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+            });
+        } else {
+            // Insert only new plans (no duplicates)
+            const insertedPlans = await SubscriptionPlan.insertMany(plansToInsert);
+            console.log(`✅ Successfully inserted ${insertedPlans.length} new subscription plans`);
+
+            // Display inserted plans
+            console.log('\n📋 Newly Inserted Subscription Plans:');
+            insertedPlans.forEach((plan, index) => {
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+            });
+
+            // Display skipped (duplicate) plans
+            const skippedPlans = defaultPlans.filter(plan => {
+                const existsByType = existingPlanTypes.has(plan.planType as string);
+                const existsByName = existingNames.has(plan.name);
+                return existsByType || existsByName;
+            });
+
+            if (skippedPlans.length > 0) {
+                console.log('\n⏭️  Skipped (Already Exists):');
+                skippedPlans.forEach((plan, index) => {
+                    console.log(`${index + 1}. ${plan.name} (${plan.planType}) - Already exists`);
+                });
+            }
+        }
 
         console.log('\n🎉 Subscription plans seeding completed successfully!');
         

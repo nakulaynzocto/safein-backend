@@ -3,6 +3,7 @@ import { VisitorController } from '../../controllers/visitor/visitor.controller'
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
+import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
 import {
     createVisitorValidation,
     updateVisitorValidation,
@@ -18,6 +19,7 @@ router.use(verifyToken);
 
 router.post(
     '/',
+    checkTrialLimits,
     validateRequest(createVisitorValidation),
     asyncWrapper(VisitorController.createVisitor)
 );

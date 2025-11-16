@@ -64,7 +64,8 @@ export class StripeService {
                 return;
             }
 
-            await UserSubscriptionService.createFreeTrial(userId, stripeCustomerId);
+            // Free trial: 3 days only, planType = 'free'
+            await UserSubscriptionService.createFreeTrial(userId, stripeCustomerId, 3);
 
         } catch (error) {
             throw error;
@@ -80,14 +81,37 @@ export class StripeService {
     ): Promise<IStripeCheckoutSessionResponse> {
         try {
 
-            const plan = await SubscriptionPlan.findById(data.planId).where({
-                isDeleted: false,
-                isActive: true,
-            });
+            // Find the subscription plan - handle both ObjectId string and ObjectId
+            let plan;
+            try {
+                plan = await SubscriptionPlan.findById(data.planId).where({
+                    isDeleted: false,
+                    isActive: true,
+                });
+            } catch (error) {
+                // If findById fails, try finding by _id field
+                plan = await SubscriptionPlan.findOne({
+                    _id: data.planId,
+                    isDeleted: false,
+                    isActive: true,
+                });
+            }
+            
             if (!plan) {
                 throw new AppError(
-                    'Subscription plan not found',
+                    `Subscription plan not found for planId: ${data.planId}. Please ensure the plan exists and is active.`,
                     ERROR_CODES.NOT_FOUND
+                );
+            }
+
+            // If plan is free, use free verification flow
+            if (plan.planType === 'free') {
+                return await this.createFreePlanVerificationSession(
+                    {
+                        successUrl: data.successUrl,
+                        cancelUrl: data.cancelUrl,
+                    },
+                    userId
                 );
             }
 
@@ -134,30 +158,42 @@ export class StripeService {
 
             let priceId: string;
             try {
-                let productId: string;
-                try {
-                    const existingProducts = await this.getStripe().products.list({
-                        active: true,
-                        limit: 100,
-                    });
+                const stripeInstance = this.getStripe();
+                let productId: string | null = null;
 
-                    const existingProduct = existingProducts.data.find(
-                        (p) => p.id === (plan.metadata?.stripeProductId as any).toString()
-                    );
+                const existingStripeProductId = (plan as any).metadata?.stripeProductId as string | undefined;
 
-                    if (existingProduct) {
-                        productId = existingProduct.id;
-                    } else {
-                        throw new AppError('Stripe plan not found', ERROR_CODES.NOT_FOUND);
+                if (existingStripeProductId) {
+                    try {
+                        const product = await stripeInstance.products.retrieve(existingStripeProductId);
+                        if (product && !product.deleted) {
+                            productId = product.id;
+                        }
+                    } catch {
+                        productId = null;
                     }
-                } catch (error) {
-                    throw new AppError(
-                        'Failed to create Stripe product',
-                        ERROR_CODES.INTERNAL_SERVER_ERROR
-                    );
                 }
 
-                const prices = await this.getStripe().prices.list({
+                if (!productId) {
+                    const product = await stripeInstance.products.create({
+                        name: plan.name,
+                        description: (plan as any).description || '',
+                        metadata: {
+                            planId: (plan._id as any).toString(),
+                            planType: plan.planType,
+                        },
+                    });
+
+                    productId = product.id;
+
+                    (plan as any).metadata = {
+                        ...(plan as any).metadata,
+                        stripeProductId: productId,
+                    };
+                    await plan.save();
+                }
+
+                const prices = await stripeInstance.prices.list({
                     product: productId,
                     active: true,
                     limit: 1,
@@ -166,7 +202,7 @@ export class StripeService {
                 if (prices.data.length > 0) {
                     priceId = prices.data[0].id;
                 } else {
-                    const price = await this.getStripe().prices.create({
+                    const price = await stripeInstance.prices.create({
                         unit_amount: plan.amount,
                         currency: plan.currency,
                         recurring: {
@@ -181,9 +217,9 @@ export class StripeService {
                     });
                     priceId = price.id;
                 }
-            } catch (error) {
+            } catch (error: any) {
                 throw new AppError(
-                    'Failed to create Stripe price',
+                    error?.message || 'Failed to create Stripe price',
                     ERROR_CODES.INTERNAL_SERVER_ERROR
                 );
             }
@@ -228,6 +264,170 @@ export class StripeService {
             }
             throw new AppError(
                 'Failed to create checkout session',
+                ERROR_CODES.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    /**
+     * Create Stripe checkout session for free plan card verification (₹50 charge - non-refundable)
+     * Note: Stripe requires minimum 50 cents USD (₹50 INR is approximately $0.60, which meets the requirement)
+     */
+    static async createFreePlanVerificationSession(
+        data: { successUrl?: string; cancelUrl?: string },
+        userId: string
+    ): Promise<IStripeCheckoutSessionResponse> {
+        try {
+            const user = await User.findOne({ _id: userId });
+
+            if (!user) {
+                throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
+            }
+
+            if (!user.email) {
+                throw new AppError(
+                    'User must have an email for payment',
+                    ERROR_CODES.BAD_REQUEST
+                );
+            }
+
+            const stripeInstance = this.getStripe();
+            
+            if (!stripeInstance) {
+                throw new AppError(
+                    'Stripe is not initialized. Please check STRIPE_SECRET_KEY configuration.',
+                    ERROR_CODES.INTERNAL_SERVER_ERROR
+                );
+            }
+
+            let customerId: string;
+            
+            // Check if user already has a Stripe customer ID
+            if (user.stripeCustomerId) {
+                try {
+                    // Verify the customer exists in Stripe
+                    const existingCustomer = await stripeInstance.customers.retrieve(user.stripeCustomerId);
+                    if (existingCustomer && !existingCustomer.deleted) {
+                        customerId = user.stripeCustomerId;
+                    } else {
+                        // Customer was deleted in Stripe, create a new one
+                        const customer = await stripeInstance.customers.create({
+                            email: user.email,
+                            metadata: {
+                                userId: userId,
+                            },
+                        });
+                        customerId = customer.id;
+                        // Update user's stripeCustomerId
+                        user.stripeCustomerId = customerId;
+                        await user.save();
+                    }
+                } catch (error: any) {
+                    // Customer doesn't exist, create a new one
+                    const customer = await stripeInstance.customers.create({
+                        email: user.email,
+                        metadata: {
+                            userId: userId,
+                        },
+                    });
+                    customerId = customer.id;
+                    // Update user's stripeCustomerId
+                    user.stripeCustomerId = customerId;
+                    await user.save();
+                }
+            } else {
+                // User doesn't have a Stripe customer ID, search by email first
+                const existingCustomers = await stripeInstance.customers.list({
+                    email: user.email,
+                    limit: 1,
+                });
+
+                if (existingCustomers.data.length > 0) {
+                    customerId = existingCustomers.data[0].id;
+                    // Update user's stripeCustomerId
+                    user.stripeCustomerId = customerId;
+                    await user.save();
+                } else {
+                    const customer = await stripeInstance.customers.create({
+                        email: user.email,
+                        metadata: {
+                            userId: userId,
+                        },
+                    });
+                    customerId = customer.id;
+                    // Update user's stripeCustomerId
+                    user.stripeCustomerId = customerId;
+                    await user.save();
+                }
+            }
+
+            // Validate URLs
+            const successUrl = data.successUrl || 
+                `${CONSTANTS.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
+            const cancelUrl = data.cancelUrl || 
+                `${CONSTANTS.FRONTEND_URL}/subscription/cancel`;
+
+            if (!CONSTANTS.FRONTEND_URL && !data.successUrl) {
+                throw new AppError(
+                    'FRONTEND_URL is not configured and no successUrl provided',
+                    ERROR_CODES.BAD_REQUEST
+                );
+            }
+
+            const session = await stripeInstance.checkout.sessions.create({
+                mode: 'payment',
+                payment_method_types: ['card'],
+                line_items: [
+                    {
+                        price_data: {
+                            currency: 'inr',
+                            unit_amount: 5000, // ₹50 (5000 paise = 50 rupees) - Stripe minimum requirement
+                            product_data: {
+                                name: 'Card Verification - 3 Day Trial',
+                                description: '₹50 will be charged (non-refundable) for 3 Day Trial card verification.',
+                            },
+                        },
+                        quantity: 1,
+                    },
+                ],
+                customer: customerId,
+                client_reference_id: userId,
+                success_url: successUrl,
+                cancel_url: cancelUrl,
+                metadata: {
+                    userId: userId,
+                    type: 'free_verification',
+                    email: user.email,
+                },
+            });
+
+            return {
+                sessionId: session.id,
+                url: session.url || '',
+            };
+        } catch (error: any) {
+            // Log the actual error for debugging
+            console.error('Error creating free plan verification session:', {
+                error: error.message,
+                stack: error.stack,
+                userId,
+                stripeError: error.type || error.code || 'Unknown',
+            });
+
+            if (error instanceof AppError) {
+                throw error;
+            }
+            
+            // Provide more specific error messages
+            if (error.type === 'StripeInvalidRequestError') {
+                throw new AppError(
+                    `Stripe error: ${error.message}`,
+                    ERROR_CODES.BAD_REQUEST
+                );
+            }
+            
+            throw new AppError(
+                `Failed to create free plan verification session: ${error.message || 'Unknown error'}`,
                 ERROR_CODES.INTERNAL_SERVER_ERROR
             );
         }
@@ -362,6 +562,22 @@ export class StripeService {
      */
     private static async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
         try {
+            if (session.mode === 'payment' && session.metadata?.type === 'free_verification') {
+                const userId = session.metadata?.userId as string;
+                const customerId = session.customer as string;
+
+                if (!userId || !customerId) {
+                    return;
+                }
+
+                // Free trial: 3 days only, planType = 'free'
+                // Payment is non-refundable for trial verification
+                await UserSubscriptionService.createFreeTrial(userId, customerId, 3);
+
+                // No refund processing - payment is non-refundable
+                return;
+            }
+
             const subscriptionId = session.subscription as string;
             if (!subscriptionId) {
                 return;

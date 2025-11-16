@@ -25,6 +25,11 @@ router.post(
     asyncWrapper(UserSubscriptionController.assignFreePlanToNewUser)
 );
 
+router.post(
+    '/stripe/checkout-free',
+    asyncWrapper(UserSubscriptionController.createFreePlanVerificationSession)
+);
+
 router.get(
     '/active/:userId',
     asyncWrapper(UserSubscriptionController.getUserActiveSubscription)

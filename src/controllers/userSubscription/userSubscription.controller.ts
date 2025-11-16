@@ -32,7 +32,8 @@ export class UserSubscriptionController {
             stripeCustomerId: req.user.stripeCustomerId,
         };
 
-        const subscription = await UserSubscriptionService.createFreeTrial(request.userId, request.stripeCustomerId as string);
+        // Free trial: 3 days only, planType = 'free'
+        const subscription = await UserSubscriptionService.createFreeTrial(request.userId, request.stripeCustomerId as string, 3);
 
         ResponseUtil.success(res, 'Free plan assigned successfully', subscription, ERROR_CODES.CREATED);
     }
@@ -88,51 +89,40 @@ export class UserSubscriptionController {
         const userId = req.user._id.toString();
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(userId);
 
-        if (!activeSubscription || !activeSubscription.isTrialing) {
-            ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
-                isTrial: false,
-                limits: {
-                    employees: { limit: -1, current: 0, reached: false },
-                    visitors: { limit: -1, current: 0, reached: false },
-                    appointments: { limit: -1, current: 0, reached: false },
-                }
-            });
-            return;
-        }
+        const isTrialLikePlan = !activeSubscription || activeSubscription.planType === 'free' || activeSubscription.isTrialing;
 
-        const companyId = req.user.companyId;
-        if (!companyId) {
+        if (isTrialLikePlan) {
+            const counts = await UserSubscriptionService.getTrialLimitsCounts(userId);
+
             ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
                 isTrial: true,
                 limits: {
-                    employees: { limit: TRIAL_LIMITS.employees, current: 0, reached: false },
-                    visitors: { limit: TRIAL_LIMITS.visitors, current: 0, reached: false },
-                    appointments: { limit: TRIAL_LIMITS.appointments, current: 0, reached: false },
+                    employees: {
+                        limit: TRIAL_LIMITS.employees,
+                        current: counts.employees,
+                        reached: counts.employees >= TRIAL_LIMITS.employees
+                    },
+                    visitors: {
+                        limit: TRIAL_LIMITS.visitors,
+                        current: counts.visitors,
+                        reached: counts.visitors >= TRIAL_LIMITS.visitors
+                    },
+                    appointments: {
+                        limit: TRIAL_LIMITS.appointments,
+                        current: counts.appointments,
+                        reached: counts.appointments >= TRIAL_LIMITS.appointments
+                    },
                 }
             });
             return;
         }
 
-        const counts = await UserSubscriptionService.getTrialLimitsCounts(companyId.toString());
-
         ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
-            isTrial: true,
+            isTrial: false,
             limits: {
-                employees: {
-                    limit: TRIAL_LIMITS.employees,
-                    current: counts.employees,
-                    reached: counts.employees >= TRIAL_LIMITS.employees
-                },
-                visitors: {
-                    limit: TRIAL_LIMITS.visitors,
-                    current: counts.visitors,
-                    reached: counts.visitors >= TRIAL_LIMITS.visitors
-                },
-                appointments: {
-                    limit: TRIAL_LIMITS.appointments,
-                    current: counts.appointments,
-                    reached: counts.appointments >= TRIAL_LIMITS.appointments
-                },
+                employees: { limit: -1, current: 0, reached: false },
+                visitors: { limit: -1, current: 0, reached: false },
+                appointments: { limit: -1, current: 0, reached: false },
             }
         });
     }
@@ -157,6 +147,26 @@ export class UserSubscriptionController {
         const session = await StripeService.createCheckoutSession(request, req.user._id.toString());
 
         ResponseUtil.success(res, 'Checkout session created successfully', session, ERROR_CODES.CREATED);
+    }
+
+    /**
+     * Create Stripe checkout session for free plan card verification
+     * POST /api/v1/user-subscriptions/stripe/checkout-free
+     */
+    @TryCatch('Failed to create free plan verification session')
+    static async createFreePlanVerificationSession(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const data = {
+            successUrl: req.body.successUrl,
+            cancelUrl: req.body.cancelUrl,
+        };
+
+        const session = await StripeService.createFreePlanVerificationSession(data, req.user._id.toString());
+
+        ResponseUtil.success(res, 'Free plan verification session created successfully', session, ERROR_CODES.CREATED);
     }
 
     /**

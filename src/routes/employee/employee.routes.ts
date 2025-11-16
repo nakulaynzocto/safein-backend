@@ -3,6 +3,7 @@ import { EmployeeController } from '../../controllers/employee/employee.controll
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
+import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
 import {
     createEmployeeValidation,
     updateEmployeeValidation,
@@ -18,6 +19,7 @@ router.use(verifyToken);
 
 router.post(
     '/',
+    checkTrialLimits,
     validateRequest(createEmployeeValidation),
     asyncWrapper(EmployeeController.createEmployee)
 );

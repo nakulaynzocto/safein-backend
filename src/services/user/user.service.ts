@@ -4,6 +4,8 @@ import {
   IUpdateUserDTO,
   ILoginDTO,
   IChangePasswordDTO,
+  IForgotPasswordDTO,
+  IResetPasswordDTO,
   IUserResponse
 } from '../../types/user/user.types';
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
@@ -13,6 +15,7 @@ import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
 import { StripeService } from '../stripe/stripe.service';
 import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
+import * as crypto from 'crypto';
 
 const otpStorage = new Map<string, { otp: string; expiresAt: Date; userData: ICreateUserDTO }>();
 
@@ -91,6 +94,10 @@ export class UserService {
     });
     user.stripeCustomerId = stripeCustomer.id;
     await user.save({ session });
+
+    // According to documentation: After OTP verification, subscription_status should be "pending"
+    // Do NOT create any subscription automatically. User must select a plan and complete payment first.
+    // Subscription will be created only after successful payment via Stripe webhook.
 
     otpStorage.delete(email);
 
@@ -364,5 +371,87 @@ export class UserService {
     }
 
     return user.getPublicProfile();
+  }
+
+  /**
+   * Forgot password - Generate reset token and send email
+   */
+  @Transaction('Failed to process forgot password request')
+  static async forgotPassword(forgotPasswordData: IForgotPasswordDTO): Promise<{ message: string }> {
+    const { email } = forgotPasswordData;
+
+    const user = await User.findOne({ email, isDeleted: false }).select('+passwordResetToken +resetPasswordExpires');
+
+    // Always return success message (security best practice - don't reveal if email exists)
+    if (!user) {
+      return { message: 'If an account with that email exists, a password reset link has been sent.' };
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Set token and expiration (1 hour from now)
+    user.passwordResetToken = hashedToken;
+    user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save({ validateBeforeSave: false });
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+
+    try {
+      // Send password reset email
+      await EmailService.sendPasswordResetEmail(user.email, resetUrl, user.companyName);
+    } catch (error: any) {
+      // If email fails, clear the token
+      user.passwordResetToken = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to send password reset email:', error.message);
+        return { message: 'Password reset email could not be sent. Please try again later.' };
+      }
+      throw new AppError('Failed to send password reset email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+    }
+
+    return { message: 'If an account with that email exists, a password reset link has been sent.' };
+  }
+
+  /**
+   * Reset password using token
+   */
+  @Transaction('Failed to reset password')
+  static async resetPassword(resetPasswordData: IResetPasswordDTO, options: { session?: any } = {}): Promise<void> {
+    const { token, newPassword } = resetPasswordData;
+    const { session } = options;
+
+    // Hash the token to compare with stored token
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token and not expired
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() },
+      isDeleted: false
+    }).select('+passwordResetToken +resetPasswordExpires +password').session(session);
+
+    if (!user) {
+      throw new AppError('Password reset token is invalid or has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Update password and clear reset token
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save({ session });
+
+    // Optionally send confirmation email
+    try {
+      await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
+    } catch (error) {
+      // Don't fail the reset if email fails
+      console.error('Failed to send password reset confirmation email:', error);
+    }
   }
 }

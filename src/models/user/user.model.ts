@@ -99,6 +99,16 @@ const userSchema = new Schema<IUser>(
             trim: true,
             default: null,
             sparse: true,
+        },
+        passwordResetToken: {
+            type: String,
+            default: null,
+            select: false
+        },
+        resetPasswordExpires: {
+            type: Date,
+            default: null,
+            select: false
         }
     },
     {

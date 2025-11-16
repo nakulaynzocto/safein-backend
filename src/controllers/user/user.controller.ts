@@ -205,12 +205,19 @@ export class UserController {
    * Forgot password
    */
   @TryCatch('Failed to send password reset email')
-  static async forgotPassword(_req: Request, res: Response, _next: NextFunction): Promise<void> {
-    ResponseUtil.success(res, 'Password reset email sent successfully');
+  static async forgotPassword(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const forgotPasswordData = req.body;
+    const result = await UserService.forgotPassword(forgotPasswordData);
+    ResponseUtil.success(res, result.message, result);
   }
 
+  /**
+   * Reset password
+   */
   @TryCatch('Failed to reset password')
-  static async resetPassword(_req: Request, res: Response, _next: NextFunction): Promise<void> {
+  static async resetPassword(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const resetPasswordData = req.body;
+    await UserService.resetPassword(resetPasswordData);
     ResponseUtil.success(res, 'Password reset successfully');
   }
 

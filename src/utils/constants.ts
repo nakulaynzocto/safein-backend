@@ -51,9 +51,9 @@ const ERROR_CODES = {
 };
 
 export const TRIAL_LIMITS = {
-    employees: 3,
-    visitors: 3,
-    appointments: 3,
+    employees: 1,
+    visitors: 1,
+    appointments: 5,
 } as const;
 
 export { CONSTANTS, ERROR_MESSAGES, ERROR_CODES };

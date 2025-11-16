@@ -10,6 +10,10 @@ export const checkTrialLimits = async (
     next: NextFunction
 ): Promise<void> => {
     try {
+        if (req.method !== 'POST') {
+            return next();
+        }
+
         if (!req.user || !req.user._id) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
@@ -17,16 +21,11 @@ export const checkTrialLimits = async (
         const userId = req.user._id.toString();
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(userId);
 
-        if (!activeSubscription || !activeSubscription.isTrialing) {
+        if (activeSubscription && !activeSubscription.isTrialing) {
             return next();
         }
 
-        const companyId = req.user.companyId;
-        if (!companyId) {
-            return next();
-        }
-
-        const counts = await UserSubscriptionService.getTrialLimitsCounts(companyId.toString());
+        const counts = await UserSubscriptionService.getTrialLimitsCounts(userId);
 
         let limitExceeded = false;
         let resourceType = '';

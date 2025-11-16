@@ -22,6 +22,8 @@ export interface IUser extends Document {
     updatedAt: Date;
     activeSubscriptionId?: mongoose.Types.ObjectId;
     stripeCustomerId?: string;
+    passwordResetToken?: string;
+    resetPasswordExpires?: Date;
 
     comparePassword(candidatePassword: string): Promise<boolean>;
     updateLastLogin(): Promise<IUser>;
