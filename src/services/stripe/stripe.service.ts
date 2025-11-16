@@ -491,18 +491,32 @@ export class StripeService {
             const stripe = this.getStripe();
 
             if (!CONSTANTS.STRIPE_WEBHOOK_SECRET) {
-                throw new Error('STRIPE_WEBHOOK_SECRET is required');
+                throw new Error('STRIPE_WEBHOOK_SECRET is required. Please set it in environment variables.');
             }
 
+            if (!signature) {
+                throw new Error('Stripe signature is required');
+            }
+
+            // Ensure payload is Buffer for signature verification
+            const payloadBuffer = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+
             const event = stripe.webhooks.constructEvent(
-                payload,
+                payloadBuffer,
                 signature,
                 CONSTANTS.STRIPE_WEBHOOK_SECRET
             );
 
             return event;
-        } catch (error) {
-            throw new Error('Invalid webhook signature');
+        } catch (error: any) {
+            console.error('Webhook signature verification error:', error.message);
+            if (error.message.includes('No signatures found')) {
+                throw new Error('No signatures found in stripe-signature header');
+            }
+            if (error.message.includes('No signatures found matching')) {
+                throw new Error('Invalid webhook secret. Please verify STRIPE_WEBHOOK_SECRET matches Stripe Dashboard.');
+            }
+            throw new Error(`Invalid webhook signature: ${error.message}`);
         }
     }
 

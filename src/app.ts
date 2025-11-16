@@ -11,11 +11,11 @@ import { notFoundHandler, generalLimiter, errorHandler } from './middlewares';
 import { requestLogger, errorLogger } from './logging';
 import { devFormat, combinedFormat, morganOptions, morganFileOptions, morganErrorOptions, errorFormat } from './logging';
 import routes from './routes';
-import employeeRoutes from './routes/employee/employee.routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
 import { StripeService } from './services/stripe/stripe.service';
+import { webhookHandler } from './routes/stripe/stripe.routes';
 
 const app: Express = express();
 
@@ -32,7 +32,19 @@ try {
   console.error('Stripe service initialization failed:', error);
 }
 
-app.use(helmet());
+// Stripe webhook route - must be registered BEFORE other middlewares
+// to receive raw body for signature verification
+// This route bypasses helmet, cors, and rate limiting for Stripe webhooks
+app.use('/api/v1/stripe/webhook', 
+  express.raw({ type: 'application/json' }),
+  webhookHandler
+);
+
+app.use(helmet({
+  // Disable contentSecurityPolicy for webhook route
+  contentSecurityPolicy: false,
+}));
+
 app.use(cors({
   origin: CONSTANTS.FRONTEND_URLS,
   credentials: true
@@ -52,15 +64,13 @@ app.use(morgan(errorFormat, morganErrorOptions));
 
 app.use(generalLimiter);
 
-app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// All API routes are registered through the main routes index
 app.use('/api/v1', routes);
-app.use('/employees', employeeRoutes);
 
 app.use(errorLogger);
 app.use(errorHandler);
