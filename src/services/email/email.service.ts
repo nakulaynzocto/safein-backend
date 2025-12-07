@@ -34,15 +34,18 @@ export class EmailService {
     }
 
     const smtpConfig = {
-      host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
+      host: process.env.SMTP_HOST || ' smtp.hostinger.com',
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: false,        // FIXED for port 587
       auth: {
         user: process.env.SMTP_USER || '',
         pass: process.env.SMTP_PASS || ''
       },
-      tls: { rejectUnauthorized: false },
-      pool: true,
+      tls: { 
+        rejectUnauthorized: false,
+        ciphers: "SSLv3"    
+      },
+      pool: false,    
       connectionTimeout: 8000,
       greetingTimeout: 8000,
       socketTimeout: 10000
