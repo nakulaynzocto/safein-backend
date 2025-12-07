@@ -189,8 +189,14 @@ SMTP_SECURE=false
 
 ### Email Issues
 - **Gmail not working**: Use App Password instead of regular password
-- **SMTP verify fails**: Set `SKIP_SMTP_VERIFY=true` (not recommended for production)
+- **SMTP verify fails**: Set `SKIP_SMTP_VERIFY=true` (recommended for Render/production if verification times out)
 - **Emails not sending**: Check SMTP credentials and firewall settings
+- **Render Production**: 
+  - SMTP verification may fail due to network/timeout issues
+  - Set `SKIP_SMTP_VERIFY=true` in Render environment variables
+  - Ensure all SMTP variables are set: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`
+  - For Gmail: Use App Password (not regular password)
+  - Alternative: Use Resend API by setting `RESEND_API_KEY` for HTTP-based email fallback
 
 ### Database Issues
 - **Connection fails**: Verify `MONGODB_URI` is correct and MongoDB is running
