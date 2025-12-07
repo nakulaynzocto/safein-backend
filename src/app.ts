@@ -21,10 +21,23 @@ const app: Express = express();
 
 connectDatabase();
 
+// Initialize email service
 EmailService.initializeTransporter();
-EmailService.verifyConnection().catch((error) => {
-  console.error('Email service initialization error:', error);
-});
+EmailService.verifyConnection()
+  .then((isAvailable) => {
+    if (isAvailable) {
+      console.log('✓ Email service initialized and verified');
+    } else {
+      console.warn('⚠ Email service verification failed, but will attempt to send emails');
+      if (process.env.RESEND_API_KEY) {
+        console.log('✓ Resend API fallback is available');
+      }
+    }
+  })
+  .catch((error) => {
+    console.error('Email service initialization error:', error);
+    console.warn('Email service will attempt to send emails despite verification failure');
+  });
 
 try {
   StripeService.initialize();

@@ -43,9 +43,10 @@ export class EmailService {
       },
       tls: { rejectUnauthorized: false },
       pool: true,
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000
+      // Increased timeouts for production environments like Render
+      connectionTimeout: 15000, // 15 seconds
+      greetingTimeout: 10000, // 10 seconds
+      socketTimeout: 20000 // 20 seconds
     } as nodemailer.TransportOptions;
 
     this.transporter = nodemailer.createTransport(smtpConfig);
@@ -60,23 +61,55 @@ export class EmailService {
       if (!this.transporter) {
         this.initializeTransporter();
       }
+      
+      // Skip verification if explicitly set (useful for production)
       if (process.env.SKIP_SMTP_VERIFY === 'true') {
+        console.log('SMTP verification skipped (SKIP_SMTP_VERIFY=true)');
         this.isEmailServiceAvailable = true;
         return true;
       }
       
-      await this.transporter.verify();
+      // Try to verify connection with timeout (increased for Render)
+      const verifyPromise = this.transporter.verify();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('SMTP verification timeout')), 10000) // 10 seconds
+      );
+      
+      await Promise.race([verifyPromise, timeoutPromise]);
       this.isEmailServiceAvailable = true;
+      console.log('SMTP connection verified successfully');
       return true;
     } catch (error: any) {
-      console.error('SMTP connection failed:', error.message);
+      console.error('SMTP connection verification failed:', error.message);
+      console.error('SMTP Config:', {
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        user: process.env.SMTP_USER ? '***' : 'not set',
+        fromEmail: process.env.SMTP_FROM_EMAIL,
+        skipVerify: process.env.SKIP_SMTP_VERIFY
+      });
+      
       this.isEmailServiceAvailable = false;
+      
+      // Enable Resend fallback if available
       if (process.env.RESEND_API_KEY) {
         this.useHttpFallback = true;
+        console.log('Resend API fallback enabled');
       }
       
+      // Try alternative SMTP configs for Gmail
       if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
-        return await this.tryAlternativeSmtpConfigs();
+        console.log('Trying alternative SMTP configurations...');
+        const alternativeWorked = await this.tryAlternativeSmtpConfigs();
+        if (alternativeWorked) {
+          return true;
+        }
+      }
+      
+      // In production with SKIP_SMTP_VERIFY not set, log warning but don't fail
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('SMTP verification failed in production. Emails will be attempted anyway.');
+        console.warn('To skip verification, set SKIP_SMTP_VERIFY=true in environment variables');
       }
       
       return false;
@@ -144,7 +177,52 @@ export class EmailService {
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
-      if (!this.isEmailServiceAvailable && this.useHttpFallback) {
+      // Initialize transporter if not already done
+      if (!this.transporter) {
+        this.initializeTransporter();
+      }
+
+      const mailOptions = {
+        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+        to: email,
+        subject: 'SafeIn Registration - Verify Your Email',
+        html: getOtpEmailTemplate(otp, companyName),
+        text: getOtpEmailText(otp, companyName)
+      };
+
+      // If SKIP_SMTP_VERIFY is true, skip verification and try sending directly
+      // This is the recommended approach for Render/production where verification times out
+      if (process.env.SKIP_SMTP_VERIFY === 'true') {
+        console.log('SKIP_SMTP_VERIFY=true: Attempting to send email without verification...');
+        try {
+          await this.transporter.sendMail(mailOptions);
+          this.isEmailServiceAvailable = true; // Mark as available if send succeeds
+          console.log('✓ OTP email sent via SMTP (verification skipped)');
+          return;
+        } catch (sendError: any) {
+          // If send fails, try Resend fallback if available
+          if (process.env.RESEND_API_KEY) {
+            console.log('SMTP send failed, trying Resend API fallback...');
+            try {
+              await this.sendWithResend({
+                to: email,
+                subject: 'SafeIn Registration - Verify Your Email',
+                html: getOtpEmailTemplate(otp, companyName),
+                text: getOtpEmailText(otp, companyName),
+              });
+              console.log('✓ OTP email sent via Resend API (fallback)');
+              return;
+            } catch (resendError: any) {
+              console.error('Resend fallback also failed:', resendError.message);
+              throw sendError; // Throw original SMTP error
+            }
+          }
+          throw sendError;
+        }
+      }
+
+      // Try Resend fallback first if available and SMTP is not available
+      if (!this.isEmailServiceAvailable && this.useHttpFallback && process.env.RESEND_API_KEY) {
         try {
           await this.sendWithResend({
             to: email,
@@ -152,54 +230,104 @@ export class EmailService {
             html: getOtpEmailTemplate(otp, companyName),
             text: getOtpEmailText(otp, companyName),
           });
+          console.log('✓ OTP email sent via Resend API');
           return;
         } catch (resendError: any) {
           console.error('Resend fallback failed:', resendError.message);
         }
       }
 
-      if (!this.transporter) {
-        this.initializeTransporter();
-      }
-
+      // If email service is already verified, send directly
       if (this.isEmailServiceAvailable) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'SafeIn Registration - Verify Your Email',
-          html: getOtpEmailTemplate(otp, companyName),
-          text: getOtpEmailText(otp, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
+        try {
+          await this.transporter.sendMail(mailOptions);
+          console.log('✓ OTP email sent via SMTP (verified connection)');
+          return;
+        } catch (sendError: any) {
+          // If verified connection fails, try Resend if available
+          if (process.env.RESEND_API_KEY && (sendError.code === 'ETIMEDOUT' || sendError.code === 'ECONNECTION')) {
+            console.log('SMTP connection timeout, trying Resend API fallback...');
+            try {
+              await this.sendWithResend({
+                to: email,
+                subject: 'SafeIn Registration - Verify Your Email',
+                html: getOtpEmailTemplate(otp, companyName),
+                text: getOtpEmailText(otp, companyName),
+              });
+              console.log('✓ OTP email sent via Resend API (timeout fallback)');
+              return;
+            } catch (resendError: any) {
+              console.error('Resend fallback failed:', resendError.message);
+            }
+          }
+          throw sendError;
+        }
       }
 
-      const isConnected = await this.verifyConnection();
-      if (isConnected) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'SafeIn Registration - Verify Your Email',
-          html: getOtpEmailTemplate(otp, companyName),
-          text: getOtpEmailText(otp, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
+      // Try to verify connection first (with timeout handling)
+      try {
+        const isConnected = await this.verifyConnection();
+        if (isConnected) {
+          await this.transporter.sendMail(mailOptions);
+          console.log('✓ OTP email sent via SMTP (after verification)');
+          return;
+        }
+      } catch (verifyError: any) {
+        // If verification fails due to timeout, try sending anyway
+        if (verifyError.message?.includes('timeout') || verifyError.code === 'ETIMEDOUT') {
+          console.log('SMTP verification timed out, attempting to send email anyway...');
+          try {
+            await this.transporter.sendMail(mailOptions);
+            this.isEmailServiceAvailable = true;
+            console.log('✓ OTP email sent via SMTP (after timeout)');
+            return;
+          } catch (sendError: any) {
+            // Try Resend if available
+            if (process.env.RESEND_API_KEY) {
+              console.log('SMTP send failed after timeout, trying Resend API...');
+              try {
+                await this.sendWithResend({
+                  to: email,
+                  subject: 'SafeIn Registration - Verify Your Email',
+                  html: getOtpEmailTemplate(otp, companyName),
+                  text: getOtpEmailText(otp, companyName),
+                });
+                console.log('✓ OTP email sent via Resend API (timeout fallback)');
+                return;
+              } catch (resendError: any) {
+                console.error('Resend fallback failed:', resendError.message);
+              }
+            }
+            throw sendError;
+          }
+        }
+        throw verifyError;
       }
 
+      // In production, throw error if we can't send
       if (process.env.NODE_ENV === 'production') {
         throw new AppError('Failed to send OTP email. Please check email service configuration.', ERROR_CODES.INTERNAL_SERVER_ERROR);
       }
+
+      // In development, just log and return
+      console.warn('Email service not available, skipping email send in development');
     } catch (error: any) {
       console.error('Failed to send OTP email:', error.message);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode,
+        errno: error.errno,
+        syscall: error.syscall
+      });
       
       if (process.env.NODE_ENV === 'development') {
+        console.warn('Continuing in development mode despite email error');
         return;
       }
       
-      throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      throw new AppError(`Failed to send OTP email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
 
