@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { AppointmentService } from '../../services/appointment/appointment.service';
 import { Appointment } from '../../models/appointment/appointment.model';
 import { ResponseUtil } from '../../utils';
@@ -60,8 +60,10 @@ export class AppointmentController {
         const { id } = req.params;
         const userId = req.user._id.toString();
         
+        // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentById(id);
         
+        // Additional check: verify the appointment was created by the current user
         const appointmentRecord = await Appointment.findById(id);
         if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
             throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
@@ -71,47 +73,24 @@ export class AppointmentController {
     }
 
     /**
-     * Get appointment by appointment ID (user-specific)
+     * Get appointment by appointment ID
      * GET /api/appointments/appointment/:appointmentId
      */
     @TryCatch('Failed to get appointment')
-    static async getAppointmentByAppointmentId(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async getAppointmentByAppointmentId(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { appointmentId } = req.params;
-        const userId = req.user._id.toString();
-        
         const appointment = await AppointmentService.getAppointmentByAppointmentId(appointmentId);
-        
-        const appointmentRecord = await Appointment.findById(appointment._id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         ResponseUtil.success(res, 'Appointment retrieved successfully', appointment);
     }
 
     /**
-     * Update appointment (user-specific)
+     * Update appointment
      * PUT /api/appointments/:id
      */
     @TryCatch('Failed to update appointment')
-    static async updateAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async updateAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
         const updateData: IUpdateAppointmentDTO = req.body;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const appointment = await AppointmentService.updateAppointment(id, updateData);
         ResponseUtil.success(res, 'Appointment updated successfully', appointment);
     }
@@ -132,45 +111,23 @@ export class AppointmentController {
     }
 
     /**
-     * Check in appointment (user-specific)
+     * Check in appointment
      * POST /api/appointments/check-in
      */
     @TryCatch('Failed to check in appointment')
-    static async checkInAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async checkInAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const request: ICheckInRequest = req.body;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findOne({ appointmentId: request.appointmentId, isDeleted: false });
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const appointment = await AppointmentService.checkInAppointment(request);
         ResponseUtil.success(res, 'Appointment checked in successfully', appointment);
     }
 
     /**
-     * Check out appointment (user-specific)
+     * Check out appointment
      * POST /api/appointments/check-out
      */
     @TryCatch('Failed to check out appointment')
-    static async checkOutAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async checkOutAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const request: ICheckOutRequest = req.body;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findOne({ appointmentId: request.appointmentId, isDeleted: false });
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const appointment = await AppointmentService.checkOutAppointment(request);
         ResponseUtil.success(res, 'Appointment checked out successfully', appointment);
     }
@@ -193,82 +150,46 @@ export class AppointmentController {
 
 
     /**
-     * Bulk update appointments (user-specific)
+     * Bulk update appointments
      * PUT /api/appointments/bulk-update
      */
     @TryCatch('Failed to bulk update appointments')
-    static async bulkUpdateAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async bulkUpdateAppointments(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const bulkData: IBulkUpdateAppointmentsDTO = req.body;
-        const userId = req.user._id.toString();
-        
-        const appointments = await Appointment.find({ 
-            _id: { $in: bulkData.appointmentIds },
-            createdBy: userId 
-        });
-        
-        if (appointments.length !== bulkData.appointmentIds.length) {
-            throw new AppError('Some appointments not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const result = await AppointmentService.bulkUpdateAppointments(bulkData);
         ResponseUtil.success(res, 'Appointments updated successfully', result);
     }
 
     /**
-     * Restore appointment from trash (user-specific)
+     * Restore appointment from trash
      * PUT /api/appointments/:id/restore
      */
     @TryCatch('Failed to restore appointment')
-    static async restoreAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async restoreAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const appointment = await AppointmentService.restoreAppointment(id);
         ResponseUtil.success(res, 'Appointment restored successfully', appointment);
     }
 
     /**
-     * Get appointments by employee (user-specific)
+     * Get appointments by employee
      * GET /api/appointments/employee/:employeeId
      */
     @TryCatch('Failed to get appointments by employee')
-    static async getAppointmentsByEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async getAppointmentsByEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { employeeId } = req.params;
-        const userId = req.user._id.toString();
         const query: IGetAppointmentsQuery = { ...req.query, employeeId };
-        const result = await AppointmentService.getAllAppointments(query, userId);
+        const result = await AppointmentService.getAllAppointments(query);
         ResponseUtil.success(res, 'Employee appointments retrieved successfully', result);
     }
 
     /**
-     * Get appointments by date range (user-specific)
+     * Get appointments by date range
      * GET /api/appointments/date-range
      */
     @TryCatch('Failed to get appointments by date range')
-    static async getAppointmentsByDateRange(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async getAppointmentsByDateRange(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { startDate, endDate } = req.query;
-        const userId = req.user._id.toString();
 
         if (!startDate || !endDate) {
             throw new AppError('Start date and end date are required', ERROR_CODES.BAD_REQUEST);
@@ -279,72 +200,39 @@ export class AppointmentController {
             startDate: startDate as string,
             endDate: endDate as string
         };
-        const result = await AppointmentService.getAllAppointments(query, userId);
+        const result = await AppointmentService.getAllAppointments(query);
         ResponseUtil.success(res, 'Appointments by date range retrieved successfully', result);
     }
 
     /**
-     * Cancel appointment (user-specific)
+     * Cancel appointment
      * PUT /api/appointments/:id/cancel
      */
     @TryCatch('Failed to cancel appointment')
-    static async cancelAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async cancelAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const appointment = await AppointmentService.cancelAppointment(id);
         ResponseUtil.success(res, 'Appointment cancelled successfully', appointment);
     }
 
     /**
-     * Approve appointment (user-specific)
+     * Approve appointment
      * PUT /api/appointments/:id/approve
      */
     @TryCatch('Failed to approve appointment')
-    static async approveAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async approveAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const result = await AppointmentService.approveAppointment(id);
         ResponseUtil.success(res, 'Appointment approved successfully. The visitor has been notified.', result);
     }
 
     /**
-     * Reject appointment (user-specific)
+     * Reject appointment
      * PUT /api/appointments/:id/reject
      */
     @TryCatch('Failed to reject appointment')
-    static async rejectAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
+    static async rejectAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
         const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
         const result = await AppointmentService.rejectAppointment(id);
         ResponseUtil.success(res, 'Appointment rejected. The visitor has been informed.', result);
     }
