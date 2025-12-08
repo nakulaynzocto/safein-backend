@@ -34,21 +34,16 @@ export class EmailService {
     }
 
     const smtpConfig = {
-      host: process.env.SMTP_HOST || ' smtp.hostinger.com',
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,        // FIXED for port 587
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
+      secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER || '',
-        pass: process.env.SMTP_PASS || ''
+        user: process.env.MAIL_USER || process.env.SMTP_USER || '',
+        pass: process.env.MAIL_PASS || process.env.SMTP_PASS || ''
       },
-      tls: { 
-        rejectUnauthorized: false,
-        ciphers: "SSLv3"    
+      tls: {
+        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'true' ? true : false,
       },
-      pool: false,    
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000
     } as nodemailer.TransportOptions;
 
     this.transporter = nodemailer.createTransport(smtpConfig);
