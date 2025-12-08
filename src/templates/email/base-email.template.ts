@@ -21,130 +21,318 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <title>${title}</title>
         <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
             body {
                 margin: 0;
                 padding: 0;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background-color: #f5f7fa;
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+            .email-wrapper {
+                width: 100%;
+                background-color: #f5f7fa;
+                padding: 40px 20px;
+            }
+            .email-container {
+                max-width: 600px;
+                margin: 0 auto;
                 background-color: #ffffff;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             }
             .header {
-                background-color: #1A73E8;
-                width: 100%;
+                background: linear-gradient(135deg, #1A73E8 0%, #0d47a1 100%);
+                padding: 40px 30px;
                 text-align: center;
-                padding: 20px 0;
             }
             .logo {
                 color: #ffffff;
-                font-size: 24px;
-                font-weight: 500;
-                letter-spacing: 0.5px;
+                font-size: 32px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                margin: 0;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
-            .content-container {
-                max-width: 500px;
-                margin: 0 auto;
-                padding: 40px 20px;
-                text-align: center;
+            .logo-tagline {
+                color: #e3f2fd;
+                font-size: 14px;
+                margin-top: 8px;
+                font-weight: 400;
+            }
+            .content-wrapper {
+                padding: 50px 40px;
             }
             .icon-container {
-                margin: 30px 0;
+                text-align: center;
+                margin-bottom: 30px;
             }
-            .cloud-icon {
-                width: 80px;
-                height: 80px;
-                background: linear-gradient(135deg, #E0E0E0 0%, #BDBDBD 100%);
+            .icon-circle {
+                width: 100px;
+                height: 100px;
+                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
                 border-radius: 50%;
-                margin: 0 auto 15px;
-                position: relative;
+                margin: 0 auto;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
             }
-            .lock-icon {
-                width: 20px;
-                height: 26px;
-                background-color: #333333;
-                border-radius: 3px;
-                position: relative;
-                margin-left: 15px;
-            }
-            .lock-icon::before {
-                content: '';
-                position: absolute;
-                width: 15px;
-                height: 15px;
-                border: 3px solid #333;
-                border-top: none;
-                border-radius: 0 0 3px 3px;
-                top: -12px;
-                left: 50%;
-                transform: translateX(-50%);
+            .icon-symbol {
+                font-size: 48px;
+                color: #1A73E8;
+                font-weight: 300;
             }
             .greeting {
-                font-size: 16px;
-                color: #333333;
-                margin: 20px 0;
-            }
-            .message {
-                font-size: 14px;
-                color: #666666;
-                margin: 20px 0;
-                line-height: 1.5;
-                text-align: left;
-            }
-            .footer-text {
-                font-size: 13px;
-                color: #999999;
-                margin-top: 30px;
+                font-size: 20px;
+                color: #1a1a1a;
+                margin: 0 0 25px 0;
+                font-weight: 600;
                 line-height: 1.4;
             }
-            .security-note {
-                font-size: 13px;
-                color: #666666;
+            .message {
+                font-size: 16px;
+                color: #4a4a4a;
                 margin: 20px 0;
-                padding: 10px;
-                background-color: #F5F5F5;
-                border-radius: 5px;
+                line-height: 1.7;
+                text-align: left;
             }
             .action-button {
                 display: inline-block;
-                padding: 12px 24px;
-                background-color: #1A73E8;
-                color: #ffffff;
+                padding: 16px 32px;
+                background: linear-gradient(135deg, #1A73E8 0%, #1565C0 100%);
+                color: #ffffff !important;
                 text-decoration: none;
-                border-radius: 5px;
-                margin: 15px 0;
-                font-weight: 500;
+                border-radius: 6px;
+                margin: 25px 0;
+                font-weight: 600;
+                font-size: 16px;
+                text-align: center;
+                box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+                transition: all 0.3s ease;
             }
             .action-button:hover {
-                background-color: #1565C0;
+                background: linear-gradient(135deg, #1565C0 0%, #0d47a1 100%);
+                box-shadow: 0 6px 16px rgba(26, 115, 232, 0.4);
+                transform: translateY(-2px);
+            }
+            .action-button-secondary {
+                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+                box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            }
+            .action-button-secondary:hover {
+                background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
+                box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+            }
+            .action-button-danger {
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+            }
+            .action-button-danger:hover {
+                background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+                box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
+            }
+            .button-group {
+                text-align: center;
+                margin: 30px 0;
+            }
+            .button-group .action-button {
+                margin: 8px;
             }
             .highlight-box {
-                background-color: #E3F2FD;
-                padding: 15px;
-                border-radius: 5px;
-                margin: 20px 0;
+                background: linear-gradient(135deg, #e3f2fd 0%, #f5f9ff 100%);
+                padding: 25px;
+                border-radius: 8px;
+                margin: 25px 0;
                 text-align: left;
+                border-left: 4px solid #1A73E8;
+            }
+            .highlight-box h3 {
+                margin: 0 0 15px 0;
+                color: #1A73E8;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            .highlight-box p {
+                margin: 8px 0;
+                color: #4a4a4a;
+                font-size: 15px;
+                line-height: 1.6;
+            }
+            .highlight-box ul {
+                margin: 10px 0;
+                padding-left: 25px;
+            }
+            .highlight-box li {
+                margin: 8px 0;
+                color: #4a4a4a;
+                font-size: 15px;
+                line-height: 1.6;
+            }
+            .security-note {
+                font-size: 14px;
+                color: #666666;
+                margin: 25px 0;
+                padding: 18px;
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                border-left: 4px solid #6c757d;
+                line-height: 1.6;
+            }
+            .security-note strong {
+                color: #333333;
+                font-weight: 600;
+            }
+            .security-warning {
+                background-color: #fff3cd;
+                border-left-color: #ffc107;
+            }
+            .security-success {
+                background-color: #d4edda;
+                border-left-color: #28a745;
+            }
+            .info-box {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 8px;
+                margin: 25px 0;
+                font-size: 14px;
+                color: #666666;
+                line-height: 1.6;
+            }
+            .info-box strong {
+                color: #333333;
+                font-weight: 600;
+            }
+            .info-box a {
+                color: #1A73E8;
+                word-break: break-all;
+                text-decoration: none;
+            }
+            .info-box a:hover {
+                text-decoration: underline;
+            }
+            .footer {
+                background-color: #f8f9fa;
+                padding: 40px 40px 30px;
+                text-align: center;
+                border-top: 1px solid #e9ecef;
+            }
+            .footer-text {
+                font-size: 15px;
+                color: #6c757d;
+                margin: 0 0 20px 0;
+                line-height: 1.6;
+            }
+            .footer-signature {
+                font-size: 16px;
+                color: #4a4a4a;
+                margin: 0 0 10px 0;
+                font-weight: 600;
+            }
+            .footer-company {
+                font-size: 14px;
+                color: #6c757d;
+                margin: 15px 0 5px 0;
+                font-weight: 500;
+            }
+            .footer-tagline {
+                font-size: 13px;
+                color: #999999;
+                margin: 5px 0 20px 0;
+            }
+            .footer-links {
+                margin: 20px 0;
+                padding-top: 20px;
+                border-top: 1px solid #e9ecef;
+            }
+            .footer-links a {
+                color: #1A73E8;
+                text-decoration: none;
+                font-size: 14px;
+                margin: 0 15px;
+            }
+            .footer-links a:hover {
+                text-decoration: underline;
+            }
+            .footer-copyright {
+                font-size: 12px;
+                color: #999999;
+                margin-top: 20px;
+                padding-top: 20px;
+                border-top: 1px solid #e9ecef;
+            }
+            @media only screen and (max-width: 600px) {
+                .email-wrapper {
+                    padding: 20px 10px;
+                }
+                .content-wrapper {
+                    padding: 30px 20px;
+                }
+                .header {
+                    padding: 30px 20px;
+                }
+                .logo {
+                    font-size: 28px;
+                }
+                .footer {
+                    padding: 30px 20px 20px;
+                }
+                .button-group .action-button {
+                    display: block;
+                    margin: 10px 0;
+                }
             }
         </style>
     </head>
     <body>
-        <div class="header">
-            <div class="logo">SafeIn</div>
-        </div>
-        
-        <div class="content-container">
-            <div class="icon-container">
-                <div class="cloud-icon">
-                    <div class="lock-icon"></div>
+        <div class="email-wrapper">
+            <div class="email-container">
+                <div class="header">
+                    <div class="logo">SafeIn</div>
+                    <div class="logo-tagline">Professional Visitor Management System</div>
                 </div>
-            </div>
-            
-            ${content}
-            
-            <div class="footer-text">
-                Thanks
+                
+                <div class="content-wrapper">
+                    <div class="icon-container">
+                        <div class="icon-circle">
+                            <div class="icon-symbol">🔒</div>
+                        </div>
+                    </div>
+                    
+                    ${content}
+                </div>
+                
+                <div class="footer">
+                    <div class="footer-signature">Best Regards,</div>
+                    <div class="footer-company">SafeIn Security Team</div>
+                    <div class="footer-tagline">Professional Visitor Management Solutions</div>
+                    
+                    <div class="footer-links">
+                        <a href="mailto:support@safein.com">Support</a>
+                        <a href="#">Help Center</a>
+                        <a href="#">Privacy Policy</a>
+                    </div>
+                    
+                    <div class="footer-text">
+                        If you have any questions or need assistance, please don't hesitate to contact our support team at 
+                        <a href="mailto:support@safein.com" style="color: #1A73E8; text-decoration: none;">support@safein.com</a>
+                    </div>
+                    
+                    <div class="footer-copyright">
+                        © ${new Date().getFullYear()} SafeIn. All rights reserved.<br>
+                        This is an automated message. Please do not reply to this email.
+                    </div>
+                </div>
             </div>
         </div>
     </body>

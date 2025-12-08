@@ -7,31 +7,39 @@ import { getBaseEmailTemplate } from './base-email.template';
 export function getWelcomeEmailTemplate(companyName: string): string {
   const content = `
             <div class="greeting">
-                Hi ${companyName},
+                Welcome to SafeIn, ${companyName}!
             </div>
             
             <div class="message">
-                Welcome to SafeIn! Your account has been created and verified successfully.
+                We're thrilled to have you on board! Your SafeIn account has been successfully created and verified. You now have access to a comprehensive visitor management system designed to enhance security and streamline your operations.
             </div>
             
             <div class="highlight-box">
-                <h3 style="margin-top: 0; color: #1A73E8;">Get Started:</h3>
-                <ul style="text-align: left; padding-left: 20px;">
-                    <li>Log in to your dashboard to start managing visitors</li>
-                    <li>Set up your company profile and preferences</li>
-                    <li>Add your first employee to the system</li>
-                    <li>Configure your security settings</li>
+                <h3>Get Started in 4 Easy Steps:</h3>
+                <ul>
+                    <li><strong>Access Your Dashboard:</strong> Log in to start managing visitors and appointments</li>
+                    <li><strong>Complete Your Profile:</strong> Set up your company information and preferences</li>
+                    <li><strong>Add Team Members:</strong> Invite employees and configure their access levels</li>
+                    <li><strong>Configure Settings:</strong> Customize security settings and notification preferences</li>
                 </ul>
             </div>
             
             <div class="message">
-                Your account includes secure visitor registration, appointment scheduling, real-time notifications, comprehensive reporting, and 24/7 security monitoring.
+                <strong>What's Included in Your Account:</strong><br><br>
+                ✓ Secure visitor registration and check-in<br>
+                ✓ Advanced appointment scheduling system<br>
+                ✓ Real-time notifications and alerts<br>
+                ✓ Comprehensive reporting and analytics<br>
+                ✓ 24/7 security monitoring and support<br>
+                ✓ Mobile-friendly access from any device
             </div>
             
-            <a href="#" class="action-button">Access Your Dashboard</a>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="#" class="action-button">Access Your Dashboard</a>
+            </div>
             
-            <div class="security-note">
-                If you have any questions or need assistance, please contact our support team at support@safein.com
+            <div class="security-note security-success">
+                <strong>💡 Pro Tip:</strong> Our support team is available 24/7 to help you get started. If you have any questions or need assistance setting up your account, don't hesitate to reach out to us at <a href="mailto:support@safein.com" style="color: #1A73E8; text-decoration: none;">support@safein.com</a>
             </div>
   `;
   

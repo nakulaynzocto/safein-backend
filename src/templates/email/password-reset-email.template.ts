@@ -7,28 +7,33 @@ import { getBaseEmailTemplate } from './base-email.template';
 export function getPasswordResetEmailTemplate(resetUrl: string, companyName: string): string {
   const content = `
             <div class="greeting">
-                Hi ${companyName},
+                Password Reset Request
             </div>
             
             <div class="message">
-                You requested to reset your password. Click the button below to reset it:
+                Hello ${companyName},<br><br>
+                We received a request to reset the password for your SafeIn account. If you made this request, please click the button below to create a new password. If you didn't request this, you can safely ignore this email.
             </div>
             
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="${resetUrl}" 
-                   style="display: inline-block; padding: 14px 28px; background-color: #1A73E8; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                    Reset Password
-                </a>
+            <div style="text-align: center; margin: 35px 0;">
+                <a href="${resetUrl}" class="action-button">Reset My Password</a>
             </div>
             
-            <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 6px; font-size: 13px; color: #666;">
-                <strong>Or copy and paste this link:</strong><br/>
-                <a href="${resetUrl}" style="color: #1A73E8; word-break: break-all;">${resetUrl}</a>
+            <div class="info-box">
+                <strong>Alternative Method:</strong> If the button above doesn't work, you can copy and paste the following link into your browser:<br><br>
+                <a href="${resetUrl}">${resetUrl}</a>
             </div>
             
-            <div class="security-note" style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-                <strong>⚠️ Security Notice:</strong><br/>
-                This link will expire in 1 hour. If you didn't request this password reset, please ignore this email or contact support if you have concerns.
+            <div class="security-note security-warning">
+                <strong>⏱️ Expiration Notice:</strong> This password reset link will expire in <strong>1 hour</strong> for security reasons. If the link expires, you can request a new password reset from the login page.
+            </div>
+            
+            <div class="security-note">
+                <strong>🔒 Security Reminders:</strong><br>
+                • Never share your password reset link with anyone<br>
+                • SafeIn staff will never ask for your password or reset link<br>
+                • If you didn't request this reset, your account remains secure<br>
+                • If you continue to receive unexpected reset emails, please contact our support team immediately
             </div>
   `;
   
@@ -65,6 +70,7 @@ SafeIn Security Management System
 Professional Visitor Management Solutions
   `;
 }
+
 
 
 

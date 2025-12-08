@@ -19,26 +19,32 @@ export function getAppointmentRejectionEmailTemplate(
 
   const content = `
             <div class="greeting">
-                Hi ${visitorName},
+                Appointment Update
             </div>
             
             <div class="message">
-                We regret to inform you that your appointment with ${employeeName} has been declined.
+                Hello ${visitorName},<br><br>
+                We regret to inform you that your appointment request with ${employeeName} has been declined. We understand this may be disappointing, and we sincerely apologize for any inconvenience this may cause.
             </div>
             
-            <div class="highlight-box" style="background-color: #FFF3CD; border-left: 4px solid #FFC107;">
-                <h3 style="margin-top: 0;">Original Appointment Details:</h3>
-                <p><strong>Date:</strong> ${formattedDate}</p>
-                <p><strong>Time:</strong> ${scheduledTime}</p>
-                <p><strong>Employee:</strong> ${employeeName}</p>
+            <div class="highlight-box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 4px solid #ffc107;">
+                <h3>Original Appointment Request:</h3>
+                <p><strong>📅 Date:</strong> ${formattedDate}</p>
+                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
+                <p><strong>👤 Employee:</strong> ${employeeName}</p>
             </div>
             
             <div class="message">
-                We apologize for any inconvenience this may cause. Please feel free to schedule a new appointment at a more convenient time.
+                <strong>What's Next?</strong><br><br>
+                We encourage you to schedule a new appointment at a time that works better for both parties. Our scheduling system is available 24/7, and you can book a new appointment at your convenience.
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="#" class="action-button">Schedule New Appointment</a>
             </div>
             
             <div class="security-note">
-                If you have any questions or need assistance, please don't hesitate to contact us.
+                <strong>💬 Need Assistance?</strong> If you have any questions about this decision or would like to discuss alternative meeting options, please don't hesitate to contact our support team. We're here to help and will do our best to accommodate your needs.
             </div>
   `;
   

@@ -25,36 +25,41 @@ export function getNewAppointmentRequestEmailTemplate(
 
   const content = `
             <div class="greeting">
-                Hi ${employeeName},
+                New Appointment Request
             </div>
             
             <div class="message">
-                You have a new appointment request! Please review the details below and take action.
+                Hello ${employeeName},<br><br>
+                You have received a new appointment request. Please review the details below and take action at your earliest convenience.
             </div>
             
             <div class="highlight-box">
-                <h3 style="margin-top: 0; color: #1A73E8;">Appointment Details:</h3>
-                <p><strong>Date:</strong> ${formattedDate}</p>
-                <p><strong>Time:</strong> ${scheduledTime}</p>
-                <p><strong>Purpose:</strong> ${purpose}</p>
+                <h3>Appointment Details</h3>
+                <p><strong>📅 Date:</strong> ${formattedDate}</p>
+                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
+                <p><strong>📋 Purpose:</strong> ${purpose}</p>
             </div>
             
-            <div class="message">
-                <strong>Visitor Information:</strong><br>
-                Name: ${visitorDetails.name}<br>
-                Email: ${visitorDetails.email}<br>
-                Phone: ${visitorDetails.phone}<br>
-                Company: ${visitorDetails.company || 'Not provided'}<br>
-                Visitor ID: ${visitorDetails.visitorId || 'Not assigned'}
+            <div class="highlight-box" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-left: 4px solid #6c757d;">
+                <h3 style="color: #4a4a4a;">Visitor Information</h3>
+                <p><strong>👤 Name:</strong> ${visitorDetails.name}</p>
+                <p><strong>📧 Email:</strong> <a href="mailto:${visitorDetails.email}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.email}</a></p>
+                <p><strong>📞 Phone:</strong> <a href="tel:${visitorDetails.phone}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.phone}</a></p>
+                <p><strong>🏢 Company:</strong> ${visitorDetails.company || 'Not provided'}</p>
+                ${visitorDetails.visitorId ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails.visitorId}</p>` : ''}
             </div>
             
-            <div style="margin: 30px 0;">
-                <a href="${approveUrl}" class="action-button" style="background-color: #28a745;">Approve Appointment</a>
-                <a href="${rejectUrl}" class="action-button" style="background-color: #dc3545;">Reject Appointment</a>
+            <div class="button-group">
+                <a href="${approveUrl}" class="action-button action-button-secondary">✓ Approve Appointment</a>
+                <a href="${rejectUrl}" class="action-button action-button-danger">✗ Reject Appointment</a>
             </div>
             
-            <div class="security-note">
-                <strong>Important:</strong> Please respond to this request as soon as possible so the visitor can plan accordingly. You can also manage this appointment through your SafeIn dashboard.
+            <div class="security-note security-success">
+                <strong>⏰ Action Required:</strong> Please respond to this request as soon as possible so the visitor can plan accordingly. A timely response helps ensure a smooth experience for all parties involved.
+            </div>
+            
+            <div class="message" style="text-align: center; margin-top: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/dashboard/notifications" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options and to view the full appointment history.
             </div>
   `;
   
