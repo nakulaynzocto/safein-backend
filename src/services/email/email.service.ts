@@ -23,7 +23,7 @@ import {
 export class EmailService {
   private static transporter: nodemailer.Transporter;
   private static isEmailServiceAvailable: boolean = false;
-  private static useHttpFallback: boolean = false; // e.g., Resend HTTP API
+  private static brevoApiDisabled: boolean = false; // Track if Brevo API should be skipped
 
   /**
    * Initialize email transporter
@@ -69,9 +69,6 @@ export class EmailService {
     } catch (error: any) {
       console.error('SMTP connection failed:', error.message);
       this.isEmailServiceAvailable = false;
-      if (process.env.RESEND_API_KEY) {
-        this.useHttpFallback = true;
-      }
       
       if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
         return await this.tryAlternativeSmtpConfigs();
@@ -115,6 +112,142 @@ export class EmailService {
     return false;
   }
 
+  /**
+   * Send email using Brevo API
+   */
+  private static async sendWithBrevo(mail: { to: string; subject: string; html: string; from?: string; text?: string; fromName?: string }) {
+    if (!process.env.BREVO_API_KEY) throw new Error('BREVO_API_KEY not set');
+    
+    const fromEmail = mail.from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app';
+    const fromName = mail.fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management';
+    
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: {
+          name: fromName,
+          email: fromEmail,
+        },
+        to: [
+          {
+            email: mail.to,
+          }
+        ],
+        subject: mail.subject,
+        htmlContent: mail.html,
+        textContent: mail.text || mail.html.replace(/<[^>]*>/g, ''), // Fallback to plain text from HTML
+      }),
+    });
+    
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Brevo API error: ${res.status} ${text}`);
+    }
+    
+    const result = await res.json();
+    return result;
+  }
+
+  /**
+   * Common function to send email with automatic provider selection
+   * Priority: Brevo API > Resend API > SMTP
+   */
+  private static async sendEmail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+    from?: string;
+    fromName?: string;
+    logMessage?: string;
+  }): Promise<void> {
+    const { to, subject, html, text, from, fromName, logMessage } = options;
+
+    // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
+    if (process.env.BREVO_API_KEY && !this.brevoApiDisabled) {
+      try {
+        await this.sendWithBrevo({
+          to,
+          subject,
+          html,
+          text,
+          from,
+          fromName: fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management',
+        });
+        console.log(`✓ ${logMessage || 'Email'} sent via Brevo API`);
+        return;
+      } catch (brevoError: any) {
+        // If it's an authentication error (401), disable Brevo for future attempts
+        if (brevoError.message.includes('401') || brevoError.message.includes('unauthorized') || brevoError.message.includes('Key not found')) {
+          this.brevoApiDisabled = true;
+          console.warn('⚠ Brevo API key is invalid or expired. Disabling Brevo API and using SMTP fallback.');
+        } else {
+          console.error('Brevo API failed:', brevoError.message);
+        }
+        // Don't throw here, try fallback
+      }
+    }
+
+    // Priority 2: Use Resend API if RESEND_API_KEY is set
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await this.sendWithResend({
+          to,
+          subject,
+          html,
+          text,
+          from,
+        });
+        console.log(`✓ ${logMessage || 'Email'} sent via Resend API`);
+        return;
+      } catch (resendError: any) {
+        console.error('Resend API failed:', resendError.message);
+        // Don't throw here, try SMTP fallback
+      }
+    }
+
+    // Priority 3: Fallback to SMTP
+    if (!this.transporter) {
+      this.initializeTransporter();
+    }
+
+    const fromEmail = from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app';
+    const fromNameValue = fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management';
+
+    const mailOptions = {
+      from: `"${fromNameValue}" <${fromEmail}>`,
+      to,
+      subject,
+      html,
+      text: text || html.replace(/<[^>]*>/g, ''),
+    };
+
+    try {
+      if (this.isEmailServiceAvailable) {
+        await this.transporter.sendMail(mailOptions);
+        console.log(`✓ ${logMessage || 'Email'} sent via SMTP`);
+        return;
+      }
+
+      // Try to verify connection if not available
+      const isConnected = await this.verifyConnection();
+      if (isConnected) {
+        await this.transporter.sendMail(mailOptions);
+        console.log(`✓ ${logMessage || 'Email'} sent via SMTP (after verification)`);
+        return;
+      }
+
+      throw new Error('SMTP connection not available');
+    } catch (smtpError: any) {
+      console.error(`Failed to send email via SMTP:`, smtpError.message);
+      throw smtpError;
+    }
+  }
+
   private static async sendWithResend(mail: { to: string; subject: string; html: string; from?: string; text?: string }) {
     if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
     const res = await fetch('https://api.resend.com/emails', {
@@ -142,62 +275,22 @@ export class EmailService {
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
-      if (!this.isEmailServiceAvailable && this.useHttpFallback) {
-        try {
-          await this.sendWithResend({
-            to: email,
-            subject: 'SafeIn Registration - Verify Your Email',
-            html: getOtpEmailTemplate(otp, companyName),
-            text: getOtpEmailText(otp, companyName),
-          });
-          return;
-        } catch (resendError: any) {
-          console.error('Resend fallback failed:', resendError.message);
-        }
-      }
-
-      if (!this.transporter) {
-        this.initializeTransporter();
-      }
-
-      if (this.isEmailServiceAvailable) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'SafeIn Registration - Verify Your Email',
-          html: getOtpEmailTemplate(otp, companyName),
-          text: getOtpEmailText(otp, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
-      }
-
-      const isConnected = await this.verifyConnection();
-      if (isConnected) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'SafeIn Registration - Verify Your Email',
-          html: getOtpEmailTemplate(otp, companyName),
-          text: getOtpEmailText(otp, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
-      }
-
-      if (process.env.NODE_ENV === 'production') {
-        throw new AppError('Failed to send OTP email. Please check email service configuration.', ERROR_CODES.INTERNAL_SERVER_ERROR);
-      }
+      await this.sendEmail({
+        to: email,
+        subject: 'SafeIn Registration - Verify Your Email',
+        html: getOtpEmailTemplate(otp, companyName),
+        text: getOtpEmailText(otp, companyName),
+        logMessage: 'OTP email',
+      });
     } catch (error: any) {
       console.error('Failed to send OTP email:', error.message);
       
       if (process.env.NODE_ENV === 'development') {
+        console.warn('Continuing in development mode despite email error');
         return;
       }
       
-      throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      throw new AppError(`Failed to send OTP email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -206,21 +299,15 @@ export class EmailService {
    */
   static async sendWelcomeEmail(email: string, companyName: string): Promise<void> {
     try {
-      if (!this.transporter) {
-        this.initializeTransporter();
-      }
-
-      const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+      await this.sendEmail({
         to: email,
         subject: 'Welcome to SafeIn - Your Account is Ready!',
         html: getWelcomeEmailTemplate(companyName),
-        text: getWelcomeEmailText(companyName)
-      };
-
-      await this.transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Failed to send welcome email:', error);
+        text: getWelcomeEmailText(companyName),
+        logMessage: 'Welcome email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send welcome email:', error.message);
     }
   }
 
@@ -234,24 +321,15 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    if (!this.isEmailServiceAvailable) {
-      return;
-    }
-
-    if (!this.transporter) {
-      this.initializeTransporter();
-    }
-    
-    const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-      to: visitorEmail,
-      subject: 'Appointment Approved - SafeIn',
-      html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
-      text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime)
-    };
-
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendEmail({
+        to: visitorEmail,
+        subject: 'Appointment Approved - SafeIn',
+        html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
+        text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Appointment approval email',
+      });
     } catch (error: any) {
       console.error('Failed to send appointment approval email:', error.message);
     }
@@ -267,24 +345,15 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    if (!this.isEmailServiceAvailable) {
-      return;
-    }
-
-    if (!this.transporter) {
-      this.initializeTransporter();
-    }
-    
-    const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-      to: visitorEmail,
-      subject: 'Appointment Update - SafeIn',
-      html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
-      text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime)
-    };
-
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendEmail({
+        to: visitorEmail,
+        subject: 'Appointment Update - SafeIn',
+        html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
+        text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Appointment rejection email',
+      });
     } catch (error: any) {
       console.error('Failed to send appointment rejection email:', error.message);
     }
@@ -300,20 +369,17 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    const transporter = this.initializeTransporter();
-    
-    const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-      to: employeeEmail,
-      subject: 'Appointment Approved - SafeIn',
-      html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
-      text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime)
-    };
-
     try {
-      await transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Failed to send appointment approval email to employee:', error);
+      await this.sendEmail({
+        to: employeeEmail,
+        subject: 'Appointment Approved - SafeIn',
+        html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
+        text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Employee appointment approval email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send appointment approval email to employee:', error.message);
       throw error;
     }
   }
@@ -328,20 +394,17 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string
   ): Promise<void> {
-    const transporter = this.initializeTransporter();
-    
-    const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-      to: employeeEmail,
-      subject: 'Appointment Rejected - SafeIn',
-      html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
-      text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime)
-    };
-
     try {
-      await transporter.sendMail(mailOptions);
-    } catch (error) {
-      console.error('Failed to send appointment rejection email to employee:', error);
+      await this.sendEmail({
+        to: employeeEmail,
+        subject: 'Appointment Rejected - SafeIn',
+        html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
+        text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Employee appointment rejection email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send appointment rejection email to employee:', error.message);
       throw error;
     }
   }
@@ -358,24 +421,15 @@ export class EmailService {
     purpose: string,
     appointmentId: string
   ): Promise<void> {
-    if (!this.isEmailServiceAvailable) {
-      return;
-    }
-
-    if (!this.transporter) {
-      this.initializeTransporter();
-    }
-    
-    const mailOptions = {
-      from: `${process.env.SMTP_FROM_NAME || 'SafeIn'} <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-      to: employeeEmail,
-      subject: 'New Appointment Request - SafeIn',
-      html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
-      text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId)
-    };
-
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendEmail({
+        to: employeeEmail,
+        subject: 'New Appointment Request - SafeIn',
+        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
+        text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'New appointment request email',
+      });
     } catch (error: any) {
       console.error('Failed to send new appointment request email:', error.message);
     }
@@ -386,62 +440,22 @@ export class EmailService {
    */
   static async sendPasswordResetEmail(email: string, resetUrl: string, companyName: string): Promise<void> {
     try {
-      if (!this.isEmailServiceAvailable && this.useHttpFallback) {
-        try {
-          await this.sendWithResend({
-            to: email,
-            subject: 'Reset Your Password - SafeIn',
-            html: getPasswordResetEmailTemplate(resetUrl, companyName),
-            text: getPasswordResetEmailText(resetUrl, companyName),
-          });
-          return;
-        } catch (resendError: any) {
-          console.error('Resend fallback failed:', resendError.message);
-        }
-      }
-
-      if (!this.transporter) {
-        this.initializeTransporter();
-      }
-
-      if (this.isEmailServiceAvailable) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'Reset Your Password - SafeIn',
-          html: getPasswordResetEmailTemplate(resetUrl, companyName),
-          text: getPasswordResetEmailText(resetUrl, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
-      }
-
-      const isConnected = await this.verifyConnection();
-      if (isConnected) {
-        const mailOptions = {
-          from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
-          to: email,
-          subject: 'Reset Your Password - SafeIn',
-          html: getPasswordResetEmailTemplate(resetUrl, companyName),
-          text: getPasswordResetEmailText(resetUrl, companyName)
-        };
-
-        await this.transporter.sendMail(mailOptions);
-        return;
-      }
-
-      if (process.env.NODE_ENV === 'production') {
-        throw new AppError('Failed to send password reset email. Please check email service configuration.', ERROR_CODES.INTERNAL_SERVER_ERROR);
-      }
+      await this.sendEmail({
+        to: email,
+        subject: 'Reset Your Password - SafeIn',
+        html: getPasswordResetEmailTemplate(resetUrl, companyName),
+        text: getPasswordResetEmailText(resetUrl, companyName),
+        logMessage: 'Password reset email',
+      });
     } catch (error: any) {
       console.error('Failed to send password reset email:', error.message);
       
       if (process.env.NODE_ENV === 'development') {
+        console.warn('Continuing in development mode despite email error');
         return;
       }
       
-      throw new AppError('Failed to send password reset email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      throw new AppError(`Failed to send password reset email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -450,27 +464,24 @@ export class EmailService {
    */
   static async sendPasswordResetConfirmationEmail(email: string, companyName: string): Promise<void> {
     try {
-      if (!this.transporter) {
-        this.initializeTransporter();
-      }
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #1A73E8;">Password Reset Successful</h2>
+          <p>Hello ${companyName},</p>
+          <p>Your password has been successfully reset.</p>
+          <p>If you did not make this change, please contact our support team immediately.</p>
+          <p>Best regards,<br/>SafeIn Security Team</p>
+        </div>
+      `;
+      const textContent = `Password Reset Successful\n\nHello ${companyName},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nSafeIn Security Team`;
 
-      const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'SafeIn Security Management'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app'}>`,
+      await this.sendEmail({
         to: email,
         subject: 'Password Reset Successful - SafeIn',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #1A73E8;">Password Reset Successful</h2>
-            <p>Hello ${companyName},</p>
-            <p>Your password has been successfully reset.</p>
-            <p>If you did not make this change, please contact our support team immediately.</p>
-            <p>Best regards,<br/>SafeIn Security Team</p>
-          </div>
-        `,
-        text: `Password Reset Successful\n\nHello ${companyName},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nSafeIn Security Team`
-      };
-
-      await this.transporter.sendMail(mailOptions);
+        html: htmlContent,
+        text: textContent,
+        logMessage: 'Password reset confirmation email',
+      });
     } catch (error: any) {
       console.error('Failed to send password reset confirmation email:', error.message);
     }
