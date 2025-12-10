@@ -101,6 +101,7 @@ export interface IAppointmentResponse {
     deletedBy?: string;
     createdAt: Date;
     updatedAt: Date;
+    approvalLink?: string | null; // One-time approval link
 }
 
 export interface IGetAppointmentsQuery {

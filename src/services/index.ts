@@ -5,3 +5,4 @@ export * from './visitor/visitor.service';
 export * from './subscription/subscription.service';
 export * from './userSubscription/userSubscription.service';
 export * from './upload/upload.service';
+export * from './whatsapp/whatsapp.service';

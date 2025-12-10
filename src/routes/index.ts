@@ -7,6 +7,8 @@ import subscriptionRoutes from './subscription/subscription.routes';
 import userSubscriptionRoutes from './userSubscription/userSubscription.routes';
 import uploadRoutes from './upload/upload.routes';
 import stripeRoutes from './stripe/stripe.routes';
+import approvalLinkRoutes from './approvalLink/approvalLink.routes';
+import settingsRoutes from './settings/settings.routes';
 
 const router = Router();
 
@@ -19,6 +21,10 @@ router.get('/health', (_req, res) => {
   });
 });
 
+// Public routes (no authentication required)
+router.use('/', approvalLinkRoutes);
+
+// Protected routes (authentication required)
 router.use('/users', userRoutes);
 router.use('/employees', employeeRoutes);
 router.use('/appointments', appointmentRoutes);
@@ -27,5 +33,6 @@ router.use('/subscription-plans', subscriptionRoutes);
 router.use('/user-subscriptions', userSubscriptionRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/stripe', stripeRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;
