@@ -1,12 +1,12 @@
 import { Response, NextFunction } from 'express';
 import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 import { StripeService } from '../../services/stripe/stripe.service';
+import { RazorpayService } from '../../services/razorpay/razorpay.service';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateUserSubscriptionDTO,
     IUpdateUserSubscriptionDTO,
     IGetUserSubscriptionsQuery,
-    IStripeCheckoutSessionRequest,
     IAssignFreePlanRequest,
     IGetUserActiveSubscriptionRequest,
     ICheckPremiumSubscriptionRequest
@@ -128,25 +128,24 @@ export class UserSubscriptionController {
     }
 
     /**
-     * Create Stripe checkout session
-     * POST /api/v1/stripe/checkout-session
+     * Create Razorpay order for subscription
+     * POST /api/v1/user-subscriptions/razorpay/checkout
      */
     @TryCatch('Failed to create checkout session')
-    static async createCheckoutSession(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    static async createRazorpayCheckout(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const request: IStripeCheckoutSessionRequest = {
+        const request = {
             planId: req.body.planId,
             successUrl: req.body.successUrl,
             cancelUrl: req.body.cancelUrl,
-            customerEmail: req.user.email
         };
 
-        const session = await StripeService.createCheckoutSession(request, req.user._id.toString());
+        const order = await RazorpayService.createOrder(request, req.user._id.toString());
 
-        ResponseUtil.success(res, 'Checkout session created successfully', session, ERROR_CODES.CREATED);
+        ResponseUtil.success(res, 'Checkout session created successfully', order, ERROR_CODES.CREATED);
     }
 
     /**

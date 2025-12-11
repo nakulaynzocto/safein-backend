@@ -46,9 +46,9 @@ router.get(
 );
 
 router.post(
-    '/stripe/checkout',
+    '/razorpay/checkout',
     validateRequest(stripeCheckoutSessionValidation),
-    asyncWrapper(UserSubscriptionController.createCheckoutSession)
+    asyncWrapper(UserSubscriptionController.createRazorpayCheckout)
 );
 
 router.get(
