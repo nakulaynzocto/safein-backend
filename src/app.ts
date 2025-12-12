@@ -14,8 +14,6 @@ import routes from './routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
-import { StripeService } from './services/stripe/stripe.service';
-import { webhookHandler } from './routes/stripe/stripe.routes';
 
 const app: Express = express();
 
@@ -25,20 +23,6 @@ EmailService.initializeTransporter();
 EmailService.verifyConnection().catch((error) => {
   console.error('Email service initialization error:', error);
 });
-
-try {
-  StripeService.initialize();
-} catch (error) {
-  console.error('Stripe service initialization failed:', error);
-}
-
-// Stripe webhook route - must be registered BEFORE other middlewares
-// to receive raw body for signature verification
-// This route bypasses helmet, cors, and rate limiting for Stripe webhooks
-app.use('/api/v1/stripe/webhook', 
-  express.raw({ type: 'application/json' }),
-  webhookHandler
-);
 
 app.use(helmet({
   // Disable contentSecurityPolicy for webhook route

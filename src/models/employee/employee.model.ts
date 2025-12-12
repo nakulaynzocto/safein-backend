@@ -5,6 +5,7 @@ export interface IEmployee extends Document {
     email: string;
     phone: string;
     department: string;
+    designation?: string;
     status: 'Active' | 'Inactive';
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the employee
     isDeleted: boolean;
@@ -41,6 +42,13 @@ const employeeSchema = new Schema<IEmployee>({
         trim: true,
         minlength: [2, 'Department must be at least 2 characters long'],
         maxlength: [50, 'Department cannot exceed 50 characters']
+    },
+    designation: {
+        type: String,
+        trim: true,
+        minlength: [2, 'Position must be at least 2 characters long'],
+        maxlength: [100, 'Position cannot exceed 100 characters'],
+        default: '',
     },
     status: {
         type: String,

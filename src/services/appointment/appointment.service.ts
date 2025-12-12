@@ -34,12 +34,16 @@ export class AppointmentService {
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
+        if (employee.status === 'Inactive') {
+            throw new AppError('Employee is inactive. Please select an active employee.', ERROR_CODES.BAD_REQUEST);
+        }
 
+        // Prevent double booking for the same employee, date, and time while an earlier appointment is pending/approved
         const conflictAppointment = await Appointment.findOne({
             employeeId: appointmentData.employeeId,
             'appointmentDetails.scheduledDate': appointmentData.appointmentDetails.scheduledDate,
             'appointmentDetails.scheduledTime': appointmentData.appointmentDetails.scheduledTime,
-            status: { $in: ['scheduled', 'checked_in', 'in_meeting'] },
+            status: 'approved',
             isDeleted: false
         }).session(session);
 
@@ -287,12 +291,26 @@ export class AppointmentService {
         }
 
         if (startDate && endDate) {
-            const start = new Date(startDate)
-            const endExclusive = new Date(endDate)
-            endExclusive.setDate(endExclusive.getDate() + 1)
+            const start = new Date(startDate);
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
 
             filter['appointmentDetails.scheduledDate'] = {
                 $gte: start,
+                $lt: endExclusive
+            };
+        } else if (startDate && !endDate) {
+            const start = new Date(startDate);
+            const endExclusive = new Date(startDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            filter['appointmentDetails.scheduledDate'] = {
+                $gte: start,
+                $lt: endExclusive
+            };
+        } else if (!startDate && endDate) {
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            filter['appointmentDetails.scheduledDate'] = {
                 $lt: endExclusive
             };
         }

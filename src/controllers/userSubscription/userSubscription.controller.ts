@@ -1,7 +1,5 @@
 import { Response, NextFunction } from 'express';
 import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
-import { StripeService } from '../../services/stripe/stripe.service';
-import { RazorpayService } from '../../services/razorpay/razorpay.service';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateUserSubscriptionDTO,
@@ -15,6 +13,7 @@ import { ERROR_CODES, TRIAL_LIMITS } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { RazorpayService } from '../../services/razorpay/razorpay.service';
 
 export class UserSubscriptionController {
     /**
@@ -29,11 +28,10 @@ export class UserSubscriptionController {
 
         const request: IAssignFreePlanRequest = {
             userId: req.user._id.toString(),
-            stripeCustomerId: req.user.stripeCustomerId,
         };
 
         // Free trial: 3 days only, planType = 'free'
-        const subscription = await UserSubscriptionService.createFreeTrial(request.userId, request.stripeCustomerId as string, 3);
+        const subscription = await UserSubscriptionService.createFreeTrial(request.userId);
 
         ResponseUtil.success(res, 'Free plan assigned successfully', subscription, ERROR_CODES.CREATED);
     }
@@ -149,40 +147,33 @@ export class UserSubscriptionController {
     }
 
     /**
-     * Create Stripe checkout session for free plan card verification
-     * POST /api/v1/user-subscriptions/stripe/checkout-free
+     * Verify Razorpay payment and activate subscription
+     * POST /api/v1/user-subscriptions/razorpay/verify
      */
-    @TryCatch('Failed to create free plan verification session')
-    static async createFreePlanVerificationSession(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    @TryCatch('Failed to verify Razorpay payment')
+    static async verifyRazorpayPayment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const data = {
-            successUrl: req.body.successUrl,
-            cancelUrl: req.body.cancelUrl,
-        };
+        const { orderId, paymentId, signature, planId } = req.body;
 
-        const session = await StripeService.createFreePlanVerificationSession(data, req.user._id.toString());
+        const isValid = RazorpayService.verifyPaymentSignature({
+            razorpayOrderId: orderId,
+            razorpayPaymentId: paymentId,
+            razorpaySignature: signature,
+        });
 
-        ResponseUtil.success(res, 'Free plan verification session created successfully', session, ERROR_CODES.CREATED);
-    }
-
-    /**
-     * Handle Stripe webhook
-     * POST /api/v1/stripe/webhook
-     */
-    @TryCatch('Failed to handle webhook')
-    static async handleStripeWebhook(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        const signature = req.headers['stripe-signature'] as string;
-
-        if (!signature) {
-            throw new AppError('Stripe signature is required', ERROR_CODES.BAD_REQUEST);
+        if (!isValid) {
+            throw new AppError('Invalid Razorpay signature', ERROR_CODES.BAD_REQUEST);
         }
 
-        await StripeService.handleWebhookEvent(req.body, signature);
+        const subscription = await UserSubscriptionService.createPaidSubscriptionFromPlan(
+            req.user._id.toString(),
+            planId,
+        );
 
-        ResponseUtil.success(res, 'Webhook processed successfully');
+        ResponseUtil.success(res, 'Payment verified and subscription activated', subscription, ERROR_CODES.CREATED);
     }
 
     /**

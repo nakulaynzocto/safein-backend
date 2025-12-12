@@ -6,7 +6,6 @@ import visitorRoutes from './visitor/visitor.routes';
 import subscriptionRoutes from './subscription/subscription.routes';
 import userSubscriptionRoutes from './userSubscription/userSubscription.routes';
 import uploadRoutes from './upload/upload.routes';
-import stripeRoutes from './stripe/stripe.routes';
 import approvalLinkRoutes from './approvalLink/approvalLink.routes';
 import settingsRoutes from './settings/settings.routes';
 
@@ -32,7 +31,6 @@ router.use('/visitors', visitorRoutes);
 router.use('/subscription-plans', subscriptionRoutes);
 router.use('/user-subscriptions', userSubscriptionRoutes);
 router.use('/upload', uploadRoutes);
-router.use('/stripe', stripeRoutes);
 router.use('/settings', settingsRoutes);
 
 export default router;

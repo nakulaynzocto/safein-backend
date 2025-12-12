@@ -14,6 +14,7 @@ export interface IAppointment extends mongoose.Document {
             image?: string;
         };
     };
+    accompanyingCount?: number;
     appointmentDetails: {
         purpose: string;
         scheduledDate: Date;
@@ -103,6 +104,12 @@ const appointmentSchema = new Schema<IAppointment>(
                     trim: true
                 }
             }
+        },
+        accompanyingCount: {
+            type: Number,
+            min: [0, 'Accompanying people cannot be negative'],
+            max: [20, 'Accompanying people cannot exceed 20'],
+            default: 0,
         },
         appointmentDetails: {
             purpose: {

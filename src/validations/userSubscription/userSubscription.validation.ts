@@ -60,21 +60,6 @@ export const createUserSubscriptionValidation = Joi.object({
             'string.empty': 'Billing cycle is required',
             'any.only': 'Billing cycle must be one of: monthly, quarterly, yearly'
         }),
-    stripeSubscriptionId: Joi.string()
-        .optional()
-        .trim(),
-    stripeCustomerId: Joi.string()
-        .optional()
-        .trim(),
-    stripePriceId: Joi.string()
-        .optional()
-        .trim(),
-    stripePaymentMethodId: Joi.string()
-        .optional()
-        .trim(),
-    stripeInvoiceId: Joi.string()
-        .optional()
-        .trim(),
     metadata: Joi.object()
         .optional()
         .pattern(Joi.string(), Joi.any())
@@ -119,21 +104,6 @@ export const updateUserSubscriptionValidation = Joi.object({
         .messages({
             'any.only': 'Billing cycle must be one of: monthly, quarterly, yearly'
         }),
-    stripeSubscriptionId: Joi.string()
-        .optional()
-        .trim(),
-    stripeCustomerId: Joi.string()
-        .optional()
-        .trim(),
-    stripePriceId: Joi.string()
-        .optional()
-        .trim(),
-    stripePaymentMethodId: Joi.string()
-        .optional()
-        .trim(),
-    stripeInvoiceId: Joi.string()
-        .optional()
-        .trim(),
     metadata: Joi.object()
         .optional()
         .pattern(Joi.string(), Joi.any())
@@ -202,7 +172,7 @@ export const getUserSubscriptionsValidation = Joi.object({
         })
 });
 
-export const stripeCheckoutSessionValidation = Joi.object({
+export const razorpayCheckoutValidation = Joi.object({
     planId: Joi.string()
         .required()
         .pattern(/^[0-9a-fA-F]{24}$/)
@@ -222,6 +192,31 @@ export const stripeCheckoutSessionValidation = Joi.object({
         .messages({
             'string.uri': 'Cancel URL must be a valid URI'
         })
+});
+
+export const razorpayVerifyValidation = Joi.object({
+    planId: Joi.string()
+        .required()
+        .pattern(/^[0-9a-fA-F]{24}$/)
+        .messages({
+            'string.empty': 'Plan ID is required',
+            'string.pattern.base': 'Invalid plan ID format'
+        }),
+    orderId: Joi.string()
+        .required()
+        .messages({
+            'string.empty': 'Order ID is required',
+        }),
+    paymentId: Joi.string()
+        .required()
+        .messages({
+            'string.empty': 'Payment ID is required',
+        }),
+    signature: Joi.string()
+        .required()
+        .messages({
+            'string.empty': 'Signature is required',
+        }),
 });
 
 export const assignFreePlanValidation = Joi.object({

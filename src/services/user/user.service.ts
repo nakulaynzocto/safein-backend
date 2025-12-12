@@ -13,7 +13,6 @@ import { JwtUtil } from '../../utils/jwt.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
-import { StripeService } from '../stripe/stripe.service';
 import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 import * as crypto from 'crypto';
 
@@ -85,14 +84,6 @@ export class UserService {
     }
 
     const user = new User(otpData.userData);
-    await user.save({ session });
-
-    const stripeCustomer = await StripeService.findOrCreateCustomer({
-        email: user.email,
-        name: user.companyName,
-        metadata: { userId: user._id.toString() },
-    });
-    user.stripeCustomerId = stripeCustomer.id;
     await user.save({ session });
 
     // According to documentation: After OTP verification, subscription_status should be "pending"
@@ -178,22 +169,13 @@ export class UserService {
     }
 
     user.lastLoginAt = new Date();
-    if (!user.stripeCustomerId) {
-        const stripeCustomer = await StripeService.findOrCreateCustomer({
-            email: user.email,
-            name: user.companyName,
-            metadata: { userId: user._id.toString() },
-        });
-        user.stripeCustomerId = stripeCustomer.id;
-    }
     await user.save({ session });
 
     try {
       const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(user._id.toString());
-      if (!activeSubscription && user.stripeCustomerId) {
+      if (!activeSubscription) {
         await UserSubscriptionService.createFreeTrial(
           user._id.toString(),
-          user.stripeCustomerId,
           3
         );
       }

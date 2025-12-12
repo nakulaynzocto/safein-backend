@@ -82,6 +82,26 @@ export class RazorpayService {
             throw new AppError('Failed to create Razorpay order', ERROR_CODES.INTERNAL_SERVER_ERROR);
         }
     }
+
+    static verifyPaymentSignature(params: {
+        razorpayOrderId: string;
+        razorpayPaymentId: string;
+        razorpaySignature: string;
+    }): boolean {
+        const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = params;
+        if (!razorpayConfig.keySecret) {
+            throw new AppError('Razorpay key secret is not configured', ERROR_CODES.INTERNAL_SERVER_ERROR);
+        }
+
+        const crypto = require('crypto');
+        const payload = `${razorpayOrderId}|${razorpayPaymentId}`;
+        const expectedSignature = crypto
+            .createHmac('sha256', razorpayConfig.keySecret)
+            .update(payload)
+            .digest('hex');
+
+        return expectedSignature === razorpaySignature;
+    }
 }
 
 

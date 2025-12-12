@@ -7,8 +7,6 @@ export interface IUserSubscription extends Document {
     endDate: Date;
     isActive: boolean;
     paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-    stripeCustomerId?: string; // Stripe Customer ID associated with the user
-    stripeSubscriptionId?: string; // Stripe Subscription ID for recurring payments
     trialDays?: number; // Number of trial days, if applicable
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
@@ -24,8 +22,6 @@ export interface ICreateUserSubscriptionDTO {
     endDate?: Date;
     isActive?: boolean;
     paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-    stripeCustomerId?: string;
-    stripeSubscriptionId?: string;
     trialDays?: number;
 }
 
@@ -35,8 +31,6 @@ export interface IUpdateUserSubscriptionDTO {
     endDate?: Date;
     isActive?: boolean;
     paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-    stripeCustomerId?: string;
-    stripeSubscriptionId?: string;
     trialDays?: number;
     isDeleted?: boolean;
     deletedAt?: Date;
@@ -51,8 +45,6 @@ export interface IUserSubscriptionResponse {
     endDate: Date;
     isActive: boolean;
     paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-    stripeCustomerId?: string;
-    stripeSubscriptionId?: string;
     trialDays: number;
     isTrialing: boolean; // Derived field
     isDeleted: boolean;
@@ -101,80 +93,8 @@ export interface IUserSubscriptionStats {
     averageSubscriptionValue: number;
 }
 
-export interface IStripeCheckoutSessionRequest {
-    planId: string;
-    successUrl?: string;
-    cancelUrl?: string;
-    customerEmail?: string;
-}
-
-export interface IStripeCheckoutSessionResponse {
-    sessionId: string;
-    url: string;
-}
-
-export interface IStripeWebhookEvent {
-    id: string;
-    type: string;
-    data: {
-        object: any;
-    };
-    created: number;
-}
-
-export interface IStripeCustomer {
-    id: string;
-    email: string;
-    name?: string;
-    metadata?: { [key: string]: string };
-}
-
-export interface IStripeSubscription {
-    id: string;
-    customer: string;
-    status: string;
-    current_period_start: number;
-    current_period_end: number;
-    trial_start?: number;
-    trial_end?: number;
-    cancel_at_period_end: boolean;
-    items: {
-        data: Array<{
-            price: {
-                id: string;
-                unit_amount: number;
-                currency: string;
-                recurring: {
-                    interval: string;
-                };
-            };
-        }>;
-    };
-    metadata?: { [key: string]: string };
-}
-
-export interface IStripePrice {
-    id: string;
-    product: string;
-    unit_amount: number;
-    currency: string;
-    recurring?: {
-        interval: string;
-        interval_count: number;
-    };
-    metadata?: { [key: string]: string };
-}
-
-export interface IStripeProduct {
-    id: string;
-    name: string;
-    description?: string;
-    metadata?: { [key: string]: string };
-}
-
 export interface IAssignFreePlanRequest {
     userId: string;
-    stripeCustomerId?: string;
 }
 
 export interface IGetUserActiveSubscriptionRequest {
@@ -185,16 +105,5 @@ export interface ICheckPremiumSubscriptionRequest {
     userId: string;
 }
 
-export interface ICreateStripeCustomerRequest {
-    email: string;
-    name?: string;
-    metadata?: { [key: string]: string };
-}
-
-export interface IUpdateStripeCustomerRequest {
-    customerId: string;
-    email?: string;
-    name?: string;
-    metadata?: { [key: string]: string };
-}
+// Stripe customer interfaces removed (Razorpay-only integration)
 

@@ -8,27 +8,13 @@ import {
     updateUserSubscriptionValidation,
     userSubscriptionParamsValidation,
     getUserSubscriptionsValidation,
-    stripeCheckoutSessionValidation
+    razorpayCheckoutValidation,
+    razorpayVerifyValidation,
 } from '../../validations/userSubscription/userSubscription.validation';
 
 const router = Router();
 
-router.post(
-    '/stripe/webhook',
-    asyncWrapper(UserSubscriptionController.handleStripeWebhook)
-);
-
 router.use(verifyToken);
-
-router.post(
-    '/assign-free-plan',
-    asyncWrapper(UserSubscriptionController.assignFreePlanToNewUser)
-);
-
-router.post(
-    '/stripe/checkout-free',
-    asyncWrapper(UserSubscriptionController.createFreePlanVerificationSession)
-);
 
 router.get(
     '/active/:userId',
@@ -47,8 +33,14 @@ router.get(
 
 router.post(
     '/razorpay/checkout',
-    validateRequest(stripeCheckoutSessionValidation),
+    validateRequest(razorpayCheckoutValidation),
     asyncWrapper(UserSubscriptionController.createRazorpayCheckout)
+);
+
+router.post(
+    '/razorpay/verify',
+    validateRequest(razorpayVerifyValidation),
+    asyncWrapper(UserSubscriptionController.verifyRazorpayPayment)
 );
 
 router.get(

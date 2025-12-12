@@ -7,13 +7,14 @@ import { Appointment } from '../../models/appointment/appointment.model';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
 import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats } from '../../types/userSubscription/userSubscription.types';
+import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 
 export class UserSubscriptionService {
     /**
      * Activate a free trial for a user.
-     * This is typically called after successful payment method verification via Stripe Setup Intent.
+     * This is typically called after verifying eligibility (no payment provider dependency).
      */
-    static async createFreeTrial(userId: string, stripeCustomerId: string, trialDays: number = 3): Promise<IUserSubscription & Document> {
+    static async createFreeTrial(userId: string, trialDays: number = 3): Promise<IUserSubscription & Document> {
         const session = await mongoose.startSession();
         session.startTransaction();
         try {
@@ -50,7 +51,6 @@ export class UserSubscriptionService {
                 endDate,
                 isActive: true,
                 paymentStatus: 'succeeded',
-                stripeCustomerId,
                 trialDays,
             });
 
@@ -92,6 +92,86 @@ export class UserSubscriptionService {
         } catch (error) {
             throw error;
         }
+    }
+
+    /**
+     * Create a paid subscription after successful Razorpay payment
+     */
+    static async createPaidSubscriptionFromPlan(
+        userId: string,
+        planId: string
+    ): Promise<IUserSubscription & Document> {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+        try {
+            const plan = await SubscriptionPlan.findOne({
+                _id: new mongoose.Types.ObjectId(planId),
+                isDeleted: false,
+                isActive: true,
+            }).session(session);
+
+            if (!plan) {
+                throw new AppError('Subscription plan not found or inactive', ERROR_CODES.NOT_FOUND);
+            }
+
+            // Deactivate existing active subscription (if any)
+            await UserSubscription.updateMany(
+                {
+                    userId: new mongoose.Types.ObjectId(userId),
+                    isActive: true,
+                    isDeleted: false,
+                },
+                {
+                    $set: { isActive: false, paymentStatus: 'cancelled', endDate: new Date() },
+                },
+                { session }
+            );
+
+            const startDate = new Date();
+            const endDate = this.calculateEndDate(startDate, plan.planType);
+
+            const subscription = new UserSubscription({
+                userId: new mongoose.Types.ObjectId(userId),
+                planType: plan.planType,
+                startDate,
+                endDate,
+                isActive: true,
+                paymentStatus: 'succeeded',
+                trialDays: plan.trialDays || 0,
+            });
+
+            await subscription.save({ session });
+            await session.commitTransaction();
+            return subscription;
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+    }
+
+    private static calculateEndDate(startDate: Date, planType: string): Date {
+        const end = new Date(startDate);
+        switch (planType) {
+            case 'weekly':
+                end.setDate(end.getDate() + 7);
+                break;
+            case 'monthly':
+                end.setMonth(end.getMonth() + 1);
+                break;
+            case 'quarterly':
+                end.setMonth(end.getMonth() + 3);
+                break;
+            case 'yearly':
+                end.setFullYear(end.getFullYear() + 1);
+                break;
+            case 'free':
+            default:
+                end.setDate(end.getDate() + 30);
+                break;
+        }
+        return end;
     }
 
     /**
@@ -349,8 +429,6 @@ export class UserSubscriptionService {
             endDate: subscription.endDate,
             isActive: subscription.isActive,
             paymentStatus: subscription.paymentStatus,
-            stripeCustomerId: subscription.stripeCustomerId,
-            stripeSubscriptionId: subscription.stripeSubscriptionId,
             trialDays: subscription.trialDays || 0,
             isTrialing,
             isDeleted: subscription.isDeleted,

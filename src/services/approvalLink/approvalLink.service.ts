@@ -1,9 +1,18 @@
 import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
-import { ERROR_CODES } from '../../utils/constants';
+import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
 
 export class ApprovalLinkService {
+    private static getBaseUrl(): string {
+        if (CONSTANTS.FRONTEND_URL && CONSTANTS.FRONTEND_URL !== 'http://localhost:3000') {
+            return CONSTANTS.FRONTEND_URL;
+        }
+        if (CONSTANTS.FRONTEND_URLS.length > 0) {
+            return CONSTANTS.FRONTEND_URLS[0];
+        }
+        return 'http://localhost:3000';
+    }
     /**
      * Generate a secure random token
      */
@@ -18,8 +27,7 @@ export class ApprovalLinkService {
         // Check if approval link already exists
         const existingLink = await ApprovalLink.findOne({ appointmentId });
         if (existingLink) {
-            // Return existing link if already created
-            const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const baseUrl = this.getBaseUrl();
             return {
                 token: existingLink.token,
                 link: `${baseUrl}/verify/${existingLink.token}`
@@ -46,7 +54,7 @@ export class ApprovalLinkService {
 
         await approvalLink.save();
 
-        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const baseUrl = this.getBaseUrl();
         const link = `${baseUrl}/verify/${token}`;
 
         return { token, link };
@@ -148,7 +156,7 @@ export class ApprovalLinkService {
             return null;
         }
 
-        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const baseUrl = this.getBaseUrl();
         const link = `${baseUrl}/verify/${approvalLink.token}`;
 
         return {

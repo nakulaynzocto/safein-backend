@@ -63,6 +63,7 @@ export interface ICreateAppointmentDTO {
     employeeId: string;
     visitorId: string; // Reference to Visitor
     accompaniedBy?: IAccompaniedBy;
+    accompanyingCount?: number;
     appointmentDetails: IAppointmentDetails;
     securityDetails?: ISecurityDetails;
     notifications?: INotifications;
@@ -72,6 +73,7 @@ export interface IUpdateAppointmentDTO {
     employeeId?: string;
     visitorId?: string; // Reference to Visitor
     accompaniedBy?: Partial<IAccompaniedBy>;
+    accompanyingCount?: number;
     appointmentDetails?: Partial<IAppointmentDetails>;
     status?: AppointmentStatus;
     checkInTime?: Date;

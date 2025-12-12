@@ -3,6 +3,7 @@ export interface ICreateEmployeeDTO {
     email: string;
     phone: string;
     department: string;
+    designation?: string;
     status?: 'Active' | 'Inactive';
 }
 
@@ -11,6 +12,7 @@ export interface IUpdateEmployeeDTO {
     email?: string;
     phone?: string;
     department?: string;
+    designation?: string;
     status?: 'Active' | 'Inactive';
 }
 
@@ -20,6 +22,7 @@ export interface IEmployeeResponse {
     email: string;
     phone: string;
     department: string;
+    designation?: string;
     status: 'Active' | 'Inactive';
     createdBy: string;
     isDeleted: boolean;

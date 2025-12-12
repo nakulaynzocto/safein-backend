@@ -7,8 +7,6 @@ export interface IUserSubscription extends Document {
     endDate: Date;
     isActive: boolean;
     paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
-    stripeCustomerId?: string; // Stripe Customer ID associated with the user
-    stripeSubscriptionId?: string; // Stripe Subscription ID for recurring payments
     trialDays?: number; // Number of trial days, if applicable
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
@@ -45,14 +43,6 @@ const userSubscriptionSchema = new Schema<IUserSubscription>({
         enum: ['pending', 'succeeded', 'failed', 'cancelled'],
         default: 'pending',
         },
-        stripeCustomerId: {
-            type: String,
-        required: false, // Not required for free trials initially
-        },
-    stripeSubscriptionId: {
-            type: String,
-        required: false, // Only for paid recurring subscriptions
-    },
     trialDays: {
         type: Number,
         default: 0,
