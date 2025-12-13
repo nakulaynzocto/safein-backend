@@ -15,6 +15,7 @@ import routes from './routes';
 import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
+import { webhookRouter } from './routes/userSubscription/userSubscription.routes';
 
 const app: Express = express();
 
@@ -54,6 +55,10 @@ if (CONSTANTS.NODE_ENV === 'development') {
 app.use(morgan(errorFormat, morganErrorOptions));
 
 app.use(generalLimiter);
+
+// Webhook route must be registered BEFORE express.json() to capture raw body
+// This allows us to verify the webhook signature using the raw request body
+app.use('/api/v1/user-subscriptions', webhookRouter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
