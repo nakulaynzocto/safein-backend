@@ -171,6 +171,8 @@ export class UserSubscriptionController {
         const subscription = await UserSubscriptionService.createPaidSubscriptionFromPlan(
             req.user._id.toString(),
             planId,
+            orderId,
+            paymentId
         );
 
         ResponseUtil.success(res, 'Payment verified and subscription activated', subscription, ERROR_CODES.CREATED);
@@ -374,9 +376,14 @@ export class UserSubscriptionController {
                 return;
             }
 
-            // Create subscription from plan
-            await UserSubscriptionService.createPaidSubscriptionFromPlan(userId, planId);
-            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via webhook`);
+            // Create subscription from plan with idempotency check
+            await UserSubscriptionService.createPaidSubscriptionFromPlan(
+                userId, 
+                planId,
+                orderId,
+                paymentId
+            );
+            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via webhook (Order: ${orderId}, Payment: ${paymentId})`);
         } catch (error: any) {
             console.error('Error handling payment.captured:', error);
             // Don't throw - webhook should still return 200

@@ -8,6 +8,8 @@ export interface IUserSubscription extends Document {
     isActive: boolean;
     paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
     trialDays?: number; // Number of trial days, if applicable
+    razorpayOrderId?: string; // Razorpay order ID for tracking
+    razorpayPaymentId?: string; // Razorpay payment ID for idempotency
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     deletedBy?: mongoose.Types.ObjectId; // User who deleted this subscription
@@ -46,6 +48,16 @@ const userSubscriptionSchema = new Schema<IUserSubscription>({
     trialDays: {
         type: Number,
         default: 0,
+    },
+    razorpayOrderId: {
+        type: String,
+        default: null,
+        index: true, // Index for faster lookups
+    },
+    razorpayPaymentId: {
+        type: String,
+        default: null,
+        index: true, // Index for faster lookups and idempotency
     },
         isDeleted: {
             type: Boolean,

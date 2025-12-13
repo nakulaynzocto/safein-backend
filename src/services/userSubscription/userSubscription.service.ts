@@ -96,14 +96,31 @@ export class UserSubscriptionService {
 
     /**
      * Create a paid subscription after successful Razorpay payment
+     * Includes idempotency check to prevent duplicate processing
      */
     static async createPaidSubscriptionFromPlan(
         userId: string,
-        planId: string
+        planId: string,
+        razorpayOrderId?: string,
+        razorpayPaymentId?: string
     ): Promise<IUserSubscription & Document> {
         const session = await mongoose.startSession();
         session.startTransaction();
         try {
+            // IDEMPOTENCY CHECK: If paymentId exists, check if subscription already created for this payment
+            if (razorpayPaymentId) {
+                const existingSubscription = await UserSubscription.findOne({
+                    razorpayPaymentId: razorpayPaymentId,
+                    isDeleted: false,
+                }).session(session);
+
+                if (existingSubscription) {
+                    console.log(`⚠️ Subscription already exists for payment ${razorpayPaymentId}. Skipping duplicate creation.`);
+                    await session.abortTransaction();
+                    return existingSubscription; // Return existing subscription (idempotent)
+                }
+            }
+
             const plan = await SubscriptionPlan.findOne({
                 _id: new mongoose.Types.ObjectId(planId),
                 isDeleted: false,
@@ -138,6 +155,8 @@ export class UserSubscriptionService {
                 isActive: true,
                 paymentStatus: 'succeeded',
                 trialDays: plan.trialDays || 0,
+                razorpayOrderId: razorpayOrderId || undefined,
+                razorpayPaymentId: razorpayPaymentId || undefined,
             });
 
             await subscription.save({ session });
