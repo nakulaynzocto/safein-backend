@@ -55,7 +55,8 @@ export class RazorpayService {
         }
 
         // Razorpay expects amount in the smallest currency unit (paise for INR)
-        const amountInSubUnits = Math.round((plan.amount || 0) * 100);
+        // Note: plan.amount is already stored in paise (smallest currency unit), so no multiplication needed
+        const amountInSubUnits = Math.round(plan.amount || 0);
         const planId = (plan as any)._id ? (plan as any)._id.toString() : String(data.planId);
 
         try {
