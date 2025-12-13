@@ -58,7 +58,7 @@ app.use(generalLimiter);
 
 // Webhook route must be registered BEFORE express.json() to capture raw body
 // This allows us to verify the webhook signature using the raw request body
-app.use('/api/v1/user-subscriptions', webhookRouter);
+app.use('/api/v1/webhooks/razorpay', webhookRouter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

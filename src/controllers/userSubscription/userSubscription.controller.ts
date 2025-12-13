@@ -286,6 +286,7 @@ export class UserSubscriptionController {
     @TryCatch('Failed to process Razorpay webhook')
     static async handleRazorpayWebhook(req: any, res: Response, _next: NextFunction): Promise<void> {
         // Get webhook signature from header
+        // console.log('Razorpay webhook headers:', req.headers);
         const webhookSignature = req.headers['x-razorpay-signature'];
         
         if (!webhookSignature) {
@@ -320,17 +321,17 @@ export class UserSubscriptionController {
         switch (eventType) {
             case 'payment.captured':
                 // Payment successfully captured
-                await this.handlePaymentCaptured(payload);
+                await UserSubscriptionController.handlePaymentCaptured(payload);
                 break;
 
             case 'payment.failed':
                 // Payment failed
-                await this.handlePaymentFailed(payload);
+                await UserSubscriptionController.handlePaymentFailed(payload);
                 break;
 
             case 'order.paid':
                 // Order paid (alternative to payment.captured)
-                await this.handleOrderPaid(payload);
+                await UserSubscriptionController.handleOrderPaid(payload);
                 break;
 
             default:
@@ -383,7 +384,7 @@ export class UserSubscriptionController {
                 orderId,
                 paymentId
             );
-            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via webhook (Order: ${orderId}, Payment: ${paymentId})`);
+            console.log(` Subscription created for user ${userId} from plan ${planId} via webhook (Order: ${orderId}, Payment: ${paymentId})`);
         } catch (error: any) {
             console.error('Error handling payment.captured:', error);
             // Don't throw - webhook should still return 200
@@ -439,7 +440,7 @@ export class UserSubscriptionController {
 
             // Create subscription from plan
             await UserSubscriptionService.createPaidSubscriptionFromPlan(userId, planId);
-            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via order.paid webhook`);
+            console.log(` Subscription created for user ${userId} from plan ${planId} via order.paid webhook`);
         } catch (error: any) {
             console.error('Error handling order.paid:', error);
             // Don't throw - webhook should still return 200

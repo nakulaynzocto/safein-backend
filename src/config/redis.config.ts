@@ -8,9 +8,9 @@ export const connectRedis = async (): Promise<Redis> => {
   }
 
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
+
   redisClient = new Redis(redisUrl, {
-    retryStrategy: (times) => {
+    retryStrategy: (times: number): number => {
       const delay = Math.min(times * 50, 2000);
       return delay;
     },
@@ -23,7 +23,7 @@ export const connectRedis = async (): Promise<Redis> => {
     console.log('Redis client connected');
   });
 
-  redisClient.on('error', (error) => {
+  redisClient.on('error', (error: Error) => {
     console.error('Redis connection error:', error);
   });
 
@@ -34,7 +34,7 @@ export const connectRedis = async (): Promise<Redis> => {
   try {
     await redisClient.connect();
     return redisClient;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Failed to connect to Redis:', error);
     throw error;
   }
@@ -53,4 +53,3 @@ export const disconnectRedis = async (): Promise<void> => {
     redisClient = null;
   }
 };
-

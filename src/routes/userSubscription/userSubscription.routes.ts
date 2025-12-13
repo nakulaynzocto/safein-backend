@@ -20,7 +20,7 @@ const router = Router();
 // Export separately so it can be registered early in app.ts
 export const webhookRouter = Router();
 webhookRouter.post(
-    '/razorpay/webhook',
+    '/',
     express.raw({ type: 'application/json' }),
     webhookRawBodyMiddleware,
     asyncWrapper(UserSubscriptionController.handleRazorpayWebhook)

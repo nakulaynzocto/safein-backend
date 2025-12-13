@@ -126,13 +126,13 @@ export class RazorpayService {
      * @returns boolean - true if signature is valid
      */
     static verifyWebhookSignature(webhookBody: string, webhookSignature: string): boolean {
-        if (!razorpayConfig.keySecret) {
+        if (!razorpayConfig.webhookSecret) {
             throw new AppError('Razorpay key secret is not configured', ERROR_CODES.INTERNAL_SERVER_ERROR);
         }
 
         const crypto = require('crypto');
         const expectedSignature = crypto
-            .createHmac('sha256', razorpayConfig.keySecret)
+            .createHmac('sha256', razorpayConfig.webhookSecret)
             .update(webhookBody)
             .digest('hex');
 
