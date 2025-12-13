@@ -118,6 +118,26 @@ export class RazorpayService {
 
         return expectedSignature === razorpaySignature;
     }
+
+    /**
+     * Verify Razorpay webhook signature
+     * @param webhookBody - Raw webhook request body (as string)
+     * @param webhookSignature - X-Razorpay-Signature header value
+     * @returns boolean - true if signature is valid
+     */
+    static verifyWebhookSignature(webhookBody: string, webhookSignature: string): boolean {
+        if (!razorpayConfig.keySecret) {
+            throw new AppError('Razorpay key secret is not configured', ERROR_CODES.INTERNAL_SERVER_ERROR);
+        }
+
+        const crypto = require('crypto');
+        const expectedSignature = crypto
+            .createHmac('sha256', razorpayConfig.keySecret)
+            .update(webhookBody)
+            .digest('hex');
+
+        return expectedSignature === webhookSignature;
+    }
 }
 
 

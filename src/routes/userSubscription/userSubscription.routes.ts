@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import express from 'express';
 import { UserSubscriptionController } from '../../controllers/userSubscription/userSubscription.controller';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
+import { webhookRawBodyMiddleware } from '../../middlewares/webhookRawBody.middleware';
 import {
     createUserSubscriptionValidation,
     updateUserSubscriptionValidation,
@@ -13,6 +15,16 @@ import {
 } from '../../validations/userSubscription/userSubscription.validation';
 
 const router = Router();
+
+// Webhook route - must be registered BEFORE express.json() in app.ts
+// Export separately so it can be registered early in app.ts
+export const webhookRouter = Router();
+webhookRouter.post(
+    '/razorpay/webhook',
+    express.raw({ type: 'application/json' }),
+    webhookRawBodyMiddleware,
+    asyncWrapper(UserSubscriptionController.handleRazorpayWebhook)
+);
 
 router.use(verifyToken);
 

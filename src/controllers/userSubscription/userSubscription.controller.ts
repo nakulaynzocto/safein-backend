@@ -275,4 +275,167 @@ export class UserSubscriptionController {
 
         ResponseUtil.success(res, 'Expired subscriptions processed successfully');
     }
+
+    /**
+     * Handle Razorpay webhook events
+     * POST /api/v1/user-subscriptions/razorpay/webhook
+     * Note: This route does NOT require authentication as it's called by Razorpay
+     */
+    @TryCatch('Failed to process Razorpay webhook')
+    static async handleRazorpayWebhook(req: any, res: Response, _next: NextFunction): Promise<void> {
+        // Get webhook signature from header
+        const webhookSignature = req.headers['x-razorpay-signature'];
+        
+        if (!webhookSignature) {
+            throw new AppError('Missing Razorpay webhook signature', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        // Get raw body (from middleware or fallback to stringified body)
+        const rawBody = req.rawBody || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+
+        // Verify webhook signature
+        const isValidSignature = RazorpayService.verifyWebhookSignature(rawBody, webhookSignature);
+        
+        if (!isValidSignature) {
+            throw new AppError('Invalid Razorpay webhook signature', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        // Parse webhook event (already parsed in middleware, but handle both cases)
+        const event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        
+        // Razorpay webhook structure: { event: 'payment.captured', payload: { payment: {...}, order: {...} } }
+        const eventType = event.event || event.type;
+        const payload = event.payload || event;
+
+        console.log('Razorpay webhook received:', {
+            eventType,
+            payloadKeys: Object.keys(payload),
+            orderId: payload.order?.entity?.id || payload.order?.id,
+            paymentId: payload.payment?.entity?.id || payload.payment?.id
+        });
+
+        // Handle different webhook events
+        switch (eventType) {
+            case 'payment.captured':
+                // Payment successfully captured
+                await this.handlePaymentCaptured(payload);
+                break;
+
+            case 'payment.failed':
+                // Payment failed
+                await this.handlePaymentFailed(payload);
+                break;
+
+            case 'order.paid':
+                // Order paid (alternative to payment.captured)
+                await this.handleOrderPaid(payload);
+                break;
+
+            default:
+                console.log(`Unhandled Razorpay webhook event: ${eventType}`);
+        }
+
+        // Always return 200 to acknowledge receipt
+        ResponseUtil.success(res, 'Webhook processed successfully');
+    }
+
+    /**
+     * Handle payment.captured event
+     */
+    private static async handlePaymentCaptured(payload: any): Promise<void> {
+        try {
+            // Razorpay webhook payload structure: { payment: { entity: {...} }, order: { entity: {...} } }
+            const payment = payload.payment?.entity || payload.payment;
+            const order = payload.order?.entity || payload.order;
+            
+            if (!payment || !order) {
+                console.error('Invalid payment.captured payload - missing payment or order:', {
+                    hasPayment: !!payment,
+                    hasOrder: !!order,
+                    payloadKeys: Object.keys(payload)
+                });
+                return;
+            }
+
+            const orderId = order.id || order.order_id;
+            const paymentId = payment.id || payment.payment_id;
+            
+            // Get userId and planId from order notes (we stored them when creating the order)
+            const userId = order.notes?.userId || payment.notes?.userId;
+            const planId = order.notes?.planId || payment.notes?.planId;
+
+            if (!userId || !planId) {
+                console.error('Missing userId or planId in payment notes:', { 
+                    orderId, 
+                    paymentId,
+                    orderNotes: order.notes,
+                    paymentNotes: payment.notes
+                });
+                return;
+            }
+
+            // Create subscription from plan
+            await UserSubscriptionService.createPaidSubscriptionFromPlan(userId, planId);
+            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via webhook`);
+        } catch (error: any) {
+            console.error('Error handling payment.captured:', error);
+            // Don't throw - webhook should still return 200
+        }
+    }
+
+    /**
+     * Handle payment.failed event
+     */
+    private static async handlePaymentFailed(payload: any): Promise<void> {
+        try {
+            const { payment, order } = payload.payment?.entity || payload;
+            console.log('Payment failed:', payment?.id || payment?.payment_id, order?.id || order?.order_id);
+            // Log failed payment for monitoring
+            // You can add additional logic here like sending notification to user
+        } catch (error: any) {
+            console.error('Error handling payment.failed:', error);
+        }
+    }
+
+    /**
+     * Handle order.paid event
+     */
+    private static async handleOrderPaid(payload: any): Promise<void> {
+        try {
+            // Razorpay webhook payload structure: { order: { entity: {...} }, payment: { entity: {...} } }
+            const order = payload.order?.entity || payload.order;
+            const payment = payload.payment?.entity || payload.payment;
+            
+            if (!order || !payment) {
+                console.error('Invalid order.paid payload - missing order or payment:', {
+                    hasOrder: !!order,
+                    hasPayment: !!payment,
+                    payloadKeys: Object.keys(payload)
+                });
+                return;
+            }
+
+            const orderId = order.id || order.order_id;
+            const paymentId = payment.id || payment.payment_id;
+            const userId = order.notes?.userId || payment.notes?.userId;
+            const planId = order.notes?.planId || payment.notes?.planId;
+
+            if (!userId || !planId) {
+                console.error('Missing userId or planId in order notes:', { 
+                    orderId, 
+                    paymentId,
+                    orderNotes: order.notes,
+                    paymentNotes: payment.notes
+                });
+                return;
+            }
+
+            // Create subscription from plan
+            await UserSubscriptionService.createPaidSubscriptionFromPlan(userId, planId);
+            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via order.paid webhook`);
+        } catch (error: any) {
+            console.error('Error handling order.paid:', error);
+            // Don't throw - webhook should still return 200
+        }
+    }
 }
