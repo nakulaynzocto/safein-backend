@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { connectDatabase } from './config/database.config';
+import { connectRedis } from './config/redis.config';
 import { notFoundHandler, generalLimiter, errorHandler } from './middlewares';
 import { requestLogger, errorLogger } from './logging';
 import { devFormat, combinedFormat, morganOptions, morganFileOptions, morganErrorOptions, errorFormat } from './logging';
@@ -18,6 +19,12 @@ import { EmailService } from './services/email/email.service';
 const app: Express = express();
 
 connectDatabase();
+
+// Connect to Redis (non-blocking - will retry on failure)
+connectRedis().catch((error) => {
+  console.error('Redis connection failed:', error);
+  console.warn('OTP functionality may not work properly without Redis');
+});
 
 EmailService.initializeTransporter();
 EmailService.verifyConnection().catch((error) => {

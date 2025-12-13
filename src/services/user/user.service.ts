@@ -13,10 +13,8 @@ import { JwtUtil } from '../../utils/jwt.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
-import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
+import { RedisOtpService } from '../redis/redisOtp.service';
 import * as crypto from 'crypto';
-
-const otpStorage = new Map<string, { otp: string; expiresAt: Date; userData: ICreateUserDTO }>();
 
 export class UserService {
   /**
@@ -52,7 +50,8 @@ export class UserService {
     const otp = this.generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    otpStorage.set(userData.email, { otp, expiresAt, userData });
+    // Store OTP in Redis
+    await RedisOtpService.storeOtp(userData.email, { otp, expiresAt, userData });
 
     await this.sendOtpToEmail(userData.email, otp, userData.companyName);
 
@@ -69,13 +68,15 @@ export class UserService {
   static async verifyOtpAndCompleteRegistration(email: string, otp: string, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
 
-    const otpData = otpStorage.get(email);
+    // Get OTP from Redis
+    const otpData = await RedisOtpService.getOtp(email);
     if (!otpData) {
       throw new AppError('OTP not found or expired', ERROR_CODES.BAD_REQUEST);
     }
 
+    // Check if OTP is expired (Redis TTL handles this, but double-check for safety)
     if (new Date() > otpData.expiresAt) {
-      otpStorage.delete(email);
+      await RedisOtpService.deleteOtp(email);
       throw new AppError('OTP expired', ERROR_CODES.BAD_REQUEST);
     }
 
@@ -90,7 +91,8 @@ export class UserService {
     // Do NOT create any subscription automatically. User must select a plan and complete payment first.
     // Subscription will be created only after successful payment via Stripe webhook.
 
-    otpStorage.delete(email);
+    // Delete OTP from Redis after successful verification
+    await RedisOtpService.deleteOtp(email);
 
     const token = JwtUtil.generateToken({
       userId: user._id.toString(),
@@ -112,7 +114,8 @@ export class UserService {
    * Resend OTP
    */
   static async resendOtp(email: string): Promise<{ message: string }> {
-    const otpData = otpStorage.get(email);
+    // Get existing OTP data from Redis
+    const otpData = await RedisOtpService.getOtp(email);
     if (!otpData) {
       throw new AppError('No pending registration found for this email', ERROR_CODES.BAD_REQUEST);
     }
@@ -120,7 +123,8 @@ export class UserService {
     const newOtp = this.generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    otpStorage.set(email, { ...otpData, otp: newOtp, expiresAt });
+    // Update OTP in Redis
+    await RedisOtpService.updateOtp(email, { otp: newOtp, expiresAt });
 
     await this.sendOtpToEmail(email, newOtp, otpData.userData.companyName);
 
@@ -171,16 +175,8 @@ export class UserService {
     user.lastLoginAt = new Date();
     await user.save({ session });
 
-    try {
-      const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(user._id.toString());
-      if (!activeSubscription) {
-        await UserSubscriptionService.createFreeTrial(
-          user._id.toString(),
-          3
-        );
-      }
-    } catch (error) {
-    }
+    // Note: Subscription plans are only created after successful payment via Stripe webhook
+    // No automatic free trial creation on login
 
     const token = JwtUtil.generateToken({
       userId: user._id.toString(),
