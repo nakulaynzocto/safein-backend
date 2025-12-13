@@ -60,27 +60,42 @@ export class RazorpayService {
         const planId = (plan as any)._id ? (plan as any)._id.toString() : String(data.planId);
 
         try {
+            const planIdStr = (plan as any)._id
+                ? (plan as any)._id.toString()
+                : String(data.planId);
+
+            const receipt = `plan_${planIdStr.slice(-10)}_${Date.now()
+                .toString()
+                .slice(-6)}`;
+
             const order = await this.getClient().orders.create({
                 amount: amountInSubUnits,
-                currency: plan.currency || 'INR',
-                receipt: `plan_${planId}_${Date.now()}`,
+                currency: plan.currency?.toUpperCase() || 'INR',
+                receipt,
+                payment_capture: true,
                 notes: {
-                    planId,
+                    planId: planIdStr,
                     userId,
                     email: user.email,
                 },
-            });
-
+            } as any);
+            console.log('Razorpay order created:', order);
             return {
-                orderId: order.id,
-                amount: Number(order.amount ?? 0),
-                currency: order.currency,
+                orderId: (order as any).id,
+                amount: Number((order as any).amount),
+                currency: (order as any).currency,
                 keyId: razorpayConfig.keyId,
                 planId,
                 userEmail: user.email,
             };
-        } catch (error) {
-            throw new AppError('Failed to create Razorpay order', ERROR_CODES.INTERNAL_SERVER_ERROR);
+
+        } catch (error: any) {
+            console.error('Razorpay order creation failed:', error);
+            throw new AppError(
+                `Failed to create Razorpay order: ${error?.error?.description || error.message
+                }`,
+                ERROR_CODES.INTERNAL_SERVER_ERROR
+            );
         }
     }
 
