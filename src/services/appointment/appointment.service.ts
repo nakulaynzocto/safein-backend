@@ -77,9 +77,9 @@ export class AppointmentService {
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // Send email notification to employee (if enabled)
+        // Send email notification to employee (if enabled and approval link exists)
         try {
-            if (populatedAppointment && emailEnabled) {
+            if (populatedAppointment && emailEnabled && approvalLink?.token) {
                 await EmailService.sendNewAppointmentRequestEmail(
                     (populatedAppointment.employeeId as any).email,
                     (populatedAppointment.employeeId as any).name,
@@ -87,13 +87,13 @@ export class AppointmentService {
                     populatedAppointment.appointmentDetails.scheduledDate,
                     populatedAppointment.appointmentDetails.scheduledTime,
                     populatedAppointment.appointmentDetails.purpose,
-                    (populatedAppointment._id as any).toString()
+                    approvalLink.token // Pass the approval token instead of appointment ID
                 );
                 
                 // Mark email as sent only if notification is enabled and sent successfully
                 appointment.notifications.emailSent = true;
             } else {
-                // Mark as not sent if disabled
+                // Mark as not sent if disabled or no approval link
                 appointment.notifications.emailSent = false;
             }
         } catch (error) {

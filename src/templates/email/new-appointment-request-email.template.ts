@@ -19,7 +19,7 @@ export function getNewAppointmentRequestEmailTemplate(
   scheduledDate: Date,
   scheduledTime: string,
   purpose: string,
-  appointmentId: string
+  approvalToken: string
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -29,8 +29,8 @@ export function getNewAppointmentRequestEmailTemplate(
   });
 
   const baseUrl = getEmailActionBaseUrl();
-  const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
-  const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;
+  // Use /verify/{token} URL format - this is a public page that shows details and allows approve/reject
+  const verifyUrl = `${baseUrl}/verify/${approvalToken}`;
 
   const content = `
             <div class="greeting">
@@ -54,21 +54,21 @@ export function getNewAppointmentRequestEmailTemplate(
                 <p><strong>👤 Name:</strong> ${visitorDetails.name}</p>
                 <p><strong>📧 Email:</strong> <a href="mailto:${visitorDetails.email}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.email}</a></p>
                 <p><strong>📞 Phone:</strong> <a href="tel:${visitorDetails.phone}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.phone}</a></p>
-                <p><strong>🏢 Company:</strong> ${visitorDetails.company || 'Not provided'}</p>
                 ${visitorDetails.visitorId ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails.visitorId}</p>` : ''}
             </div>
             
-            <div class="button-group">
-                <a href="${approveUrl}" class="action-button action-button-secondary">✓ Approve Appointment</a>
-                <a href="${rejectUrl}" class="action-button action-button-danger">✗ Reject Appointment</a>
+            <div class="button-group" style="text-align: center; margin: 30px 0;">
+                <a href="${verifyUrl}" class="action-button action-button-primary" style="display: inline-block; padding: 14px 32px; background-color: #3882a5; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                    📋 View Details & Take Action
+                </a>
             </div>
             
             <div class="security-note security-success">
-                <strong>⏰ Action Required:</strong> Please respond to this request as soon as possible so the visitor can plan accordingly. A timely response helps ensure a smooth experience for all parties involved.
+                <strong>⏰ Action Required:</strong> Click the button above to view full visitor details, ID proof, and approve or reject this appointment. The link is secure and will expire after use.
             </div>
             
             <div class="message" style="text-align: center; margin-top: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
-                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/dashboard/notifications" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options and to view the full appointment history.
+                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/dashboard/notifications" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
             </div>
   `;
   
@@ -81,7 +81,7 @@ export function getNewAppointmentRequestEmailText(
   scheduledDate: Date,
   scheduledTime: string,
   purpose: string,
-  appointmentId: string
+  approvalToken: string
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -91,8 +91,7 @@ export function getNewAppointmentRequestEmailText(
   });
 
   const baseUrl = getEmailActionBaseUrl();
-  const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
-  const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;
+  const verifyUrl = `${baseUrl}/verify/${approvalToken}`;
 
   return `
 New Appointment Request
@@ -113,15 +112,12 @@ Visitor Information:
 - Company: ${visitorDetails.company || 'Not provided'}
 - Visitor ID: ${visitorDetails.visitorId || 'Not assigned'}
 
-Quick Action:
-To approve this appointment, click: ${approveUrl}
-To reject this appointment, click: ${rejectUrl}
+To view full details and approve/reject this appointment, click:
+${verifyUrl}
 
 Or visit your dashboard: ${baseUrl}/dashboard/notifications
 
-Important: Please respond to this request as soon as possible so the visitor can plan accordingly. If you don't take action, the request will remain pending.
-
-Note: You can also manage this appointment through your SafeIn dashboard for more detailed options.
+Important: Please respond to this request as soon as possible. The link is secure and will expire after use.
 
 Best regards,
 SafeIn Security Team
