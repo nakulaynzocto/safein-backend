@@ -419,14 +419,14 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
-    appointmentId: string
+    approvalToken: string
   ): Promise<void> {
     try {
       await this.sendEmail({
         to: employeeEmail,
         subject: 'New Appointment Request - SafeIn',
-        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
-        text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, appointmentId),
+        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
+        text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
         fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'New appointment request email',
       });
