@@ -1,5 +1,5 @@
 import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
-import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
+import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
 
