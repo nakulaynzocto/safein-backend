@@ -5,13 +5,26 @@ import * as crypto from 'crypto';
 
 export class ApprovalLinkService {
     private static getBaseUrl(): string {
-        if (CONSTANTS.FRONTEND_URL && CONSTANTS.FRONTEND_URL !== 'http://localhost:3000') {
-            return CONSTANTS.FRONTEND_URL;
+        const candidates = [
+            process.env.APPROVAL_LINK_BASE_URL,
+            CONSTANTS.APPROVAL_LINK_BASE_URL,
+            ...CONSTANTS.FRONTEND_URLS,
+            CONSTANTS.FRONTEND_URL
+        ].filter(Boolean) as string[];
+
+        let fallback = '';
+
+        for (const url of candidates) {
+            const normalized = url.replace(/\/$/, '');
+            if (!normalized.includes('localhost')) {
+                return normalized;
+            }
+            if (!fallback) {
+                fallback = normalized;
+            }
         }
-        if (CONSTANTS.FRONTEND_URLS.length > 0) {
-            return CONSTANTS.FRONTEND_URLS[0];
-        }
-        return 'http://localhost:3000';
+
+        return fallback || 'http://localhost:3000';
     }
     /**
      * Generate a secure random token

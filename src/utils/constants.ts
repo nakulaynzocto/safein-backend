@@ -5,6 +5,7 @@ const CONSTANTS = {
     NODE_ENV: process.env.NODE_ENV || "development",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
     FRONTEND_URLS: process.env.FRONTEND_URLS ? process.env.FRONTEND_URLS.split(',') : [],
+    APPROVAL_LINK_BASE_URL: process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
