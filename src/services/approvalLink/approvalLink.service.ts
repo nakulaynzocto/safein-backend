@@ -1,17 +1,12 @@
 import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
-import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
+import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
 
 export class ApprovalLinkService {
     private static getBaseUrl(): string {
-        if (CONSTANTS.FRONTEND_URL && CONSTANTS.FRONTEND_URL !== 'http://localhost:3000') {
-            return CONSTANTS.FRONTEND_URL;
-        }
-        if (CONSTANTS.FRONTEND_URLS.length > 0) {
-            return CONSTANTS.FRONTEND_URLS[0];
-        }
-        return 'http://localhost:3000';
+        const url = process.env.APPROVAL_LINK_BASE_URL || '';
+        return url.replace(/\/$/, ''); // Remove trailing slash
     }
     /**
      * Generate a secure random token

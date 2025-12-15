@@ -22,11 +22,24 @@ export class VisitorService {
     static async createVisitor(visitorData: ICreateVisitorDTO, createdBy: string, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
-        const existingEmail = await Visitor.findOne({ 
-            email: visitorData.email, 
-            createdBy: createdBy 
+        const existingVisitor = await Visitor.findOne({
+            email: visitorData.email,
+            createdBy: createdBy
         }).session(session);
-        if (existingEmail) {
+
+        // If a visitor exists with the same email but is soft-deleted, restore it instead of blocking.
+        // This matches the expected behavior: deleted records should not prevent re-creation.
+        if (existingVisitor) {
+            if ((existingVisitor as any).isDeleted === true) {
+                existingVisitor.set({
+                    ...visitorData,
+                    isDeleted: false,
+                    deletedAt: null,
+                    deletedBy: null
+                });
+                await existingVisitor.save({ session });
+                return existingVisitor.toObject() as unknown as IVisitorResponse;
+            }
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 

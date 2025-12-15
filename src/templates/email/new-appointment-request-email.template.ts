@@ -1,6 +1,15 @@
 import { getBaseEmailTemplate } from './base-email.template';
 
 /**
+ * Get the base URL for email action links
+ * Only uses APPROVAL_LINK_BASE_URL environment variable
+ */
+function getEmailActionBaseUrl(): string {
+  const url = process.env.APPROVAL_LINK_BASE_URL || '';
+  return url.replace(/\/$/, ''); // Remove trailing slash
+}
+
+/**
  * New Appointment Request Email Template
  * Sent to employee when a new appointment is requested
  */
@@ -19,7 +28,7 @@ export function getNewAppointmentRequestEmailTemplate(
     day: 'numeric'
   });
 
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const baseUrl = getEmailActionBaseUrl();
   const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
   const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;
 
@@ -81,7 +90,7 @@ export function getNewAppointmentRequestEmailText(
     day: 'numeric'
   });
 
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const baseUrl = getEmailActionBaseUrl();
   const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
   const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;
 

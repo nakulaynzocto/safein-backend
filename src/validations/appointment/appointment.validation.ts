@@ -301,7 +301,9 @@ export const getAppointmentsValidation = Joi.object({
     limit: Joi.number()
         .integer()
         .min(1)
-        .max(100)
+        // Dashboard may request higher limits to compute accurate stats client-side.
+        // Keep a reasonable upper bound to protect the API.
+        .max(5000)
         .default(10),
     search: Joi.string()
         .optional()
