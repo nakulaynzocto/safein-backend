@@ -21,11 +21,24 @@ export class EmployeeService {
     static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
-        const existingEmail = await Employee.findOne({ 
-            email: employeeData.email, 
-            createdBy: createdBy 
+        const existingEmployee = await Employee.findOne({
+            email: employeeData.email,
+            createdBy: createdBy
         }).session(session);
-        if (existingEmail) {
+
+        // If an employee exists with the same email but is soft-deleted, restore it instead of blocking.
+        // This matches the expected behavior: deleted records should not prevent re-creation.
+        if (existingEmployee) {
+            if ((existingEmployee as any).isDeleted === true) {
+                existingEmployee.set({
+                    ...employeeData,
+                    isDeleted: false,
+                    deletedAt: null,
+                    deletedBy: null
+                });
+                await existingEmployee.save({ session });
+                return existingEmployee.toObject() as unknown as IEmployeeResponse;
+            }
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
