@@ -2,6 +2,7 @@ import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
 import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
+import { socketService } from '../socket/socket.service';
 
 export class ApprovalLinkService {
     private static getBaseUrl(): string {
@@ -134,6 +135,17 @@ export class ApprovalLinkService {
         // Mark approval link as used
         approvalLink.isUsed = true;
         await approvalLink.save();
+
+        // 🔔 Emit WebSocket event for real-time update
+        const userId = appointment.createdBy?.toString();
+        if (userId) {
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: appointment._id.toString(),
+                status: status,
+                updatedAt: new Date(),
+                appointment: appointment.toObject()
+            });
+        }
 
         return {
             success: true,
