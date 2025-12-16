@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express, { Express } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -16,8 +17,13 @@ import { swaggerSpec } from './docs/swagger';
 import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
 import { webhookRouter } from './routes/userSubscription/userSubscription.routes';
+import { socketService } from './services/socket/socket.service';
 
 const app: Express = express();
+const httpServer = createServer(app);
+
+// Initialize Socket.IO
+socketService.initialize(httpServer);
 
 connectDatabase();
 
@@ -73,8 +79,10 @@ app.use(errorHandler);
 app.use(notFoundHandler);
 
 const PORT = CONSTANTS.PORT;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+  console.log(`📡 WebSocket server ready for connections`);
 });
 
 export default app;
+export { httpServer };
