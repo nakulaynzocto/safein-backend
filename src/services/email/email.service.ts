@@ -139,7 +139,15 @@ export class EmailService {
         ],
         subject: mail.subject,
         htmlContent: mail.html,
-        textContent: mail.text || mail.html.replace(/<[^>]*>/g, ''), // Fallback to plain text from HTML
+        textContent: mail.text || mail.html.replace(/<[^>]*>/g, ''),
+        headers: {
+          'X-Mailer': 'SafeIn Security Management System',
+          'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+        replyTo: {
+          email: process.env.SMTP_REPLY_TO || fromEmail,
+        },
       }),
     });
     
@@ -224,6 +232,21 @@ export class EmailService {
       subject,
       html,
       text: text || html.replace(/<[^>]*>/g, ''),
+      // Anti-spam headers
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high',
+        'List-Unsubscribe': `<mailto:${process.env.SMTP_FROM_EMAIL || fromEmail}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        'Precedence': 'bulk',
+        'X-Mailer': 'SafeIn Security Management System',
+        'X-Auto-Response-Suppress': 'All',
+        'Auto-Submitted': 'auto-generated',
+        'Return-Path': fromEmail,
+      },
+      // Reply-to header
+      replyTo: process.env.SMTP_REPLY_TO || fromEmail,
     };
 
     try {
@@ -262,6 +285,11 @@ export class EmailService {
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
+        headers: {
+          'X-Mailer': 'SafeIn Security Management System',
+          'List-Unsubscribe': `<mailto:${mail.from || process.env.SMTP_FROM_EMAIL || 'no-reply@safein.app'}?subject=unsubscribe>`,
+        },
+        reply_to: process.env.SMTP_REPLY_TO || mail.from || process.env.SMTP_FROM_EMAIL || 'no-reply@safein.app',
       }),
     });
     if (!res.ok) {
