@@ -196,6 +196,21 @@ export class UserSubscriptionController {
     }
 
     /**
+     * Get user subscription history (all successful purchases)
+     * GET /api/v1/user-subscriptions/history
+     */
+    @TryCatch('Failed to get subscription history')
+    static async getUserSubscriptionHistory(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const history = await UserSubscriptionService.getUserSubscriptionHistory(req.user._id.toString());
+
+        ResponseUtil.success(res, 'Subscription history retrieved successfully', history);
+    }
+
+    /**
      * Get user subscription by ID
      * GET /api/v1/user-subscriptions/:id
      */
@@ -437,8 +452,13 @@ export class UserSubscriptionController {
                 return;
             }
 
-            // Create subscription from plan
-            await UserSubscriptionService.createPaidSubscriptionFromPlan(userId, planId);
+            // Create subscription from plan with order and payment IDs
+            await UserSubscriptionService.createPaidSubscriptionFromPlan(
+                userId, 
+                planId, 
+                orderId, 
+                paymentId
+            );
             console.log(`✅ Subscription created for user ${userId} from plan ${planId} via order.paid webhook`);
         } catch (error: any) {
             console.error('Error handling order.paid:', error);

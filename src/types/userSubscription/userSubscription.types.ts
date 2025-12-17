@@ -52,6 +52,10 @@ export interface IUserSubscriptionResponse {
     deletedBy?: string;
     createdAt: Date;
     updatedAt: Date;
+    // Permission flags for frontend (calculated on backend for security)
+    canAccessDashboard?: boolean;
+    hasActiveSubscription?: boolean;
+    subscriptionStatus?: 'active' | 'trialing' | 'cancelled' | 'expired' | 'pending';
 }
 
 export interface IGetUserSubscriptionsQuery {

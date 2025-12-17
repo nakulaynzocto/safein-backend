@@ -33,9 +33,9 @@ const defaultPlans = [
     },
     {
         name: "Premium - 1 Month",
-        description: "Monthly billing at ₹8,499/month",
+        description: "Monthly billing at ₹6,999/month",
         planType: 'monthly',
-        amount: 849900, // ₹8,499.00 in cents
+        amount: 699900, // ₹6,999.00 in paise
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -46,8 +46,6 @@ const defaultPlans = [
             '24/7 priority support',
             'Advanced analytics & reporting',
             'Custom branding options',
-            'API access',
-            'Multi-location support'
         ],
         isActive: true,
         isPopular: false,
@@ -63,7 +61,7 @@ const defaultPlans = [
         name: "Premium - 3 Months",
         description: "Save 5% with 3-month billing",
         planType: 'quarterly',
-        amount: 2422200, // ₹24,222.00 in cents
+        amount: 1991700, // ₹19,917.00 in paise (3 * 6999 * 0.95 = 19,917)
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -74,8 +72,6 @@ const defaultPlans = [
             '24/7 priority support',
             'Advanced analytics & reporting',
             'Custom branding options',
-            'API access',
-            'Multi-location support'
         ],
         isActive: true,
         isPopular: true,
@@ -91,7 +87,7 @@ const defaultPlans = [
         name: "Premium - 12 Months",
         description: "Save 10% with annual billing - Best value!",
         planType: 'yearly',
-        amount: 9179000, // ₹91,790.00 in cents
+        amount: 7558900, // ₹75,589.00 in paise (12 * 6999 * 0.90 = 75,589)
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -102,8 +98,6 @@ const defaultPlans = [
             '24/7 priority support',
             'Advanced analytics & reporting',
             'Custom branding options',
-            'API access',
-            'Multi-location support'
         ],
         isActive: true,
         isPopular: false,
