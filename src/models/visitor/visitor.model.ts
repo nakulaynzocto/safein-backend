@@ -34,10 +34,11 @@ export interface IVisitor extends Document {
 const addressSchema = new Schema<IAddress>({
     street: {
         type: String,
-        required: [true, 'Street address is required'],
+        required: false,
         trim: true,
         minlength: [2, 'Street address must be at least 2 characters long'],
-        maxlength: [200, 'Street address cannot exceed 200 characters']
+        maxlength: [200, 'Street address cannot exceed 200 characters'],
+        default: ''
     },
     city: {
         type: String,
@@ -65,17 +66,19 @@ const addressSchema = new Schema<IAddress>({
 const idProofSchema = new Schema<IIdProof>({
     type: {
         type: String,
-        required: [true, 'ID proof type is required'],
+        required: false,
         trim: true,
         minlength: [2, 'ID proof type must be at least 2 characters long'],
-        maxlength: [50, 'ID proof type cannot exceed 50 characters']
+        maxlength: [50, 'ID proof type cannot exceed 50 characters'],
+        default: ''
     },
     number: {
         type: String,
-        required: [true, 'ID proof number is required'],
+        required: false,
         trim: true,
         minlength: [2, 'ID proof number must be at least 2 characters long'],
-        maxlength: [50, 'ID proof number cannot exceed 50 characters']
+        maxlength: [50, 'ID proof number cannot exceed 50 characters'],
+        default: ''
     },
     image: {
         type: String,

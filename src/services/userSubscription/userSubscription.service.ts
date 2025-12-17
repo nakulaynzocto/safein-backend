@@ -8,6 +8,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
 import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats } from '../../types/userSubscription/userSubscription.types';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
+import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
 
 export class UserSubscriptionService {
     /**
@@ -95,7 +96,8 @@ export class UserSubscriptionService {
     }
 
     /**
-     * Create a paid subscription after successful Razorpay payment
+     * Create or update paid subscription after successful Razorpay payment
+     * Updates existing subscription instead of creating new one (better approach)
      * Includes idempotency check to prevent duplicate processing
      */
     static async createPaidSubscriptionFromPlan(
@@ -131,35 +133,103 @@ export class UserSubscriptionService {
                 throw new AppError('Subscription plan not found or inactive', ERROR_CODES.NOT_FOUND);
             }
 
-            // Deactivate existing active subscription (if any)
-            await UserSubscription.updateMany(
-                {
-                    userId: new mongoose.Types.ObjectId(userId),
-                    isActive: true,
-                    isDeleted: false,
-                },
-                {
-                    $set: { isActive: false, paymentStatus: 'cancelled', endDate: new Date() },
-                },
-                { session }
-            );
+            // ✅ PREFERRED APPROACH: Find existing subscription and update it instead of creating new
+            const existingSubscription = await UserSubscription.findOne({
+                userId: new mongoose.Types.ObjectId(userId),
+                isDeleted: false,
+            }).sort({ createdAt: -1 }).session(session);
 
             const startDate = new Date();
-            const endDate = this.calculateEndDate(startDate, plan.planType);
+            
+            // ✅ Calculate remaining days from existing subscription and add to new plan
+            let remainingDaysFromPrevious = 0;
+            let previousSubscriptionId: mongoose.Types.ObjectId | undefined = undefined;
+            
+            if (existingSubscription && existingSubscription.isActive && existingSubscription.endDate > startDate) {
+                // Calculate remaining days from previous subscription
+                const remainingTime = existingSubscription.endDate.getTime() - startDate.getTime();
+                remainingDaysFromPrevious = Math.ceil(remainingTime / (1000 * 60 * 60 * 24));
+                
+                // Only carry forward if there are remaining days (positive value)
+                if (remainingDaysFromPrevious > 0) {
+                    previousSubscriptionId = existingSubscription._id as mongoose.Types.ObjectId;
+                    console.log(`📅 Carrying forward ${remainingDaysFromPrevious} days from previous subscription`);
+                } else {
+                    remainingDaysFromPrevious = 0;
+                }
+            }
+            
+            // Calculate base end date for new plan
+            const baseEndDate = this.calculateEndDate(startDate, plan.planType);
+            
+            // ✅ Add remaining days to the new plan's end date
+            const endDate = new Date(baseEndDate);
+            if (remainingDaysFromPrevious > 0) {
+                endDate.setDate(endDate.getDate() + remainingDaysFromPrevious);
+                const newPlanDays = this.getPlanDays(plan.planType);
+                console.log(`✅ New subscription will expire after ${remainingDaysFromPrevious} (carried forward) + ${newPlanDays} (new plan) = ${remainingDaysFromPrevious + newPlanDays} days`);
+            }
 
-            const subscription = new UserSubscription({
+            let subscription: IUserSubscription & Document;
+
+            if (existingSubscription) {
+                // ✅ UPDATE existing subscription instead of creating new
+                existingSubscription.planType = plan.planType;
+                existingSubscription.startDate = startDate;
+                existingSubscription.endDate = endDate;
+                existingSubscription.isActive = true;
+                existingSubscription.paymentStatus = 'succeeded';
+                existingSubscription.trialDays = plan.trialDays || 0;
+                existingSubscription.razorpayOrderId = razorpayOrderId || undefined;
+                existingSubscription.razorpayPaymentId = razorpayPaymentId || undefined;
+                existingSubscription.updatedAt = new Date();
+                
+                await existingSubscription.save({ session });
+                subscription = existingSubscription;
+            } else {
+                // Create new only if no existing subscription found
+                subscription = new UserSubscription({
+                    userId: new mongoose.Types.ObjectId(userId),
+                    planType: plan.planType,
+                    startDate,
+                    endDate,
+                    isActive: true,
+                    paymentStatus: 'succeeded',
+                    trialDays: plan.trialDays || 0,
+                    razorpayOrderId: razorpayOrderId || undefined,
+                    razorpayPaymentId: razorpayPaymentId || undefined,
+                });
+
+                await subscription.save({ session });
+            }
+
+            // ✅ Store purchase history
+            const subscriptionHistory = new SubscriptionHistory({
                 userId: new mongoose.Types.ObjectId(userId),
+                subscriptionId: subscription._id as mongoose.Types.ObjectId,
                 planType: plan.planType,
-                startDate,
-                endDate,
-                isActive: true,
+                planId: new mongoose.Types.ObjectId(planId),
+                purchaseDate: startDate,
+                startDate: startDate,
+                endDate: endDate,
+                amount: plan.amount,
+                currency: plan.currency || 'INR',
                 paymentStatus: 'succeeded',
-                trialDays: plan.trialDays || 0,
                 razorpayOrderId: razorpayOrderId || undefined,
                 razorpayPaymentId: razorpayPaymentId || undefined,
+                previousSubscriptionId: previousSubscriptionId,
+                remainingDaysFromPrevious: remainingDaysFromPrevious,
             });
 
-            await subscription.save({ session });
+            await subscriptionHistory.save({ session });
+
+            // Update user's activeSubscriptionId
+            const user = await User.findById(userId).session(session);
+            if (user) {
+                user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
+                await user.save({ session });
+            }
+
             await session.commitTransaction();
             return subscription;
         } catch (error) {
@@ -191,6 +261,25 @@ export class UserSubscriptionService {
                 break;
         }
         return end;
+    }
+
+    /**
+     * Get number of days for a plan type
+     */
+    private static getPlanDays(planType: string): number {
+        switch (planType) {
+            case 'weekly':
+                return 7;
+            case 'monthly':
+                return 30;
+            case 'quarterly':
+                return 90;
+            case 'yearly':
+                return 365;
+            case 'free':
+            default:
+                return 30;
+        }
     }
 
     /**
@@ -435,10 +524,72 @@ export class UserSubscriptionService {
     }
 
     /**
-     * Format user subscription response
+     * Get subscription history for a user (all successful purchases)
+     */
+    static async getUserSubscriptionHistory(userId: string): Promise<any[]> {
+        try {
+            const history = await SubscriptionHistory.find({
+                userId: new mongoose.Types.ObjectId(userId),
+                isDeleted: false,
+                paymentStatus: 'succeeded', // Only successful payments
+            })
+            .sort({ purchaseDate: -1 }) // Most recent first
+            .populate('planId', 'name amount currency')
+            .exec();
+
+            return history.map((item) => ({
+                _id: (item._id as mongoose.Types.ObjectId).toString(),
+                subscriptionId: item.subscriptionId.toString(),
+                planType: item.planType,
+                planName: (item.planId as any)?.name || `${item.planType} Plan`,
+                purchaseDate: item.purchaseDate,
+                startDate: item.startDate,
+                endDate: item.endDate,
+                amount: item.amount || 0,
+                currency: item.currency || 'INR',
+                paymentStatus: item.paymentStatus,
+                razorpayOrderId: item.razorpayOrderId,
+                razorpayPaymentId: item.razorpayPaymentId,
+                remainingDaysFromPrevious: item.remainingDaysFromPrevious || 0,
+                createdAt: item.createdAt,
+            }));
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Format user subscription response with permission flags
      */
     private static formatUserSubscriptionResponse(subscription: IUserSubscription & Document): IUserSubscriptionResponse {
-        const isTrialing = subscription.planType === 'free' && subscription.endDate > new Date();
+        const now = new Date();
+        const isTrialing = subscription.planType === 'free' && subscription.endDate > now;
+        const isExpired = subscription.endDate <= now;
+        
+        // ✅ Calculate permission flags on backend for security
+        const hasActiveSubscription = 
+            subscription.isActive && 
+            !subscription.isDeleted && 
+            subscription.paymentStatus === 'succeeded' && 
+            !isExpired;
+        
+        const canAccessDashboard = hasActiveSubscription || isTrialing;
+        
+        // Determine subscription status
+        let subscriptionStatus: 'active' | 'trialing' | 'cancelled' | 'expired' | 'pending';
+        if (subscription.paymentStatus === 'cancelled') {
+            subscriptionStatus = 'cancelled';
+        } else if (isExpired) {
+            subscriptionStatus = 'expired';
+        } else if (isTrialing) {
+            subscriptionStatus = 'trialing';
+        } else if (subscription.paymentStatus === 'pending') {
+            subscriptionStatus = 'pending';
+        } else if (hasActiveSubscription) {
+            subscriptionStatus = 'active';
+        } else {
+            subscriptionStatus = 'pending';
+        }
 
         return {
             _id: (subscription._id as mongoose.Types.ObjectId).toString(),
@@ -455,6 +606,10 @@ export class UserSubscriptionService {
             deletedBy: subscription.deletedBy ? (subscription.deletedBy as mongoose.Types.ObjectId).toString() : undefined,
             createdAt: subscription.createdAt,
             updatedAt: subscription.updatedAt,
+            // Permission flags calculated on backend
+            canAccessDashboard,
+            hasActiveSubscription,
+            subscriptionStatus,
         };
     }
 }

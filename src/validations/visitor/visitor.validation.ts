@@ -2,12 +2,12 @@ import Joi from 'joi';
 
 const addressValidation = Joi.object({
     street: Joi.string()
-        .required()
+        .optional()
+        .allow('')
         .trim()
         .min(2)
         .max(200)
         .messages({
-            'string.empty': 'Street address is required',
             'string.min': 'Street address must be at least 2 characters long',
             'string.max': 'Street address cannot exceed 200 characters'
         }),
@@ -45,22 +45,22 @@ const addressValidation = Joi.object({
 
 const idProofValidation = Joi.object({
     type: Joi.string()
-        .required()
+        .optional()
+        .allow('')
         .trim()
         .min(2)
         .max(50)
         .messages({
-            'string.empty': 'ID proof type is required',
             'string.min': 'ID proof type must be at least 2 characters long',
             'string.max': 'ID proof type cannot exceed 50 characters'
         }),
     number: Joi.string()
-        .required()
+        .optional()
+        .allow('')
         .trim()
         .min(2)
         .max(50)
         .messages({
-            'string.empty': 'ID proof number is required',
             'string.min': 'ID proof number must be at least 2 characters long',
             'string.max': 'ID proof number cannot exceed 50 characters'
         }),
@@ -105,9 +105,7 @@ export const createVisitorValidation = Joi.object({
     address: addressValidation.required().messages({
         'any.required': 'Address is required'
     }),
-    idProof: idProofValidation.required().messages({
-        'any.required': 'ID proof is required'
-    }),
+    idProof: idProofValidation.optional(),
     photo: Joi.string()
         .optional()
         .trim()

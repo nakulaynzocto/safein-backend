@@ -43,6 +43,11 @@ router.get(
     asyncWrapper(UserSubscriptionController.getTrialLimitsStatus)
 );
 
+router.get(
+    '/history',
+    asyncWrapper(UserSubscriptionController.getUserSubscriptionHistory)
+);
+
 router.post(
     '/razorpay/checkout',
     validateRequest(razorpayCheckoutValidation),

@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IUserSubscription extends Document {
     userId: mongoose.Types.ObjectId; // Reference to the User model
-    planType: 'free' | 'monthly' | 'quarterly' | 'yearly';
+    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     startDate: Date;
     endDate: Date;
     isActive: boolean;
@@ -25,7 +25,7 @@ const userSubscriptionSchema = new Schema<IUserSubscription>({
     },
     planType: {
             type: String,
-        enum: ['free', 'monthly', 'quarterly', 'yearly'],
+        enum: ['free', 'weekly', 'monthly', 'quarterly', 'yearly'],
         required: true,
         },
         startDate: {
