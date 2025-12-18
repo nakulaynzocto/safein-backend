@@ -13,6 +13,7 @@ import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import * as XLSX from 'xlsx';
 
 export class EmployeeController {
     /**
@@ -215,5 +216,159 @@ export class EmployeeController {
         const userId = req.user._id.toString();
         const stats = await EmployeeService.getEmployeeStats(userId);
         ResponseUtil.success(res, 'Employee statistics retrieved successfully', stats);
+    }
+
+    /**
+     * Download Excel template for bulk import
+     * GET /api/employees/template
+     */
+    @TryCatch('Failed to download template')
+    static async downloadTemplate(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        // Create workbook and worksheet
+        const workbook = XLSX.utils.book_new();
+        
+        // Define headers
+        const headers = [
+            'Name',
+            'Email',
+            'Phone',
+            'Department',
+            'Designation',
+            'Status'
+        ];
+
+        // Create sample data row
+        const sampleData = [
+            [
+                'John Doe',
+                'john.doe@example.com',
+                '1234567890',
+                'Engineering',
+                'Software Engineer',
+                'Active'
+            ]
+        ];
+
+        // Create worksheet
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+
+        // Set column widths
+        worksheet['!cols'] = [
+            { wch: 20 }, // Name
+            { wch: 30 }, // Email
+            { wch: 15 }, // Phone
+            { wch: 20 }, // Department
+            { wch: 25 }, // Designation
+            { wch: 12 }  // Status
+        ];
+
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Employees');
+
+        // Generate buffer
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Set response headers
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=employee-import-template.xlsx');
+        
+        // Send file
+        res.send(buffer);
+    }
+
+    /**
+     * Bulk create employees from Excel file
+     * POST /api/employees/bulk-create
+     */
+    @TryCatch('Failed to bulk create employees')
+    static async bulkCreateEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        if (!req.file) {
+            throw new AppError('Excel file is required', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const createdBy = req.user._id.toString();
+        
+        try {
+            // Read Excel file
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            // Convert to JSON - map headers to lowercase keys
+            const data = XLSX.utils.sheet_to_json(worksheet, { 
+                defval: '', // Default value for empty cells
+                raw: false // Convert all values to strings
+            });
+
+            // Validate and transform data - optimized with helper function
+            const employees: ICreateEmployeeDTO[] = [];
+            const VALID_STATUSES = ['Active', 'Inactive'] as const;
+            
+            // Helper function to get value by case-insensitive key
+            const getValue = (row: any, key: string): string => {
+                const keys = Object.keys(row);
+                const foundKey = keys.find(k => k.toLowerCase().trim() === key.toLowerCase());
+                return foundKey ? String(row[foundKey] || '').trim() : '';
+            };
+
+            for (let i = 0; i < data.length; i++) {
+                const row = data[i] as any;
+                
+                const name = getValue(row, 'name');
+                const email = getValue(row, 'email');
+                const phone = getValue(row, 'phone');
+                const department = getValue(row, 'department');
+                const designation = getValue(row, 'designation');
+                const status = getValue(row, 'status');
+
+                // Skip empty rows
+                if (!name && !email && !phone) {
+                    continue;
+                }
+
+                // Transform to match DTO
+                const employee: ICreateEmployeeDTO = {
+                    name,
+                    email: email.toLowerCase(),
+                    phone,
+                    department,
+                    designation: designation || undefined,
+                    status: (status && VALID_STATUSES.includes(status as typeof VALID_STATUSES[number]))
+                        ? status as 'Active' | 'Inactive'
+                        : 'Active'
+                };
+
+                employees.push(employee);
+            }
+
+            if (employees.length === 0) {
+                throw new AppError('No valid employee data found in Excel file', ERROR_CODES.BAD_REQUEST);
+            }
+
+            if (employees.length > 1000) {
+                throw new AppError('Maximum 1000 employees can be imported at once', ERROR_CODES.BAD_REQUEST);
+            }
+
+            // Bulk create employees
+            const result = await EmployeeService.bulkCreateEmployees(
+                { employees },
+                createdBy
+            );
+
+            ResponseUtil.success(res, 'Bulk import completed', result);
+        } catch (error: any) {
+            if (error instanceof AppError) {
+                throw error;
+            }
+            throw new AppError(`Failed to process Excel file: ${error.message}`, ERROR_CODES.BAD_REQUEST);
+        }
     }
 }

@@ -7,7 +7,9 @@ import {
     IEmployeeListResponse,
     IUpdateEmployeeStatusDTO,
     IBulkUpdateEmployeesDTO,
-    IEmployeeStats
+    IEmployeeStats,
+    IBulkCreateEmployeeDTO,
+    IBulkCreateEmployeeResponse
 } from '../../types/employee/employee.types';
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
@@ -382,6 +384,166 @@ export class EmployeeService {
                 status: item._id,
                 count: item.count
             }))
+        };
+    }
+
+    /**
+     * Bulk create employees
+     * Duplicate emails are ignored (skipped) - only unique emails are inserted
+     * Optimized with batch database queries for better performance
+     */
+    @Transaction('Failed to bulk create employees')
+    static async bulkCreateEmployees(
+        bulkData: IBulkCreateEmployeeDTO,
+        createdBy: string,
+        options: { session?: any } = {}
+    ): Promise<IBulkCreateEmployeeResponse> {
+        const { session } = options;
+        const { employees } = bulkData;
+
+        if (!employees || employees.length === 0) {
+            return { successCount: 0, failedCount: 0, errors: [] };
+        }
+
+        const errors: Array<{ row: number; email?: string; errors: string[] }> = [];
+        let successCount = 0;
+        const processedEmails = new Set<string>(); // Track emails in current batch to skip duplicates
+        const validEmployees: Array<{ data: ICreateEmployeeDTO; row: number; emailLower: string }> = [];
+        const emailToRowMap = new Map<string, number>(); // Map email to row for error reporting
+
+        // Step 1: Validate and normalize emails, filter duplicates within file
+        for (let i = 0; i < employees.length; i++) {
+            const employeeData = employees[i];
+            const row = i + 2; // +2 because row 1 is header, row 2 is first data
+
+            try {
+                const emailLower = employeeData.email.toLowerCase().trim();
+                
+                // Skip if email is duplicate within the same batch
+                if (processedEmails.has(emailLower)) {
+                    errors.push({
+                        row,
+                        email: employeeData.email,
+                        errors: ['Duplicate email in file - skipped']
+                    });
+                    continue;
+                }
+
+                processedEmails.add(emailLower);
+                emailToRowMap.set(emailLower, row);
+                validEmployees.push({
+                    data: { ...employeeData, email: emailLower },
+                    row,
+                    emailLower
+                });
+            } catch (error: any) {
+                errors.push({
+                    row,
+                    email: employeeData.email,
+                    errors: [error.message || 'Invalid employee data']
+                });
+            }
+        }
+
+        if (validEmployees.length === 0) {
+            return { successCount: 0, failedCount: errors.length, errors };
+        }
+
+        // Step 2: Batch query existing employees (optimized - single query)
+        const emailsToCheck = validEmployees.map(e => e.emailLower);
+        const existingEmployees = await Employee.find({
+            email: { $in: emailsToCheck },
+            createdBy: createdBy
+        }).session(session);
+
+        const existingEmailsMap = new Map<string, any>();
+        existingEmployees.forEach(emp => {
+            existingEmailsMap.set(emp.email.toLowerCase(), emp);
+        });
+
+        // Step 3: Process employees in batch
+        const employeesToCreate: Array<ICreateEmployeeDTO & { createdBy: string }> = [];
+        const employeesToRestore: Array<{ employee: any; data: ICreateEmployeeDTO }> = [];
+
+        for (const { data, row, emailLower } of validEmployees) {
+            const existingEmployee = existingEmailsMap.get(emailLower);
+
+            if (existingEmployee) {
+                if ((existingEmployee as any).isDeleted === true) {
+                    // Queue for restore
+                    employeesToRestore.push({ employee: existingEmployee, data });
+                } else {
+                    // Skip duplicate - email already exists and is active
+                    errors.push({
+                        row,
+                        email: data.email,
+                        errors: ['Email already exists - skipped']
+                    });
+                }
+            } else {
+                // Queue for creation
+                employeesToCreate.push({ ...data, createdBy });
+            }
+        }
+
+        // Step 4: Batch create new employees
+        if (employeesToCreate.length > 0) {
+            try {
+                await Employee.insertMany(employeesToCreate, { session });
+                successCount += employeesToCreate.length;
+            } catch (error: any) {
+                // If batch insert fails, try individual inserts for better error reporting
+                for (let i = 0; i < employeesToCreate.length; i++) {
+                    const empData = employeesToCreate[i];
+                    const row = emailToRowMap.get(empData.email.toLowerCase()) || 0;
+                    try {
+                        const employee = new Employee(empData);
+                        await employee.save({ session });
+                        successCount++;
+                    } catch (err: any) {
+                        const errorMessages: string[] = [];
+                        if (err.name === 'ValidationError') {
+                            Object.keys(err.errors).forEach((key) => {
+                                errorMessages.push(`${key}: ${err.errors[key].message}`);
+                            });
+                        } else {
+                            errorMessages.push(err.message || 'Unknown error occurred');
+                        }
+                        errors.push({ row, email: empData.email, errors: errorMessages });
+                    }
+                }
+            }
+        }
+
+        // Step 5: Restore deleted employees
+        for (const { employee, data } of employeesToRestore) {
+            const row = emailToRowMap.get(data.email.toLowerCase()) || 0;
+            try {
+                employee.set({
+                    ...data,
+                    isDeleted: false,
+                    deletedAt: null,
+                    deletedBy: null
+                });
+                await employee.save({ session });
+                successCount++;
+            } catch (error: any) {
+                const errorMessages: string[] = [];
+                if (error.name === 'ValidationError') {
+                    Object.keys(error.errors).forEach((key) => {
+                        errorMessages.push(`${key}: ${error.errors[key].message}`);
+                    });
+                } else {
+                    errorMessages.push(error.message || 'Unknown error occurred');
+                }
+                errors.push({ row, email: data.email, errors: errorMessages });
+            }
+        }
+
+        return {
+            successCount,
+            failedCount: errors.length,
+            errors
         };
     }
 }

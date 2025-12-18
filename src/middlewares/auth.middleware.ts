@@ -9,6 +9,8 @@ export interface AuthenticatedRequest extends Request {
   user?: IUser;
   isPremiumUser?: boolean;
   activeSubscription?: any;
+  file?: Express.Multer.File;
+  files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
 }
 
 export const verifyToken = async (req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> => {
