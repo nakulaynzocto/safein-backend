@@ -8,7 +8,7 @@ import {
   IResetPasswordDTO,
   IUserResponse
 } from '../../types/user/user.types';
-import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
+import { ERROR_MESSAGES, ERROR_CODES, CONSTANTS } from '../../utils/constants';
 import { JwtUtil } from '../../utils/jwt.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
@@ -374,8 +374,9 @@ export class UserService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    // Create reset URL - Use APPROVAL_LINK_BASE_URL (same as approve/reject links) or fallback to FRONTEND_URL
+    const baseUrl = CONSTANTS.APPROVAL_LINK_BASE_URL || CONSTANTS.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
+    const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`;
 
     try {
       // Send password reset email
