@@ -189,3 +189,16 @@ export const bulkUpdateEmployeesValidation = Joi.object({
             'string.max': 'Department cannot exceed 50 characters'
         })
 });
+
+export const bulkCreateEmployeesValidation = Joi.object({
+    employees: Joi.array()
+        .items(createEmployeeValidation)
+        .min(1)
+        .max(1000)
+        .required()
+        .messages({
+            'array.min': 'At least one employee is required',
+            'array.max': 'Maximum 1000 employees can be imported at once',
+            'any.required': 'Employees array is required'
+        })
+});

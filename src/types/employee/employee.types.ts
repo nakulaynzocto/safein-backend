@@ -79,3 +79,17 @@ export interface IEmployeeStats {
         count: number;
     }>;
 }
+
+export interface IBulkCreateEmployeeDTO {
+    employees: ICreateEmployeeDTO[];
+}
+
+export interface IBulkCreateEmployeeResponse {
+    successCount: number;
+    failedCount: number;
+    errors: Array<{
+        row: number;
+        email?: string;
+        errors: string[];
+    }>;
+}
