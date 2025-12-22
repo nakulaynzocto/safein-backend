@@ -479,11 +479,47 @@ export class AppointmentService {
 
     /**
      * Get appointment statistics (user-specific)
+     * @param userId - Optional user ID to filter by creator
+     * @param startDate - Optional start date for filtering (YYYY-MM-DD)
+     * @param endDate - Optional end date for filtering (YYYY-MM-DD)
      */
-    static async getAppointmentStats(userId?: string): Promise<IAppointmentStats> {
-        const baseFilter: any = {};
+    static async getAppointmentStats(userId?: string, startDate?: string, endDate?: string): Promise<IAppointmentStats> {
+        const baseFilter: any = { isDeleted: false };
         if (userId) {
             baseFilter.createdBy = userId;
+        }
+
+        // Build date range filter
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $gte: start,
+                $lt: endExclusive
+            };
+        } else if (startDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const endExclusive = new Date(startDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $gte: start,
+                $lt: endExclusive
+            };
+        } else if (endDate) {
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $lt: endExclusive
+            };
         }
 
         const [
@@ -497,19 +533,19 @@ export class AppointmentService {
             appointmentsByEmployee,
             appointmentsByDate
         ] = await Promise.all([
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'scheduled' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'checked_in' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'completed' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'cancelled' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'no_show' }),
+            Appointment.countDocuments(baseFilter),
+            Appointment.countDocuments({ ...baseFilter, status: 'scheduled' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'checked_in' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'completed' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'cancelled' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'no_show' }),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 { $group: { _id: '$status', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ]),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 { $group: { _id: '$employeeId', count: { $sum: 1 } } },
                 { $lookup: { from: 'employees', localField: '_id', foreignField: '_id', as: 'employee' } },
                 { $unwind: '$employee' },
@@ -518,7 +554,7 @@ export class AppointmentService {
                 { $limit: 10 }
             ]),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 {
                     $group: {
                         _id: {

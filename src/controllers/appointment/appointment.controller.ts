@@ -143,7 +143,13 @@ export class AppointmentController {
         }
         
         const userId = req.user._id.toString();
-        const stats = await AppointmentService.getAppointmentStats(userId);
+        const { startDate, endDate } = req.query;
+        
+        const stats = await AppointmentService.getAppointmentStats(
+            userId,
+            startDate as string | undefined,
+            endDate as string | undefined
+        );
         ResponseUtil.success(res, 'Appointment statistics retrieved successfully', stats);
     }
 
