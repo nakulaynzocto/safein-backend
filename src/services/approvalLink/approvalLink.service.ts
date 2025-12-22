@@ -139,11 +139,12 @@ export class ApprovalLinkService {
         // 🔔 Emit WebSocket event for real-time update
         const userId = appointment.createdBy?.toString();
         if (userId) {
+            const appointmentObj = appointment.toObject();
             socketService.emitAppointmentStatusChange(userId, {
-                appointmentId: appointment._id.toString(),
+                appointmentId: appointmentObj.appointmentId || appointment._id.toString(),
                 status: status,
                 updatedAt: new Date(),
-                appointment: appointment.toObject()
+                appointment: appointmentObj
             });
         }
 

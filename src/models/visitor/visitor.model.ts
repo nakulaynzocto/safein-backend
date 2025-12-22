@@ -36,7 +36,16 @@ const addressSchema = new Schema<IAddress>({
         type: String,
         required: false,
         trim: true,
-        minlength: [2, 'Street address must be at least 2 characters long'],
+        validate: {
+            validator: function(value: string) {
+                // Only validate minlength if value is provided and not empty
+                if (!value || value.trim() === '') {
+                    return true; // Empty is allowed
+                }
+                return value.trim().length >= 2;
+            },
+            message: 'Street address must be at least 2 characters long'
+        },
         maxlength: [200, 'Street address cannot exceed 200 characters'],
         default: ''
     },

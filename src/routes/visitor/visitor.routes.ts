@@ -42,12 +42,6 @@ router.post(
 );
 
 router.get(
-    '/trashed',
-    validateRequest(getVisitorsValidation),
-    asyncWrapper(VisitorController.getTrashedVisitors)
-);
-
-router.get(
     '/:id',
     validateRequest(visitorParamsValidation),
     asyncWrapper(VisitorController.getVisitorById)
@@ -58,12 +52,6 @@ router.put(
     validateRequest(visitorParamsValidation),
     validateRequest(updateVisitorValidation),
     asyncWrapper(VisitorController.updateVisitor)
-);
-
-router.put(
-    '/:id/restore',
-    validateRequest(visitorParamsValidation),
-    asyncWrapper(VisitorController.restoreVisitor)
 );
 
 router.put(

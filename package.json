@@ -11,7 +11,7 @@
     "test": "jest",
     "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts",
     "seed:subscription-plans:clear": "ts-node scripts/seed-subscription-plans.ts --clear",
-    "test:user-subscription": "ts-node scripts/test-user-subscription-system.ts"
+    "fix:appointment-links-index": "ts-node scripts/fix-appointment-links-index.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -26,6 +26,7 @@
     "@types/socket.io": "^3.0.1",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
+    "@types/uuid": "^10.0.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
@@ -45,6 +46,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
     "typescript": "^5.0.0",
+    "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

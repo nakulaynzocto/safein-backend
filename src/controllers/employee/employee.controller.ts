@@ -116,43 +116,6 @@ export class EmployeeController {
         ResponseUtil.success(res, 'Employee deleted successfully');
     }
 
-    /**
-     * Get trashed employees (user-specific)
-     * GET /api/employees/trashed
-     */
-    @TryCatch('Failed to get trashed employees')
-    static async getTrashedEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const query: IGetEmployeesQuery = req.query;
-        const userId = req.user._id.toString();
-        const result = await EmployeeService.getTrashedEmployees(query, userId);
-        ResponseUtil.success(res, 'Trashed employees retrieved successfully', result);
-    }
-
-    /**
-     * Restore employee from trash (user-specific)
-     * PUT /api/employees/:id/restore
-     */
-    @TryCatch('Failed to restore employee')
-    static async restoreEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const employeeRecord = await Employee.findById(id);
-        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
-            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const employee = await EmployeeService.restoreEmployee(id);
-        ResponseUtil.success(res, 'Employee restored successfully', employee);
-    }
 
     /**
      * Update employee status (user-specific)

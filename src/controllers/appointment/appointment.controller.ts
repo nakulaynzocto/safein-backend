@@ -166,16 +166,6 @@ export class AppointmentController {
         ResponseUtil.success(res, 'Appointments updated successfully', result);
     }
 
-    /**
-     * Restore appointment from trash
-     * PUT /api/appointments/:id/restore
-     */
-    @TryCatch('Failed to restore appointment')
-    static async restoreAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const { id } = req.params;
-        const appointment = await AppointmentService.restoreAppointment(id);
-        ResponseUtil.success(res, 'Appointment restored successfully', appointment);
-    }
 
     /**
      * Get appointments by employee

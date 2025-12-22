@@ -69,12 +69,6 @@ router.post(
 );
 
 router.get(
-    '/trashed',
-    validateRequest(getEmployeesValidation),
-    asyncWrapper(EmployeeController.getTrashedEmployees)
-);
-
-router.get(
     '/:id',
     validateRequest(employeeParamsValidation),
     asyncWrapper(EmployeeController.getEmployeeById)
@@ -92,12 +86,6 @@ router.put(
     validateRequest(employeeParamsValidation),
     validateRequest(updateEmployeeStatusValidation),
     asyncWrapper(EmployeeController.updateEmployeeStatus)
-);
-
-router.put(
-    '/:id/restore',
-    validateRequest(employeeParamsValidation),
-    asyncWrapper(EmployeeController.restoreEmployee)
 );
 
 router.put(
