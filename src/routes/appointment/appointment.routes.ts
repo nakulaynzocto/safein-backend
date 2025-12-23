@@ -86,11 +86,6 @@ router.delete(
     asyncWrapper(AppointmentController.deleteAppointment)
 );
 
-router.put(
-    '/:id/restore',
-    validateRequest(appointmentParamsValidation),
-    asyncWrapper(AppointmentController.restoreAppointment)
-);
 
 router.put(
     '/:id/cancel',

@@ -5,6 +5,8 @@ import { EmailService } from '../email/email.service';
 import { ApprovalLinkService } from '../approvalLink/approvalLink.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SettingsService } from '../settings/settings.service';
+import { socketService } from '../socket/socket.service';
+import { emitAppointmentStatusChange } from '../../utils/socketHelpers.util';
 import {
     ICreateAppointmentDTO,
     IUpdateAppointmentDTO,
@@ -23,9 +25,6 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 
 export class AppointmentService {
-    /**
-     * Create a new appointment
-     */
     @Transaction('Failed to create appointment')
     static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
@@ -38,7 +37,6 @@ export class AppointmentService {
             throw new AppError('Employee is inactive. Please select an active employee.', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Prevent double booking for the same employee, date, and time while an earlier appointment is pending/approved
         const conflictAppointment = await Appointment.findOne({
             employeeId: appointmentData.employeeId,
             'appointmentDetails.scheduledDate': appointmentData.appointmentDetails.scheduledDate,
@@ -63,21 +61,18 @@ export class AppointmentService {
             .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
             .session(session);
 
-        // Generate approval link for the appointment
         let approvalLink = null;
         try {
             const appointmentId = (appointment._id as any).toString();
             approvalLink = await ApprovalLinkService.createApprovalLink(appointmentId);
-        } catch (error) {
-            console.error('Failed to create approval link:', error);
+        } catch {
+            // Approval link creation failed, continue without it
         }
 
-        // Check settings for notifications
         const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // Send email notification to employee (if enabled and approval link exists)
         try {
             if (populatedAppointment && emailEnabled && approvalLink?.token) {
                 await EmailService.sendNewAppointmentRequestEmail(
@@ -87,18 +82,30 @@ export class AppointmentService {
                     populatedAppointment.appointmentDetails.scheduledDate,
                     populatedAppointment.appointmentDetails.scheduledTime,
                     populatedAppointment.appointmentDetails.purpose,
-                    approvalLink.token // Pass the approval token instead of appointment ID
+                    approvalLink.token
                 );
-                
-                // Mark email as sent only if notification is enabled and sent successfully
                 appointment.notifications.emailSent = true;
             } else {
-                // Mark as not sent if disabled or no approval link
                 appointment.notifications.emailSent = false;
             }
-        } catch (error) {
-            console.error('Failed to send new appointment request email to employee:', error);
+        } catch {
             appointment.notifications.emailSent = false;
+        }
+
+        // Send confirmation email to visitor (if enabled)
+        try {
+            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
+                await EmailService.sendAppointmentConfirmationEmail(
+                    (populatedAppointment.visitorId as any).email,
+                    (populatedAppointment.visitorId as any).name,
+                    (populatedAppointment.employeeId as any).name,
+                    populatedAppointment.appointmentDetails.scheduledDate,
+                    populatedAppointment.appointmentDetails.scheduledTime,
+                    populatedAppointment.appointmentDetails.purpose
+                );
+            }
+        } catch {
+            // Visitor confirmation email failed, continue
         }
 
         // Send WhatsApp notification to employee (if enabled)
@@ -108,8 +115,6 @@ export class AppointmentService {
                 const employeeName = (populatedAppointment.employeeId as any).name;
                 
                 if (employeePhone) {
-                    console.log(`Sending WhatsApp notification to employee: ${employeeName} (${employeePhone})`);
-                    
                     const whatsappSent = await WhatsAppService.sendAppointmentNotification(
                         employeePhone,
                         employeeName,
@@ -129,54 +134,43 @@ export class AppointmentService {
                     
                     // Mark WhatsApp as sent only if notification is enabled and sent successfully
                     appointment.notifications.whatsappSent = whatsappSent;
-                    
-                    if (whatsappSent) {
-                        console.log(`WhatsApp notification sent successfully to employee: ${employeeName}`);
-                    } else {
-                        console.warn(`Failed to send WhatsApp notification to employee: ${employeeName}. Check WhatsApp Cloud API configuration.`);
-                    }
                 } else {
-                    console.warn(`Employee ${employeeName} does not have a phone number. WhatsApp notification not sent.`);
                     appointment.notifications.whatsappSent = false;
                 }
             } else {
-                if (!whatsappEnabled) {
-                    console.log('WhatsApp notifications are disabled in settings');
-                } else if (!approvalLink?.link) {
-                    console.warn('Approval link not generated. WhatsApp notification not sent.');
-                }
-                // Mark as not sent if disabled
                 appointment.notifications.whatsappSent = false;
             }
-        } catch (error: any) {
-            console.error('Failed to send WhatsApp notification to employee:', error?.message || error);
+        } catch {
             appointment.notifications.whatsappSent = false;
         }
 
-        // SMS notifications (if SMS service is implemented)
-        // For now, mark as not sent if disabled
         appointment.notifications.smsSent = false;
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // const smsSent = await SmsService.sendAppointmentNotification(...);
-            // appointment.notifications.smsSent = smsSent;
         }
 
-        // Save notification status
         await appointment.save({ session });
 
+        try {
+            if (populatedAppointment) {
+                socketService.emitAppointmentCreated(createdBy, {
+                    appointmentId: (appointment._id as any).toString(),
+                    appointment: populatedAppointment,
+                    status: appointment.status,
+                    createdAt: appointment.createdAt,
+                });
+            }
+        } catch {
+            // Socket notification failed, continue
+        }
+
         const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
-        
-        // Add approval link to response
         return {
             ...appointmentResponse,
             approvalLink: approvalLink?.link || null
         } as IAppointmentResponse;
     }
 
-    /**
-     * Get appointment by ID
-     */
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
@@ -719,22 +713,6 @@ export class AppointmentService {
     }
 
     /**
-     * Restore appointment from trash
-     */
-    @Transaction('Failed to restore appointment')
-    static async restoreAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
-
-        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: true }).session(session);
-        if (!appointment) {
-            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
-        }
-
-        await (appointment as any).restore();
-        return appointment.toObject() as unknown as IAppointmentResponse;
-    }
-
-    /**
      * Cancel appointment
      */
     @Transaction('Failed to cancel appointment')
@@ -801,8 +779,8 @@ export class AppointmentService {
                     appointment.appointmentDetails.scheduledTime
                 );
             }
-        } catch (error) {
-            console.error('Failed to send approval email to visitor:', error);
+        } catch {
+            // Email sending failed, continue
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -820,17 +798,14 @@ export class AppointmentService {
                     );
                 }
             }
-        } catch (error) {
-            console.error('Failed to send approval WhatsApp to visitor:', error);
+        } catch {
+            // WhatsApp sending failed, continue
         }
 
-        // SMS notifications (if SMS service is implemented and enabled)
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // await SmsService.sendAppointmentStatusUpdate(...);
         }
 
-        // Send email notification to employee
         try {
             await EmailService.sendEmployeeAppointmentApprovalEmail(
                 (appointment.employeeId as any).email,
@@ -839,16 +814,15 @@ export class AppointmentService {
                 appointment.appointmentDetails.scheduledDate,
                 appointment.appointmentDetails.scheduledTime
             );
-        } catch (error) {
-            console.error('Failed to send approval email to employee:', error);
+        } catch {
+            // Email sending failed, continue
         }
+
+        emitAppointmentStatusChange(userId, appointment, 'approved');
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
-    /**
-     * Reject appointment
-     */
     static async rejectAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
 
@@ -887,8 +861,8 @@ export class AppointmentService {
                     appointment.appointmentDetails.scheduledTime
                 );
             }
-        } catch (error) {
-            console.error('Failed to send rejection email to visitor:', error);
+        } catch {
+            // Email sending failed, continue
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -906,17 +880,14 @@ export class AppointmentService {
                     );
                 }
             }
-        } catch (error) {
-            console.error('Failed to send rejection WhatsApp to visitor:', error);
+        } catch {
+            // WhatsApp sending failed, continue
         }
 
-        // SMS notifications (if SMS service is implemented and enabled)
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // await SmsService.sendAppointmentStatusUpdate(...);
         }
 
-        // Send email notification to employee
         try {
             await EmailService.sendEmployeeAppointmentRejectionEmail(
                 (appointment.employeeId as any).email,
@@ -925,9 +896,11 @@ export class AppointmentService {
                 appointment.appointmentDetails.scheduledDate,
                 appointment.appointmentDetails.scheduledTime
             );
-        } catch (error) {
-            console.error('Failed to send rejection email to employee:', error);
+        } catch {
+            // Email sending failed, continue
         }
+
+        emitAppointmentStatusChange(userId, appointment, 'rejected');
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }

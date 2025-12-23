@@ -79,7 +79,6 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         razorpayPaymentId: {
             type: String,
             default: null,
-            index: true,
         },
         previousSubscriptionId: {
             type: Schema.Types.ObjectId,

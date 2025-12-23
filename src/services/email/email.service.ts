@@ -19,6 +19,14 @@ import {
   getPasswordResetEmailTemplate, 
   getPasswordResetEmailText 
 } from '../../templates/email/password-reset-email.template';
+import {
+  getAppointmentLinkEmailTemplate,
+  getAppointmentLinkEmailText
+} from '../../templates/email/appointment-link-email.template';
+import {
+  getAppointmentConfirmationEmailTemplate,
+  getAppointmentConfirmationEmailText
+} from '../../templates/email/appointment-confirmation-email.template';
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
@@ -484,6 +492,60 @@ export class EmailService {
       }
       
       throw new AppError(`Failed to send password reset email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Send appointment booking link email
+   */
+  static async sendAppointmentLinkEmail(
+    visitorEmail: string,
+    employeeName: string,
+    bookingUrl: string,
+    expiresAt: Date
+  ): Promise<void> {
+    try {
+      await this.sendEmail({
+        to: visitorEmail,
+        subject: 'Book Your Appointment - SafeIn',
+        html: getAppointmentLinkEmailTemplate(employeeName, bookingUrl, expiresAt),
+        text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Appointment link email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send appointment link email:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send appointment confirmation email to visitor
+   */
+  static async sendAppointmentConfirmationEmail(
+    visitorEmail: string,
+    visitorName: string,
+    employeeName: string,
+    scheduledDate: Date,
+    scheduledTime: string,
+    purpose: string
+  ): Promise<void> {
+    try {
+      await this.sendEmail({
+        to: visitorEmail,
+        subject: 'Appointment Request Submitted - SafeIn',
+        html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
+        text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
+        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        logMessage: 'Appointment confirmation email to visitor',
+      });
+    } catch (error: any) {
+      console.error('Failed to send appointment confirmation email to visitor:', error.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Continuing in development mode despite email error');
+        return;
+      }
+      // Don't throw error, just log it - visitor confirmation is not critical
     }
   }
 
