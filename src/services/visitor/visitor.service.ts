@@ -1,4 +1,5 @@
 import { Visitor } from '../../models/visitor/visitor.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import {
     ICreateVisitorDTO,
     IUpdateVisitorDTO,
@@ -209,12 +210,36 @@ export class VisitorService {
      * Soft delete visitor
      */
     @Transaction('Failed to delete visitor')
+    /**
+     * Check if visitor has appointments
+     */
+    static async hasAppointments(visitorId: string): Promise<{ hasAppointments: boolean; count: number }> {
+        const count = await Appointment.countDocuments({ 
+            visitorId, 
+            isDeleted: false 
+        });
+        return { hasAppointments: count > 0, count };
+    }
+
     static async deleteVisitor(visitorId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
         const { session } = options;
 
         const visitor = await Visitor.findOne({ _id: visitorId, isDeleted: false }).session(session);
         if (!visitor) {
             throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        // Check if any appointments exist for this visitor
+        const existingAppointments = await Appointment.countDocuments({ 
+            visitorId, 
+            isDeleted: false 
+        }).session(session);
+
+        if (existingAppointments > 0) {
+            throw new AppError(
+                `Cannot delete visitor. ${existingAppointments} appointment(s) have been created with this visitor. Please delete or reassign the appointments first.`,
+                ERROR_CODES.BAD_REQUEST
+            );
         }
 
         await (visitor as any).softDelete(deletedBy);

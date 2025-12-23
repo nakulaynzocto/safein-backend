@@ -1,4 +1,5 @@
 import { Employee } from '../../models/employee/employee.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import {
     ICreateEmployeeDTO,
     IUpdateEmployeeDTO,
@@ -191,6 +192,17 @@ export class EmployeeService {
     }
 
     /**
+     * Check if employee has appointments
+     */
+    static async hasAppointments(employeeId: string): Promise<{ hasAppointments: boolean; count: number }> {
+        const count = await Appointment.countDocuments({ 
+            employeeId, 
+            isDeleted: false 
+        });
+        return { hasAppointments: count > 0, count };
+    }
+
+    /**
      * Soft delete employee
      */
     @Transaction('Failed to delete employee')
@@ -200,6 +212,19 @@ export class EmployeeService {
         const employee = await Employee.findOne({ _id: employeeId, isDeleted: false }).session(session);
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        // Check if any appointments exist for this employee
+        const existingAppointments = await Appointment.countDocuments({ 
+            employeeId, 
+            isDeleted: false 
+        }).session(session);
+
+        if (existingAppointments > 0) {
+            throw new AppError(
+                `Cannot delete employee. ${existingAppointments} appointment(s) have been created with this employee. Please delete or reassign the appointments first.`,
+                ERROR_CODES.BAD_REQUEST
+            );
         }
 
         await (employee as any).softDelete(deletedBy);

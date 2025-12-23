@@ -75,6 +75,12 @@ router.get(
 );
 
 router.get(
+    '/:id/has-appointments',
+    validateRequest(employeeParamsValidation),
+    asyncWrapper(EmployeeController.hasAppointments)
+);
+
+router.get(
     '/:id',
     validateRequest(employeeParamsValidation),
     asyncWrapper(EmployeeController.getEmployeeById)

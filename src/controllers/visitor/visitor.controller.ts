@@ -108,6 +108,21 @@ export class VisitorController {
     }
 
     /**
+     * Check if visitor has appointments
+     * GET /api/visitors/:id/has-appointments
+     */
+    @TryCatch('Failed to check visitor appointments')
+    static async hasAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
+        const { id } = req.params;
+        const result = await VisitorService.hasAppointments(id);
+        ResponseUtil.success(res, 'Appointment check completed', result);
+    }
+
+    /**
      * Get trashed visitors (user-specific)
      * GET /api/visitors/trashed
      */

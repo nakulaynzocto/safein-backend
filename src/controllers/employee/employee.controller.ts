@@ -117,6 +117,28 @@ export class EmployeeController {
     }
 
     /**
+     * Check if employee has appointments
+     * GET /api/employees/:id/has-appointments
+     */
+    @TryCatch('Failed to check employee appointments')
+    static async hasAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+        
+        const { id } = req.params;
+        const userId = req.user._id.toString();
+        
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+        
+        const result = await EmployeeService.hasAppointments(id);
+        ResponseUtil.success(res, 'Appointment check completed', result);
+    }
+
+    /**
      * Get trashed employees (user-specific)
      * GET /api/employees/trashed
      */

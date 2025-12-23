@@ -3,12 +3,18 @@ import Joi from 'joi';
 const addressValidation = Joi.object({
     street: Joi.string()
         .optional()
-        .allow('')
+        .allow('', null)
         .trim()
+        .custom((value, helpers) => {
+            if (value && value.trim().length > 0 && value.trim().length < 2) {
+                return helpers.error('string.min');
+            }
+            return value;
+        })
         .min(2)
         .max(200)
         .messages({
-            'string.min': 'Street address must be at least 2 characters long',
+            'string.min': 'Street address must be at least 2 characters. Please enter a complete address or leave it empty.',
             'string.max': 'Street address cannot exceed 200 characters'
         }),
     city: Joi.string()
@@ -46,29 +52,41 @@ const addressValidation = Joi.object({
 const idProofValidation = Joi.object({
     type: Joi.string()
         .optional()
-        .allow('')
+        .allow('', null)
         .trim()
+        .custom((value, helpers) => {
+            if (value && value.trim().length > 0 && value.trim().length < 2) {
+                return helpers.error('string.min');
+            }
+            return value;
+        })
         .min(2)
         .max(50)
         .messages({
-            'string.min': 'ID proof type must be at least 2 characters long',
+            'string.min': 'ID proof type must be at least 2 characters. Please enter a complete ID type or leave it empty.',
             'string.max': 'ID proof type cannot exceed 50 characters'
         }),
     number: Joi.string()
         .optional()
-        .allow('')
+        .allow('', null)
         .trim()
+        .custom((value, helpers) => {
+            if (value && value.trim().length > 0 && value.trim().length < 2) {
+                return helpers.error('string.min');
+            }
+            return value;
+        })
         .min(2)
         .max(50)
         .messages({
-            'string.min': 'ID proof number must be at least 2 characters long',
+            'string.min': 'ID proof number must be at least 2 characters. Please enter a complete ID number or leave it empty.',
             'string.max': 'ID proof number cannot exceed 50 characters'
         }),
     image: Joi.string()
         .optional()
         .trim()
         .max(500)
-        .allow('')
+        .allow('', null)
         .messages({
             'string.max': 'ID proof image URL cannot exceed 500 characters'
         })

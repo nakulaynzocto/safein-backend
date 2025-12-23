@@ -8,8 +8,8 @@ export interface IAddress {
 }
 
 export interface IIdProof {
-    type: string;
-    number: string;
+    type?: string;
+    number?: string;
     image?: string;
 }
 
@@ -36,7 +36,13 @@ const addressSchema = new Schema<IAddress>({
         type: String,
         required: false,
         trim: true,
-        minlength: [2, 'Street address must be at least 2 characters long'],
+        validate: {
+            validator: function(value: string) {
+                if (!value || value.trim().length === 0) return true;
+                return value.trim().length >= 2;
+            },
+            message: 'Street address must be at least 2 characters. Please enter a complete address or leave it empty.'
+        },
         maxlength: [200, 'Street address cannot exceed 200 characters'],
         default: ''
     },
@@ -68,7 +74,13 @@ const idProofSchema = new Schema<IIdProof>({
         type: String,
         required: false,
         trim: true,
-        minlength: [2, 'ID proof type must be at least 2 characters long'],
+        validate: {
+            validator: function(value: string) {
+                if (!value || value.trim().length === 0) return true;
+                return value.trim().length >= 2;
+            },
+            message: 'ID proof type must be at least 2 characters. Please enter a complete ID type or leave it empty.'
+        },
         maxlength: [50, 'ID proof type cannot exceed 50 characters'],
         default: ''
     },
@@ -76,7 +88,13 @@ const idProofSchema = new Schema<IIdProof>({
         type: String,
         required: false,
         trim: true,
-        minlength: [2, 'ID proof number must be at least 2 characters long'],
+        validate: {
+            validator: function(value: string) {
+                if (!value || value.trim().length === 0) return true;
+                return value.trim().length >= 2;
+            },
+            message: 'ID proof number must be at least 2 characters. Please enter a complete ID number or leave it empty.'
+        },
         maxlength: [50, 'ID proof number cannot exceed 50 characters'],
         default: ''
     },
@@ -121,7 +139,7 @@ const visitorSchema = new Schema<IVisitor>({
     },
     idProof: {
         type: idProofSchema,
-        required: [true, 'ID proof is required']
+        required: false
     },
     photo: {
         type: String,

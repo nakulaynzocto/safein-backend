@@ -6,7 +6,7 @@ export interface ICreateVisitorDTO {
     email: string;
     phone: string;
     address: IAddress;
-    idProof: IIdProof;
+    idProof?: IIdProof;
     photo?: string;
 }
 
@@ -26,7 +26,7 @@ export interface IVisitorResponse {
     email: string;
     phone: string;
     address: IAddress;
-    idProof: IIdProof;
+    idProof?: IIdProof;
     photo?: string;
     createdBy: string;
     isDeleted: boolean;

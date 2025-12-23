@@ -48,6 +48,12 @@ router.get(
 );
 
 router.get(
+    '/:id/has-appointments',
+    validateRequest(visitorParamsValidation),
+    asyncWrapper(VisitorController.hasAppointments)
+);
+
+router.get(
     '/:id',
     validateRequest(visitorParamsValidation),
     asyncWrapper(VisitorController.getVisitorById)
