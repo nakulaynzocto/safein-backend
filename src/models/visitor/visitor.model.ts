@@ -14,7 +14,6 @@ export interface IIdProof {
 }
 
 export interface IVisitor extends Document {
-    visitorId?: string; // Add this field if needed
     name: string;
     email: string;
     phone: string;
@@ -106,13 +105,6 @@ const idProofSchema = new Schema<IIdProof>({
 }, { _id: false });
 
 const visitorSchema = new Schema<IVisitor>({
-    visitorId: {
-        type: String,
-        sparse: true,
-        default: function() {
-            return 'VIS' + Date.now() + Math.random().toString(36).substr(2, 5).toUpperCase();
-        }
-    },
     name: {
         type: String,
         required: [true, 'Visitor name is required'],
@@ -180,7 +172,6 @@ visitorSchema.index({ isDeleted: 1 });
 visitorSchema.index({ deletedAt: 1 });
 visitorSchema.index({ createdBy: 1 });
 
-visitorSchema.index({ createdBy: 1, visitorId: 1 }, { unique: true, sparse: true });
 visitorSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
 visitorSchema.virtual('fullName').get(function () {

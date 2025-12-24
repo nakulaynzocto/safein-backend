@@ -4,8 +4,9 @@ export const visitorSchemas = {
         properties: {
             _id: {
                 type: 'string',
-                description: 'Visitor unique identifier',
-                example: '507f1f77bcf86cd799439011'
+                description: 'Visitor unique identifier (MongoDB _id)',
+                example: '507f1f77bcf86cd799439011',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             name: {
                 type: 'string',

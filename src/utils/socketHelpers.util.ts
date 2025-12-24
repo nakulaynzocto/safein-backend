@@ -9,7 +9,7 @@ export const emitAppointmentStatusChange = (
   
   const appointmentObj = appointment.toObject();
   socketService.emitAppointmentStatusChange(userId, {
-    appointmentId: appointmentObj.appointmentId || appointment._id.toString(),
+    appointmentId: appointment._id.toString(),
     status,
     updatedAt: new Date(),
     appointment: appointmentObj,

@@ -40,7 +40,6 @@ export interface ICreateUserDTO {
     role: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
-    employeeId?: string;
 }
 
 export interface IUpdateUserDTO {
@@ -50,7 +49,6 @@ export interface IUpdateUserDTO {
     role?: "admin" | "safein" | "employee" | "visitor";
     department?: string;
     designation?: string;
-    employeeId?: string;
 }
 
 export interface ILoginDTO {

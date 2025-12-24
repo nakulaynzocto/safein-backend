@@ -1,7 +1,6 @@
 import { IAddress, IIdProof } from '../../models/visitor/visitor.model';
 
 export interface ICreateVisitorDTO {
-    visitorId?: string;
     name: string;
     email: string;
     phone: string;
@@ -21,7 +20,6 @@ export interface IUpdateVisitorDTO {
 
 export interface IVisitorResponse {
     _id: string;
-    visitorId?: string;
     name: string;
     email: string;
     phone: string;

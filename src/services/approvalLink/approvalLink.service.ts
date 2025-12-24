@@ -88,7 +88,7 @@ export class ApprovalLinkService {
             isUsed: false,
             appointment: {
                 _id: appointment._id,
-                appointmentId: appointment.appointmentId,
+                appointmentId: appointment._id.toString(),
                 status: appointment.status,
                 employee: appointment.employeeId,
                 visitor: appointment.visitorId,
@@ -141,7 +141,7 @@ export class ApprovalLinkService {
         if (userId) {
             const appointmentObj = appointment.toObject();
             socketService.emitAppointmentStatusChange(userId, {
-                appointmentId: appointmentObj.appointmentId || appointment._id.toString(),
+                appointmentId: appointment._id.toString(),
                 status: status,
                 updatedAt: new Date(),
                 appointment: appointmentObj

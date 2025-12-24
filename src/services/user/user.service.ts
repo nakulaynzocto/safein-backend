@@ -227,9 +227,6 @@ export class UserService {
     if (updateData.designation !== undefined) {
       safeUpdateData.designation = updateData.designation;
     }
-    if (updateData.employeeId !== undefined) {
-      safeUpdateData.employeeId = updateData.employeeId;
-    }
 
     delete (safeUpdateData as any).session;
 

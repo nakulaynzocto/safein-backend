@@ -23,6 +23,8 @@ import {
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
+import { toObjectId } from '../../utils/idExtractor.util';
+import { escapeRegex } from '../../utils/string.util';
 
 export class AppointmentService {
     @Transaction('Failed to create appointment')
@@ -58,7 +60,7 @@ export class AppointmentService {
 
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
             .session(session);
 
         let approvalLink = null;
@@ -123,7 +125,7 @@ export class AppointmentService {
                             email: (populatedAppointment.visitorId as any).email,
                             phone: (populatedAppointment.visitorId as any).phone,
                             company: (populatedAppointment.visitorId as any).company,
-                            visitorId: (populatedAppointment.visitorId as any).visitorId
+                            _id: (populatedAppointment.visitorId as any)._id?.toString()
                         },
                         populatedAppointment.appointmentDetails.scheduledDate,
                         populatedAppointment.appointmentDetails.scheduledTime,
@@ -174,7 +176,7 @@ export class AppointmentService {
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -189,9 +191,13 @@ export class AppointmentService {
      * Get appointment by appointment ID
      */
     static async getAppointmentByAppointmentId(appointmentId: string): Promise<IAppointmentResponse> {
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false })
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -226,7 +232,8 @@ export class AppointmentService {
         }
 
         if (search) {
-            const searchRegex = { $regex: search, $options: 'i' };
+            const escapedSearch = escapeRegex(search);
+            const searchRegex = { $regex: escapedSearch, $options: 'i' };
             
             const matchingVisitors = await Visitor.find({
                 $or: [
@@ -250,7 +257,7 @@ export class AppointmentService {
             const employeeIds = matchingEmployees.map((e: any) => e._id);
             
             filter.$or = [
-                { appointmentId: searchRegex },
+                { _id: searchRegex },
                 { 'appointmentDetails.purpose': searchRegex },
                 { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
@@ -317,7 +324,7 @@ export class AppointmentService {
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
                 .sort(sort)
@@ -414,7 +421,11 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, badgeNumber, securityNotes } = request;
 
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
@@ -448,7 +459,11 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, notes } = request;
 
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
@@ -600,6 +615,7 @@ export class AppointmentService {
             isDeleted: false
         })
             .populate('employeeId', 'name')
+            .populate('visitorId', 'name')
             .sort({ 'appointmentDetails.scheduledDate': 1, 'appointmentDetails.scheduledTime': 1 })
             .lean();
 
@@ -611,9 +627,9 @@ export class AppointmentService {
             }
 
             acc[date].push({
-                appointmentId: appointment.appointmentId,
-                visitorName: appointment.visitorDetails.name,
-                employeeName: appointment.employeeId.name,
+                _id: appointment._id.toString(),
+                visitorName: (appointment.visitorId as any)?.name || 'Unknown Visitor',
+                employeeName: (appointment.employeeId as any)?.name || 'Unknown Employee',
                 scheduledTime: appointment.appointmentDetails.scheduledTime,
                 duration: appointment.appointmentDetails.duration,
                 status: appointment.status,
@@ -636,23 +652,54 @@ export class AppointmentService {
         const { query, type, page = 1, limit = 10 } = request;
 
         const filter: any = { isDeleted: false };
+        const escapedQuery = escapeRegex(query);
 
         switch (type) {
             case 'visitor_name':
-                filter['visitorDetails.name'] = { $regex: query, $options: 'i' };
-                break;
             case 'visitor_phone':
-                filter['visitorDetails.phone'] = { $regex: query, $options: 'i' };
+            case 'visitor_email': {
+                // Search in Visitor collection first, then filter appointments by visitorId
+                const visitorSearchRegex = { $regex: escapedQuery, $options: 'i' };
+                const visitorFilter: any = {};
+                
+                if (type === 'visitor_name') {
+                    visitorFilter.name = visitorSearchRegex;
+                } else if (type === 'visitor_phone') {
+                    visitorFilter.phone = visitorSearchRegex;
+                } else if (type === 'visitor_email') {
+                    visitorFilter.email = visitorSearchRegex;
+                }
+                
+                const matchingVisitors = await Visitor.find(visitorFilter).select('_id').lean();
+                const visitorIds = matchingVisitors.map((v: any) => v._id);
+                
+                if (visitorIds.length > 0) {
+                    filter.visitorId = { $in: visitorIds };
+                } else {
+                    // No matching visitors, return empty result
+                    filter.visitorId = { $in: [] };
+                }
                 break;
-            case 'visitor_email':
-                filter['visitorDetails.email'] = { $regex: query, $options: 'i' };
-                break;
+            }
             case 'appointment_id':
-                filter.appointmentId = { $regex: query, $options: 'i' };
+                filter._id = { $regex: escapedQuery, $options: 'i' };
                 break;
-            case 'employee_name':
-                filter['employeeId'] = { $exists: true };
+            case 'employee_name': {
+                // Search in Employee collection first, then filter appointments by employeeId
+                const employeeSearchRegex = { $regex: escapedQuery, $options: 'i' };
+                const matchingEmployees = await Employee.find({
+                    name: employeeSearchRegex
+                }).select('_id').lean();
+                const employeeIds = matchingEmployees.map((e: any) => e._id);
+                
+                if (employeeIds.length > 0) {
+                    filter.employeeId = { $in: employeeIds };
+                } else {
+                    // No matching employees, return empty result
+                    filter.employeeId = { $in: [] };
+                }
                 break;
+            }
         }
 
         const skip = (page - 1) * limit;
@@ -660,7 +707,7 @@ export class AppointmentService {
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -746,7 +793,7 @@ export class AppointmentService {
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
-            .populate('visitorId', 'name email phone photo visitorId')
+            .populate('visitorId', 'name email phone photo')
             .session(session);
             
         if (!appointment) {
@@ -828,7 +875,7 @@ export class AppointmentService {
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
-            .populate('visitorId', 'name email phone photo visitorId')
+            .populate('visitorId', 'name email phone photo')
             .session(session);
             
         if (!appointment) {

@@ -85,7 +85,6 @@ export interface IUpdateAppointmentDTO {
 
 export interface IAppointmentResponse {
     _id: string;
-    appointmentId: string;
     employeeId: string;
     visitorId: string; // Reference to Visitor
     visitor?: IVisitorDetails; // Populated visitor details
@@ -133,13 +132,13 @@ export interface IAppointmentListResponse {
 }
 
 export interface ICheckInRequest {
-    appointmentId: string;  // Custom appointmentId (e.g., "APT1760335163234DWU4Z") - NOT MongoDB _id
+    appointmentId: string;  // MongoDB _id
     badgeNumber?: string;
     securityNotes?: string;
 }
 
 export interface ICheckOutRequest {
-    appointmentId: string;  // Custom appointmentId (e.g., "APT1760335163234DWU4Z") - NOT MongoDB _id
+    appointmentId: string;  // MongoDB _id
     notes?: string;
 }
 
@@ -175,7 +174,7 @@ export interface IBulkUpdateAppointmentsDTO {
 export interface IAppointmentCalendarResponse {
     date: string;
     appointments: Array<{
-        appointmentId: string;
+        _id: string;
         visitorName: string;
         employeeName: string;
         scheduledTime: string;

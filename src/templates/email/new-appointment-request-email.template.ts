@@ -54,7 +54,7 @@ export function getNewAppointmentRequestEmailTemplate(
                 <p><strong>👤 Name:</strong> ${visitorDetails.name}</p>
                 <p><strong>📧 Email:</strong> <a href="mailto:${visitorDetails.email}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.email}</a></p>
                 <p><strong>📞 Phone:</strong> <a href="tel:${visitorDetails.phone}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.phone}</a></p>
-                ${visitorDetails.visitorId ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails.visitorId}</p>` : ''}
+                ${visitorDetails._id ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails._id}</p>` : ''}
             </div>
             
             <div class="button-group" style="text-align: center; margin: 30px 0;">
@@ -110,7 +110,7 @@ Visitor Information:
 - Email: ${visitorDetails.email}
 - Phone: ${visitorDetails.phone}
 - Company: ${visitorDetails.company || 'Not provided'}
-- Visitor ID: ${visitorDetails.visitorId || 'Not assigned'}
+- Visitor ID: ${visitorDetails._id || 'Not assigned'}
 
 To view full details and approve/reject this appointment, click:
 ${verifyUrl}

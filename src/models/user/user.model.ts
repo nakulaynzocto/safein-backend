@@ -54,12 +54,6 @@ const userSchema = new Schema<IUser>(
             type: String,
             trim: true
         },
-        employeeId: {
-            type: String,
-            trim: true,
-            unique: true,
-            sparse: true // Allows multiple null values
-        },
         isEmailVerified: {
             type: Boolean,
             default: false

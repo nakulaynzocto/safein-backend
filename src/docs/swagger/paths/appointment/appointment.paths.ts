@@ -100,14 +100,14 @@ export const appointmentPaths = {
                 {
                     name: 'search',
                     in: 'query',
-                    description: 'Search term for visitor name, phone, email, or appointment ID',
+                    description: 'Search term for visitor name, phone, email, or appointment MongoDB _id. Special characters are automatically escaped for safe regex matching.',
                     schema: { type: 'string' }
                 },
                 {
                     name: 'employeeId',
                     in: 'query',
-                    description: 'Filter by employee ID',
-                    schema: { type: 'string' }
+                    description: 'Filter by employee MongoDB _id',
+                    schema: { type: 'string', pattern: '^[0-9a-fA-F]{24}$' }
                 },
                 {
                     name: 'status',
@@ -159,7 +159,7 @@ export const appointmentPaths = {
                 {
                     name: 'searchType',
                     in: 'query',
-                    description: 'Type of search to perform',
+                    description: 'Type of search to perform. Special characters in search query are automatically escaped for safe regex matching.',
                     schema: {
                         type: 'string',
                         enum: ['visitor_name', 'visitor_phone', 'visitor_email', 'appointment_id', 'employee_name'],
@@ -401,14 +401,14 @@ export const appointmentPaths = {
         get: {
             tags: ['Appointments'],
             summary: 'Get appointment by appointment ID',
-            description: 'Get a specific appointment by its appointment ID (APT123456789)',
+            description: 'Get a specific appointment by its MongoDB _id',
             security: [{ bearerAuth: [] }],
             parameters: [
                 {
                     name: 'appointmentId',
                     in: 'path',
                     required: true,
-                    description: 'Appointment ID (e.g., APT123456789)',
+                    description: 'Appointment MongoDB _id',
                     schema: { type: 'string' }
                 }
             ],
