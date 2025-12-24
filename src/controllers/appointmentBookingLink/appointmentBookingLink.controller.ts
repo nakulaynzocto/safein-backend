@@ -37,7 +37,10 @@ export class AppointmentBookingLinkController {
     const { token } = req.params;
     if (!token) throw new AppError('Token is required', ERROR_CODES.BAD_REQUEST);
 
-    const link = await AppointmentBookingLinkService.getAppointmentLinkByToken(token);
+    // Decode the token in case it's URL encoded
+    const decodedToken = decodeURIComponent(token);
+    
+    const link = await AppointmentBookingLinkService.getAppointmentLinkByToken(decodedToken);
     ResponseUtil.success(res, 'Appointment link retrieved successfully', link);
   };
 
