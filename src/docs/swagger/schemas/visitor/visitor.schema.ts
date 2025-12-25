@@ -150,13 +150,6 @@ export const visitorSchemas = {
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
             },
-            company: {
-                type: 'string',
-                description: 'Visitor company name',
-                example: 'ABC Corporation',
-                minLength: 2,
-                maxLength: 100
-            },
             designation: {
                 type: 'string',
                 description: 'Visitor designation',
@@ -238,7 +231,7 @@ export const visitorSchemas = {
                 maxLength: 500
             }
         },
-        required: ['name', 'email', 'phone', 'company', 'designation', 'address', 'idProof']
+        required: ['name', 'email', 'phone', 'designation', 'address', 'idProof']
     },
 
     UpdateVisitor: {
@@ -262,13 +255,6 @@ export const visitorSchemas = {
                 description: 'Visitor phone number',
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
-            },
-            company: {
-                type: 'string',
-                description: 'Visitor company name',
-                example: 'ABC Corporation',
-                minLength: 2,
-                maxLength: 100
             },
             designation: {
                 type: 'string',

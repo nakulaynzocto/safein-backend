@@ -27,8 +27,14 @@ interface IGetAllAppointmentLinksQuery {
 
 export class AppointmentBookingLinkService {
   private static getBaseUrl(): string {
-    const url = process.env.APPOINTMENT_BOOKING_LINK_BASE_URL || process.env.FRONTEND_URL || '';
-    return url.replace(/\/$/, ''); // Remove trailing slash
+    const url = process.env.APPOINTMENT_BOOKING_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const cleanUrl = url.replace(/\/$/, '');
+    
+    if (!cleanUrl || cleanUrl === '') {
+      return 'http://localhost:3000';
+    }
+    
+    return cleanUrl;
   }
 
   /**
@@ -93,7 +99,6 @@ export class AppointmentBookingLinkService {
         expiresAt
       );
     } catch (error: any) {
-      console.error('Failed to send appointment link email:', error.message);
       // Continue even if email fails
     }
 
@@ -107,6 +112,7 @@ export class AppointmentBookingLinkService {
     const link = await AppointmentBookingLink.findOne({ secureToken: token })
       .populate('employeeId', 'name email phone department designation')
       .populate('visitorId', 'name email phone company designation')
+      .populate('createdBy', 'companyName profilePicture')
       .lean();
 
     if (!link) {
@@ -116,6 +122,36 @@ export class AppointmentBookingLinkService {
     // Check if link has expired
     if (new Date(link.expiresAt) < new Date()) {
       throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // If link doesn't have visitorId, check if visitor exists by email
+    if (!link.visitorId && link.visitorEmail && link.createdBy) {
+      const visitor = await Visitor.findOne({
+        email: link.visitorEmail.toLowerCase().trim(),
+        createdBy: toObjectId(link.createdBy.toString()),
+        isDeleted: false,
+      })
+        .select('_id name email phone company designation')
+        .lean();
+
+      if (visitor && visitor._id) {
+        // Visitor exists, update the link document with visitorId
+        const linkDocument = await AppointmentBookingLink.findById(link._id);
+        if (linkDocument) {
+          const visitorObjectId = toObjectId(visitor._id.toString());
+          if (visitorObjectId) {
+            linkDocument.visitorId = visitorObjectId;
+            await linkDocument.save();
+          }
+        }
+        
+        // Return updated link with visitorId
+        return {
+          ...link,
+          visitorId: visitor._id.toString(),
+          visitor: visitor,
+        };
+      }
     }
 
     return link;
@@ -169,9 +205,16 @@ export class AppointmentBookingLinkService {
     ]);
 
     const totalPages = Math.ceil(totalLinks / limit);
+    const baseUrl = this.getBaseUrl();
+
+    // Add bookingUrl to each link
+    const linksWithBookingUrl = links.map((link: any) => ({
+      ...link,
+      bookingUrl: `${baseUrl}/book-appointment/${link.secureToken}`,
+    }));
 
     return {
-      links,
+      links: linksWithBookingUrl,
       pagination: {
         currentPage: page,
         totalPages,
@@ -286,6 +329,32 @@ export class AppointmentBookingLinkService {
 
     if (new Date(link.expiresAt) < new Date()) {
       throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // If visitorId is not set, try to find visitor by email and update the link
+    if (!link.visitorId && link.visitorEmail && link.createdBy) {
+      const visitor = await Visitor.findOne({
+        email: link.visitorEmail.toLowerCase().trim(),
+        createdBy: toObjectId(link.createdBy.toString()),
+        isDeleted: false,
+      })
+        .select('_id')
+        .lean();
+
+      if (visitor && visitor._id) {
+        // Update the link document with visitorId
+        const linkDocument = await AppointmentBookingLink.findById(link._id);
+        if (linkDocument) {
+          const visitorObjectId = toObjectId(visitor._id.toString());
+          if (visitorObjectId) {
+            linkDocument.visitorId = visitorObjectId;
+            await linkDocument.save();
+            // Reload the link to get updated visitorId
+            await linkDocument.populate('visitorId');
+            link.visitorId = linkDocument.visitorId;
+          }
+        }
+      }
     }
 
     if (!link.visitorId) {

@@ -123,11 +123,43 @@ export class EmailService {
   /**
    * Send email using Brevo API
    */
-  private static async sendWithBrevo(mail: { to: string; subject: string; html: string; from?: string; text?: string; fromName?: string }) {
+  private static async sendWithBrevo(mail: { to: string; subject: string; html: string; from?: string; text?: string; fromName?: string; disableClickTracking?: boolean }) {
     if (!process.env.BREVO_API_KEY) throw new Error('BREVO_API_KEY not set');
     
     const fromEmail = mail.from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app';
     const fromName = mail.fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management';
+    
+    const emailPayload: any = {
+      sender: {
+        name: fromName,
+        email: fromEmail,
+      },
+      to: [
+        {
+          email: mail.to,
+        }
+      ],
+      subject: mail.subject,
+      htmlContent: mail.html,
+      textContent: mail.text || mail.html.replace(/<[^>]*>/g, ''),
+      headers: {
+        'X-Mailer': 'SafeIn Security Management System',
+        'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      replyTo: {
+        email: process.env.SMTP_REPLY_TO || fromEmail,
+      },
+    };
+
+    // Disable click tracking for appointment links to prevent tracking URL issues
+    // Brevo API format: tracking.clicks can be 'enabled', 'disabled', or boolean
+    if (mail.disableClickTracking !== undefined) {
+      emailPayload.tracking = {
+        clicks: mail.disableClickTracking ? false : true,
+        opens: true,
+      };
+    }
     
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -135,28 +167,7 @@ export class EmailService {
         'Content-Type': 'application/json',
         'api-key': process.env.BREVO_API_KEY,
       },
-      body: JSON.stringify({
-        sender: {
-          name: fromName,
-          email: fromEmail,
-        },
-        to: [
-          {
-            email: mail.to,
-          }
-        ],
-        subject: mail.subject,
-        htmlContent: mail.html,
-        textContent: mail.text || mail.html.replace(/<[^>]*>/g, ''),
-        headers: {
-          'X-Mailer': 'SafeIn Security Management System',
-          'List-Unsubscribe': `<mailto:${fromEmail}?subject=unsubscribe>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        },
-        replyTo: {
-          email: process.env.SMTP_REPLY_TO || fromEmail,
-        },
-      }),
+      body: JSON.stringify(emailPayload),
     });
     
     if (!res.ok) {
@@ -180,8 +191,9 @@ export class EmailService {
     from?: string;
     fromName?: string;
     logMessage?: string;
+    disableClickTracking?: boolean;
   }): Promise<void> {
-    const { to, subject, html, text, from, fromName, logMessage } = options;
+    const { to, subject, html, text, from, fromName, logMessage, disableClickTracking } = options;
 
     // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
     if (process.env.BREVO_API_KEY && !this.brevoApiDisabled) {
@@ -193,6 +205,7 @@ export class EmailService {
           text,
           from,
           fromName: fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management',
+          disableClickTracking,
         });
         console.log(`✓ ${logMessage || 'Email'} sent via Brevo API`);
         return;
@@ -512,6 +525,7 @@ export class EmailService {
         text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt),
         fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Appointment link email',
+        disableClickTracking: true, // Disable click tracking to prevent tracking URL issues
       });
     } catch (error: any) {
       console.error('Failed to send appointment link email:', error.message);
