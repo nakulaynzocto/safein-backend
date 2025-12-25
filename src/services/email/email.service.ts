@@ -193,7 +193,7 @@ export class EmailService {
     logMessage?: string;
     disableClickTracking?: boolean;
   }): Promise<void> {
-    const { to, subject, html, text, from, fromName, logMessage, disableClickTracking } = options;
+    const { to, subject, html, text, from, fromName, disableClickTracking } = options;
 
     // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
     if (process.env.BREVO_API_KEY && !this.brevoApiDisabled) {
@@ -207,7 +207,6 @@ export class EmailService {
           fromName: fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management',
           disableClickTracking,
         });
-        console.log(`✓ ${logMessage || 'Email'} sent via Brevo API`);
         return;
       } catch (brevoError: any) {
         // If it's an authentication error (401), disable Brevo for future attempts
@@ -231,7 +230,6 @@ export class EmailService {
           text,
           from,
         });
-        console.log(`✓ ${logMessage || 'Email'} sent via Resend API`);
         return;
       } catch (resendError: any) {
         console.error('Resend API failed:', resendError.message);
@@ -273,7 +271,6 @@ export class EmailService {
     try {
       if (this.isEmailServiceAvailable) {
         await this.transporter.sendMail(mailOptions);
-        console.log(`✓ ${logMessage || 'Email'} sent via SMTP`);
         return;
       }
 
@@ -281,7 +278,6 @@ export class EmailService {
       const isConnected = await this.verifyConnection();
       if (isConnected) {
         await this.transporter.sendMail(mailOptions);
-        console.log(`✓ ${logMessage || 'Email'} sent via SMTP (after verification)`);
         return;
       }
 

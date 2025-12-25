@@ -1,6 +1,7 @@
 import { AppError } from '../../middlewares/errorHandler';
 import { uploadToCloudinary, UPLOAD_CONFIG } from '../../utils/cloudinary';
 import { ERROR_CODES } from '../../utils/constants';
+import sharp from 'sharp';
 
 /**
  * Upload Service
@@ -38,6 +39,80 @@ export class UploadService {
   }
 
   /**
+   * Compress image if it's larger than 400KB
+   * @param file - Uploaded file object
+   * @returns Compressed file buffer or original buffer
+   */
+  private static async compressImage(file: Express.Multer.File): Promise<Buffer> {
+    const maxSizeKB = 400;
+    const maxSizeBytes = maxSizeKB * 1024;
+
+    // If file is already smaller than 400KB, return as is
+    if (file.size <= maxSizeBytes) {
+      return file.buffer;
+    }
+
+    // Skip compression for SVG files
+    if (file.mimetype === 'image/svg+xml' || file.originalname.toLowerCase().endsWith('.svg')) {
+      return file.buffer;
+    }
+
+    try {
+      let compressedBuffer = file.buffer;
+      let quality = 90;
+      const minQuality = 10;
+
+      // Try to compress with decreasing quality until we reach target size
+      while (compressedBuffer.length > maxSizeBytes && quality >= minQuality) {
+        const sharpInstance = sharp(file.buffer);
+
+        // Resize if image is too large (max 1920px on longest side)
+        sharpInstance.resize(1920, 1920, {
+          fit: 'inside',
+          withoutEnlargement: true
+        });
+
+        // Compress based on image type
+        if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+          compressedBuffer = await sharpInstance
+            .jpeg({ quality, progressive: true, mozjpeg: true })
+            .toBuffer();
+        } else if (file.mimetype === 'image/png') {
+          compressedBuffer = await sharpInstance
+            .png({ quality, compressionLevel: 9 })
+            .toBuffer();
+        } else if (file.mimetype === 'image/webp') {
+          compressedBuffer = await sharpInstance
+            .webp({ quality })
+            .toBuffer();
+        } else {
+          // For other formats, convert to JPEG
+          compressedBuffer = await sharpInstance
+            .jpeg({ quality, progressive: true })
+            .toBuffer();
+        }
+
+        // If still too large, reduce quality
+        if (compressedBuffer.length > maxSizeBytes && quality > minQuality) {
+          quality -= 10;
+        } else {
+          break;
+        }
+      }
+
+      const originalSizeKB = (file.size / 1024).toFixed(2);
+      const compressedSizeKB = (compressedBuffer.length / 1024).toFixed(2);
+      console.log(`Image compressed: ${file.originalname} from ${originalSizeKB}KB to ${compressedSizeKB}KB`);
+
+      return compressedBuffer;
+    } catch (error: any) {
+      console.warn(`Compression failed for ${file.originalname}, using original:`, error.message);
+      // Return original buffer if compression fails
+      return file.buffer;
+    }
+  }
+
+  /**
    * Get file metadata for logging
    * @param file - Uploaded file object
    * @returns File metadata
@@ -67,7 +142,17 @@ export class UploadService {
   }> {
     this.validateFile(file);
 
-    const result = await uploadToCloudinary(file, {
+    // Compress image if it's larger than 400KB
+    const compressedBuffer = await this.compressImage(file);
+    
+    // Create a new file object with compressed buffer
+    const compressedFile: Express.Multer.File = {
+      ...file,
+      buffer: compressedBuffer,
+      size: compressedBuffer.length
+    };
+
+    const result = await uploadToCloudinary(compressedFile, {
       folder: customFolder || UPLOAD_CONFIG.UPLOAD_FOLDER
     });
 

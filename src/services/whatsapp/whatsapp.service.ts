@@ -60,8 +60,6 @@ export class WhatsAppService {
             const phoneNumber = to.replace('+', '');
             const url = `https://graph.facebook.com/v18.0/${this.WHATSAPP_PHONE_NUMBER_ID}/messages`;
             
-            console.log(`Sending WhatsApp message via Cloud API to: ${phoneNumber}`);
-            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -104,12 +102,7 @@ export class WhatsAppService {
                 throw new Error(`WhatsApp Cloud API error: ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}`);
             }
 
-            const responseData: any = await response.json().catch(() => ({}));
-            console.log('WhatsApp message sent successfully via Cloud API:', {
-                messageId: responseData.messages?.[0]?.id,
-                to: phoneNumber
-            });
-
+            await response.json().catch(() => ({}));
             return true;
         } catch (error: any) {
             console.error('WhatsApp Cloud API error:', error.message);

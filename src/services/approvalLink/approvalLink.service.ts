@@ -1,4 +1,5 @@
 import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
@@ -107,7 +108,13 @@ export class ApprovalLinkService {
         appointment: any;
     }> {
         const approvalLink = await ApprovalLink.findOne({ token })
-            .populate('appointmentId');
+            .populate({
+                path: 'appointmentId',
+                populate: [
+                    { path: 'employeeId', select: 'name email department designation phone' },
+                    { path: 'visitorId', select: 'name email phone company designation address idProof photo visitorId' }
+                ]
+            });
 
         if (!approvalLink) {
             throw new AppError('Invalid or expired link', ERROR_CODES.NOT_FOUND);
@@ -139,12 +146,18 @@ export class ApprovalLinkService {
         // 🔔 Emit WebSocket event for real-time update
         const userId = appointment.createdBy?.toString();
         if (userId) {
-            const appointmentObj = appointment.toObject();
+            // Repopulate after save to ensure populated fields are available
+            // Mongoose may lose populated fields after save()
+            const populatedAppointment = await Appointment.findById(appointment._id)
+                .populate('employeeId', 'name email department designation phone')
+                .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
+                .lean();
+            
             socketService.emitAppointmentStatusChange(userId, {
                 appointmentId: appointment._id.toString(),
                 status: status,
                 updatedAt: new Date(),
-                appointment: appointmentObj
+                appointment: populatedAppointment
             });
         }
 

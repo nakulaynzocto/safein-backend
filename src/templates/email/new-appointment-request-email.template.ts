@@ -68,7 +68,7 @@ export function getNewAppointmentRequestEmailTemplate(
             </div>
             
             <div class="message" style="text-align: center; margin-top: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
-                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/dashboard/notifications" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
+                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/appointment/list" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
             </div>
   `;
   
@@ -115,7 +115,7 @@ Visitor Information:
 To view full details and approve/reject this appointment, click:
 ${verifyUrl}
 
-Or visit your dashboard: ${baseUrl}/dashboard/notifications
+Or visit your dashboard: ${baseUrl}/appointment/list
 
 Important: Please respond to this request as soon as possible. The link is secure and will expire after use.
 

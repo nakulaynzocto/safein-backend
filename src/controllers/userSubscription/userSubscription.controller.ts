@@ -324,13 +324,6 @@ export class UserSubscriptionController {
         const eventType = event.event || event.type;
         const payload = event.payload || event;
 
-        console.log('Razorpay webhook received:', {
-            eventType,
-            payloadKeys: Object.keys(payload),
-            orderId: payload.order?.entity?.id || payload.order?.id,
-            paymentId: payload.payment?.entity?.id || payload.payment?.id
-        });
-
         // Handle different webhook events
         switch (eventType) {
             case 'payment.captured':
@@ -349,7 +342,8 @@ export class UserSubscriptionController {
                 break;
 
             default:
-                console.log(`Unhandled Razorpay webhook event: ${eventType}`);
+                // Unhandled webhook event type
+                break;
         }
 
         // Always return 200 to acknowledge receipt
@@ -398,7 +392,6 @@ export class UserSubscriptionController {
                 orderId,
                 paymentId
             );
-            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via webhook (Order: ${orderId}, Payment: ${paymentId})`);
         } catch (error: any) {
             console.error('Error handling payment.captured:', error);
             // Don't throw - webhook should still return 200
@@ -408,12 +401,11 @@ export class UserSubscriptionController {
     /**
      * Handle payment.failed event
      */
-    private static async handlePaymentFailed(payload: any): Promise<void> {
+    private static async handlePaymentFailed(_payload: any): Promise<void> {
         try {
-            const { payment, order } = payload.payment?.entity || payload;
-            console.log('Payment failed:', payment?.id || payment?.payment_id, order?.id || order?.order_id);
             // Log failed payment for monitoring
             // You can add additional logic here like sending notification to user
+            // const { payment, order } = _payload.payment?.entity || _payload;
         } catch (error: any) {
             console.error('Error handling payment.failed:', error);
         }

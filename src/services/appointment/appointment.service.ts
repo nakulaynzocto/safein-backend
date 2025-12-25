@@ -6,7 +6,6 @@ import { ApprovalLinkService } from '../approvalLink/approvalLink.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SettingsService } from '../settings/settings.service';
 import { socketService } from '../socket/socket.service';
-import { emitAppointmentStatusChange } from '../../utils/socketHelpers.util';
 import {
     ICreateAppointmentDTO,
     IUpdateAppointmentDTO,
@@ -155,12 +154,18 @@ export class AppointmentService {
 
         try {
             if (populatedAppointment) {
-                socketService.emitAppointmentCreated(createdBy, {
-                    appointmentId: (appointment._id as any).toString(),
-                    appointment: populatedAppointment,
-                    status: appointment.status,
-                    createdAt: appointment.createdAt,
-                });
+                const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
+                const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
+                const userId = (createdBy as any)?.toString() || createdBy;
+                
+                if (userId) {
+                    socketService.emitAppointmentCreated(userId, {
+                        appointmentId: (appointment._id as any).toString(),
+                        appointment: serializedAppointment,
+                        status: appointment.status,
+                        createdAt: appointment.createdAt,
+                    });
+                }
             }
         } catch {
             // Socket notification failed, continue
@@ -807,6 +812,12 @@ export class AppointmentService {
         appointment.status = 'approved';
         await appointment.save({ session });
 
+        // Re-populate after save to ensure populated fields are available for socket emission
+        const populatedAppointment = await Appointment.findById(appointment._id)
+            .populate('employeeId', 'name email phone department')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .session(session);
+
         // Get user ID who created the appointment (for settings check)
         const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
 
@@ -865,7 +876,14 @@ export class AppointmentService {
             // Email sending failed, continue
         }
 
-        emitAppointmentStatusChange(userId, appointment, 'approved');
+        if (populatedAppointment && userId) {
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: 'approved',
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            });
+        }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
@@ -891,6 +909,12 @@ export class AppointmentService {
 
         // Get user ID who created the appointment (for settings check)
         const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+
+        // Re-populate after save to ensure populated fields are available for socket emission
+        const populatedAppointment = await Appointment.findById(appointment._id)
+            .populate('employeeId', 'name email phone department')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .session(session);
 
         // Check settings for notifications
         const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
@@ -947,7 +971,14 @@ export class AppointmentService {
             // Email sending failed, continue
         }
 
-        emitAppointmentStatusChange(userId, appointment, 'rejected');
+        if (populatedAppointment && userId) {
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: 'rejected',
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            });
+        }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }

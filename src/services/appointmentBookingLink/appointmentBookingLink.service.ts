@@ -26,24 +26,6 @@ interface IGetAllAppointmentLinksQuery {
 }
 
 export class AppointmentBookingLinkService {
-  private static getBaseUrl(): string {
-    const url = process.env.APPOINTMENT_BOOKING_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
-    const cleanUrl = url.replace(/\/$/, '');
-    
-    if (!cleanUrl || cleanUrl === '') {
-      return 'http://localhost:3000';
-    }
-    
-    return cleanUrl;
-  }
-
-  /**
-   * Generate a secure random token
-   */
-  private static generateToken(): string {
-    return crypto.randomBytes(32).toString('hex');
-  }
-
   /**
    * Create an appointment booking link
    */
@@ -57,6 +39,25 @@ export class AppointmentBookingLinkService {
     const employee = await Employee.findOne({ _id: employeeId, isDeleted: false });
     if (!employee) {
       throw new AppError('Employee not found', ERROR_CODES.NOT_FOUND);
+    }
+
+    // Check if visitor exists by email
+    const normalizedEmail = visitorEmail.toLowerCase().trim();
+    const createdByObjectId = toObjectId(createdBy);
+    let visitorId: any = null;
+
+    if (createdByObjectId) {
+      const existingVisitor = await Visitor.findOne({
+        email: normalizedEmail,
+        createdBy: createdByObjectId,
+        isDeleted: false,
+      })
+        .select('_id')
+        .lean();
+
+      if (existingVisitor && existingVisitor._id) {
+        visitorId = toObjectId(existingVisitor._id.toString());
+      }
     }
 
     // Generate unique token
@@ -77,12 +78,13 @@ export class AppointmentBookingLinkService {
 
     // Create appointment booking link
     const appointmentLink = new AppointmentBookingLink({
-      visitorEmail: visitorEmail.toLowerCase().trim(),
+      visitorEmail: normalizedEmail,
       employeeId: toObjectId(employeeId),
       secureToken: token,
       expiresAt,
-      createdBy: toObjectId(createdBy),
+      createdBy: createdByObjectId,
       isBooked: false,
+      visitorId: visitorId, // Set visitorId if visitor exists
     });
 
     await appointmentLink.save();
@@ -119,42 +121,71 @@ export class AppointmentBookingLinkService {
       throw new AppError('Appointment link not found', ERROR_CODES.NOT_FOUND);
     }
 
+    // Check if link has already been used
+    if (link.isBooked) {
+      throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
     // Check if link has expired
     if (new Date(link.expiresAt) < new Date()) {
       throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
     }
 
-    // If link doesn't have visitorId, check if visitor exists by email
-    if (!link.visitorId && link.visitorEmail && link.createdBy) {
-      const visitor = await Visitor.findOne({
-        email: link.visitorEmail.toLowerCase().trim(),
-        createdBy: toObjectId(link.createdBy.toString()),
-        isDeleted: false,
-      })
-        .select('_id name email phone company designation')
-        .lean();
+    // Check if visitorId already exists (from populated or direct)
+    const existingVisitorId = this.getVisitorIdString(link.visitorId);
+    
+    if (existingVisitorId) {
+      // Visitor already associated with link
+      const populatedVisitor = link.visitorId && typeof link.visitorId === 'object' 
+        ? link.visitorId 
+        : null;
+      
+      return {
+        ...link,
+        visitorId: existingVisitorId,
+        visitor: populatedVisitor || undefined,
+      };
+    }
 
-      if (visitor && visitor._id) {
-        // Visitor exists, update the link document with visitorId
-        const linkDocument = await AppointmentBookingLink.findById(link._id);
-        if (linkDocument) {
+    // If link doesn't have visitorId, check if visitor exists by email
+    if (link.visitorEmail && link.createdBy) {
+      const createdByIdString = this.getCreatedByIdString(link.createdBy);
+      const createdByObjectId = toObjectId(createdByIdString || undefined);
+      if (createdByObjectId) {
+        const visitor = await Visitor.findOne({
+          email: link.visitorEmail.toLowerCase().trim(),
+          createdBy: createdByObjectId,
+          isDeleted: false,
+        })
+          .select('_id name email phone company designation')
+          .lean();
+
+        if (visitor && visitor._id) {
           const visitorObjectId = toObjectId(visitor._id.toString());
           if (visitorObjectId) {
-            linkDocument.visitorId = visitorObjectId;
-            await linkDocument.save();
+            // Update the link document with visitorId
+            const linkDocument = await AppointmentBookingLink.findById(link._id);
+            if (linkDocument) {
+              linkDocument.visitorId = visitorObjectId;
+              await linkDocument.save();
+            }
           }
+          
+          return {
+            ...link,
+            visitorId: visitor._id.toString(),
+            visitor: visitor,
+          };
         }
-        
-        // Return updated link with visitorId
-        return {
-          ...link,
-          visitorId: visitor._id.toString(),
-          visitor: visitor,
-        };
       }
     }
 
-    return link;
+    // No visitor found, return link without visitorId
+    return {
+      ...link,
+      visitorId: null,
+      visitor: undefined,
+    };
   }
 
   /**
@@ -267,7 +298,8 @@ export class AppointmentBookingLinkService {
       return null;
     }
 
-    return (link.createdBy as any).toString();
+    const createdByIdString = this.getCreatedByIdString(link.createdBy);
+    return createdByIdString;
   }
 
   /**
@@ -331,45 +363,52 @@ export class AppointmentBookingLinkService {
       throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
     }
 
+    // Check if visitorId is already set (from populated or direct)
+    let visitorIdString = this.getVisitorIdString(link.visitorId);
+    
     // If visitorId is not set, try to find visitor by email and update the link
-    if (!link.visitorId && link.visitorEmail && link.createdBy) {
-      const visitor = await Visitor.findOne({
-        email: link.visitorEmail.toLowerCase().trim(),
-        createdBy: toObjectId(link.createdBy.toString()),
-        isDeleted: false,
-      })
-        .select('_id')
-        .lean();
+    if (!visitorIdString && link.visitorEmail && link.createdBy) {
+      const createdByIdString = this.getCreatedByIdString(link.createdBy);
+      const createdByObjectId = toObjectId(createdByIdString || undefined);
+      if (createdByObjectId) {
+        const visitor = await Visitor.findOne({
+          email: link.visitorEmail.toLowerCase().trim(),
+          createdBy: createdByObjectId,
+          isDeleted: false,
+        })
+          .select('_id')
+          .lean();
 
-      if (visitor && visitor._id) {
-        // Update the link document with visitorId
-        const linkDocument = await AppointmentBookingLink.findById(link._id);
-        if (linkDocument) {
+        if (visitor && visitor._id) {
           const visitorObjectId = toObjectId(visitor._id.toString());
           if (visitorObjectId) {
-            linkDocument.visitorId = visitorObjectId;
-            await linkDocument.save();
-            // Reload the link to get updated visitorId
-            await linkDocument.populate('visitorId');
-            link.visitorId = linkDocument.visitorId;
+            // Update the link document with visitorId
+            const linkDocument = await AppointmentBookingLink.findById(link._id);
+            if (linkDocument) {
+              linkDocument.visitorId = visitorObjectId;
+              await linkDocument.save();
+              visitorIdString = visitor._id.toString();
+            }
           }
         }
       }
     }
 
-    if (!link.visitorId) {
+    if (!visitorIdString) {
       throw new AppError('Visitor not associated with this link', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Use the employee and visitor from the link
     const appointmentPayload: ICreateAppointmentDTO = {
       ...appointmentData,
-      employeeId: (link.employeeId as any)._id.toString(),
-      visitorId: (link.visitorId as any)._id.toString(),
+      employeeId: this.getEmployeeIdString(link.employeeId),
+      visitorId: visitorIdString,
     };
 
     // Get creator ID from link
-    const createdBy = (link.createdBy as any).toString();
+    const createdBy = this.getCreatedByIdString(link.createdBy);
+    if (!createdBy) {
+      throw new AppError('Invalid appointment link creator', ERROR_CODES.BAD_REQUEST);
+    }
 
     // Create appointment
     const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy);
@@ -378,6 +417,77 @@ export class AppointmentBookingLinkService {
     await this.markAsBooked(token);
 
     return appointment;
+  }
+
+  /**
+   * Helper: Convert visitorId to string format
+   */
+  private static getVisitorIdString(visitorId: any): string | null {
+    if (!visitorId) return null;
+    if (typeof visitorId === 'string') return visitorId;
+    if (typeof visitorId === 'object' && visitorId._id) {
+      return visitorId._id.toString();
+    }
+    if (typeof visitorId === 'object' && visitorId.toString) {
+      return visitorId.toString();
+    }
+    return null;
+  }
+
+  /**
+   * Helper: Convert employeeId to string format
+   */
+  private static getEmployeeIdString(employeeId: any): string {
+    if (typeof employeeId === 'string') return employeeId;
+    if (typeof employeeId === 'object' && employeeId._id) {
+      return employeeId._id.toString();
+    }
+    if (typeof employeeId === 'object' && employeeId.toString) {
+      return employeeId.toString();
+    }
+    throw new AppError('Invalid employee ID', ERROR_CODES.BAD_REQUEST);
+  }
+
+  /**
+   * Helper: Convert createdBy to string format
+   */
+  private static getCreatedByIdString(createdBy: any): string | null {
+    if (!createdBy) return null;
+    if (typeof createdBy === 'string') return createdBy;
+    if (typeof createdBy === 'object' && createdBy._id) {
+      return createdBy._id.toString();
+    }
+    if (typeof createdBy === 'object' && createdBy.toString) {
+      // Check if it's a MongoDB ObjectId
+      const str = createdBy.toString();
+      // If toString() returns [object Object], it means it's not a proper ObjectId
+      if (str === '[object Object]') {
+        return null;
+      }
+      return str;
+    }
+    return null;
+  }
+
+  /**
+   * Helper: Get base URL for appointment links
+   */
+  private static getBaseUrl(): string {
+    const url = process.env.APPOINTMENT_BOOKING_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const cleanUrl = url.replace(/\/$/, '');
+    
+    if (!cleanUrl || cleanUrl === '') {
+      return 'http://localhost:3000';
+    }
+    
+    return cleanUrl;
+  }
+
+  /**
+   * Helper: Generate a secure random token
+   */
+  private static generateToken(): string {
+    return crypto.randomBytes(32).toString('hex');
   }
 }
 

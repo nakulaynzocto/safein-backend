@@ -117,7 +117,6 @@ export class UserSubscriptionService {
                 }).session(session);
 
                 if (existingSubscription) {
-                    console.log(`⚠️ Subscription already exists for payment ${razorpayPaymentId}. Skipping duplicate creation.`);
                     await session.abortTransaction();
                     return existingSubscription; // Return existing subscription (idempotent)
                 }
@@ -153,7 +152,6 @@ export class UserSubscriptionService {
                 // Only carry forward if there are remaining days (positive value)
                 if (remainingDaysFromPrevious > 0) {
                     previousSubscriptionId = existingSubscription._id as mongoose.Types.ObjectId;
-                    console.log(`📅 Carrying forward ${remainingDaysFromPrevious} days from previous subscription`);
                 } else {
                     remainingDaysFromPrevious = 0;
                 }
@@ -166,8 +164,6 @@ export class UserSubscriptionService {
             const endDate = new Date(baseEndDate);
             if (remainingDaysFromPrevious > 0) {
                 endDate.setDate(endDate.getDate() + remainingDaysFromPrevious);
-                const newPlanDays = this.getPlanDays(plan.planType);
-                console.log(`✅ New subscription will expire after ${remainingDaysFromPrevious} (carried forward) + ${newPlanDays} (new plan) = ${remainingDaysFromPrevious + newPlanDays} days`);
             }
 
             let subscription: IUserSubscription & Document;
@@ -261,25 +257,6 @@ export class UserSubscriptionService {
                 break;
         }
         return end;
-    }
-
-    /**
-     * Get number of days for a plan type
-     */
-    private static getPlanDays(planType: string): number {
-        switch (planType) {
-            case 'weekly':
-                return 7;
-            case 'monthly':
-                return 30;
-            case 'quarterly':
-                return 90;
-            case 'yearly':
-                return 365;
-            case 'free':
-            default:
-                return 30;
-        }
     }
 
     /**

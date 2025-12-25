@@ -79,7 +79,6 @@ export class RazorpayService {
                     email: user.email,
                 },
             } as any);
-            console.log('Razorpay order created:', order);
             return {
                 orderId: (order as any).id,
                 amount: Number((order as any).amount),

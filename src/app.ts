@@ -80,8 +80,10 @@ app.use(notFoundHandler);
 
 const PORT = CONSTANTS.PORT;
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
-  console.log(`📡 WebSocket server ready for connections`);
+  if (CONSTANTS.NODE_ENV === 'development') {
+    console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+    console.log(`📡 WebSocket server ready for connections`);
+  }
 });
 
 export default app;
