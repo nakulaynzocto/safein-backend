@@ -4,6 +4,7 @@ import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { userLimiter } from '../../middlewares';
 import {
     createAppointmentValidation,
     updateAppointmentValidation,
@@ -18,6 +19,7 @@ import {
 const router = Router();
 
 router.use(verifyToken);
+router.use(userLimiter);
 
 router.post(
     '/',

@@ -42,8 +42,15 @@ export class UserController {
   @TryCatch('Failed to login user')
   static async login(req: Request, res: Response, _next: NextFunction): Promise<void> {
     const loginData = req.body;
-    const result = await UserService.loginUser(loginData);
-    ResponseUtil.success(res, 'Login successful', result);
+
+    try {
+      const result = await UserService.loginUser(loginData);
+      // Login attempt tracking is handled by loginAttemptTracker middleware
+      ResponseUtil.success(res, 'Login successful', result);
+    } catch (error: any) {
+      // Login attempt tracking for failures is handled by loginAttemptTracker middleware
+      throw error;
+    }
   }
 
   /**
@@ -93,18 +100,18 @@ export class UserController {
   @TryCatch('Failed to get user')
   static async getUserById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const { id } = req.params;
-    
+
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
-    
+
     const currentUserId = req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
-    
+
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only access your own profile.', ERROR_CODES.FORBIDDEN);
     }
-    
+
     const user = await UserService.getUserById(id);
     ResponseUtil.success(res, 'User retrieved successfully', user);
   }
@@ -117,11 +124,11 @@ export class UserController {
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
-    
+
     if (req.user.role !== 'admin') {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
-    
+
     const { page = 1, limit = 10, includeDeleted = false } = req.query;
     const result = await UserService.getAllUsers(
       parseInt(page as string),
@@ -137,18 +144,18 @@ export class UserController {
   @TryCatch('Failed to update user')
   static async updateUserById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     const { id } = req.params;
-    
+
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
-    
+
     const currentUserId = req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
-    
+
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only update your own profile.', ERROR_CODES.FORBIDDEN);
     }
-    
+
     const updateData = req.body;
     const user = await UserService.updateUser(id, updateData);
     ResponseUtil.success(res, 'User updated successfully', user);
@@ -162,11 +169,11 @@ export class UserController {
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
-    
+
     if (req.user.role !== 'admin') {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
-    
+
     const { id } = req.params;
     const deletedBy = req.user._id.toString();
     await UserService.deleteUser(id, deletedBy);
@@ -181,11 +188,11 @@ export class UserController {
     if (!req.user) {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
-    
+
     if (req.user.role !== 'admin') {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
-    
+
     const { id } = req.params;
     const user = await UserService.restoreUser(id);
     ResponseUtil.success(res, 'User restored successfully', user);

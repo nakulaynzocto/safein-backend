@@ -154,7 +154,10 @@ export class UserService {
    * Login user
    */
   @Transaction('Failed to login user')
-  static async loginUser(loginData: ILoginDTO, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+  static async loginUser(
+    loginData: ILoginDTO,
+    options: { session?: any } = {}
+  ): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
     const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password').session(session);
 
@@ -208,7 +211,7 @@ export class UserService {
     const { session } = options;
 
     const safeUpdateData: Partial<IUpdateUserDTO> = {};
-    
+
     if (updateData.companyName !== undefined) {
       safeUpdateData.companyName = updateData.companyName;
     }
