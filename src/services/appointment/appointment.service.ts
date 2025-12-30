@@ -171,7 +171,7 @@ export class AppointmentService {
                         appointment: serializedAppointment,
                         status: appointment.status,
                         createdAt: appointment.createdAt,
-                    });
+                    }, sendNotifications);
                 }
             }
         } catch {
@@ -460,6 +460,23 @@ export class AppointmentService {
 
         await appointment.save({ session });
 
+        // 🔔 Emit background socket event for data refresh (no notification popup)
+        const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+        if (userId) {
+            const populatedAppointment = await Appointment.findById(appointment._id as any)
+                .populate('employeeId', 'name email phone department')
+                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .session(session)
+                .lean();
+
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: appointment.status,
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            }, false);
+        }
+
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
@@ -494,6 +511,23 @@ export class AppointmentService {
         }
 
         await appointment.save({ session });
+
+        // 🔔 Emit background socket event for data refresh (no notification popup)
+        const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+        if (userId) {
+            const populatedAppointment = await Appointment.findById(appointment._id as any)
+                .populate('employeeId', 'name email phone department')
+                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .session(session)
+                .lean();
+
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: 'completed',
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            }, false);
+        }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
@@ -800,8 +834,8 @@ export class AppointmentService {
     /**
      * Approve appointment
      */
-    static async approveAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
+    static async approveAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false } = options;
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
@@ -889,14 +923,14 @@ export class AppointmentService {
                 status: 'approved',
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            });
+            }, sendNotifications);
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
-    static async rejectAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
+    static async rejectAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false } = options;
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
@@ -984,7 +1018,7 @@ export class AppointmentService {
                 status: 'rejected',
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            });
+            }, sendNotifications);
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;

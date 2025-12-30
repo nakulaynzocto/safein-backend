@@ -18,7 +18,7 @@ class SocketService {
   private io: SocketIOServer | null = null;
   private static instance: SocketService;
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): SocketService {
     if (!SocketService.instance) {
@@ -58,7 +58,7 @@ class SocketService {
         }
       });
 
-      socket.on(SocketEvents.DISCONNECT, () => {});
+      socket.on(SocketEvents.DISCONNECT, () => { });
     });
   }
 
@@ -106,20 +106,22 @@ class SocketService {
     status: string;
     updatedAt?: Date;
     appointment?: any;
-  }): void {
+  }, showNotification: boolean = true): void {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
-    
+
     const payload = {
       ...appointmentData,
       employeeName,
       visitorName
     };
 
-    this.emitToUser(userId, SocketEvents.APPOINTMENT_STATUS_CHANGED, {
-      type: 'APPOINTMENT_STATUS_CHANGED',
-      payload,
-      timestamp: new Date().toISOString()
-    });
+    if (showNotification) {
+      this.emitToUser(userId, SocketEvents.APPOINTMENT_STATUS_CHANGED, {
+        type: 'APPOINTMENT_STATUS_CHANGED',
+        payload,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     this.emitToAll(SocketEvents.APPOINTMENT_UPDATED, {
       type: 'APPOINTMENT_UPDATED',
@@ -128,18 +130,27 @@ class SocketService {
     });
   }
 
-  emitAppointmentCreated(userId: string, appointmentData: any): void {
+  emitAppointmentCreated(userId: string, appointmentData: any, showNotification: boolean = true): void {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
-    
+
     const payload = {
       ...appointmentData,
       employeeName,
       visitorName
     };
 
-    this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
-      type: 'APPOINTMENT_CREATED',
-      payload,
+    if (showNotification) {
+      this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
+        type: 'APPOINTMENT_CREATED',
+        payload,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Also emit update to refresh lists for everyone
+    this.emitToAll(SocketEvents.APPOINTMENT_UPDATED, {
+      type: 'APPOINTMENT_UPDATED',
+      payload: appointmentData,
       timestamp: new Date().toISOString()
     });
   }
