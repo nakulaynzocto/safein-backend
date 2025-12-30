@@ -133,13 +133,13 @@ export class AppointmentBookingLinkService {
 
     // Check if visitorId already exists (from populated or direct)
     const existingVisitorId = this.getVisitorIdString(link.visitorId);
-    
+
     if (existingVisitorId) {
       // Visitor already associated with link
-      const populatedVisitor = link.visitorId && typeof link.visitorId === 'object' 
-        ? link.visitorId 
+      const populatedVisitor = link.visitorId && typeof link.visitorId === 'object'
+        ? link.visitorId
         : null;
-      
+
       return {
         ...link,
         visitorId: existingVisitorId,
@@ -170,7 +170,7 @@ export class AppointmentBookingLinkService {
               await linkDocument.save();
             }
           }
-          
+
           return {
             ...link,
             visitorId: visitor._id.toString(),
@@ -365,7 +365,7 @@ export class AppointmentBookingLinkService {
 
     // Check if visitorId is already set (from populated or direct)
     let visitorIdString = this.getVisitorIdString(link.visitorId);
-    
+
     // If visitorId is not set, try to find visitor by email and update the link
     if (!visitorIdString && link.visitorEmail && link.createdBy) {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
@@ -473,13 +473,13 @@ export class AppointmentBookingLinkService {
    * Helper: Get base URL for appointment links
    */
   private static getBaseUrl(): string {
-    const url = process.env.APPOINTMENT_BOOKING_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const url = process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
     const cleanUrl = url.replace(/\/$/, '');
-    
+
     if (!cleanUrl || cleanUrl === '') {
       return 'http://localhost:3000';
     }
-    
+
     return cleanUrl;
   }
 
