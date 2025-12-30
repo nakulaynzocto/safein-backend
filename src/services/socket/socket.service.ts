@@ -39,8 +39,6 @@ class SocketService {
     });
 
     this.setupConnectionHandlers();
-    console.log('✅ Socket.IO initialized');
-    
     return this.io;
   }
 
@@ -80,15 +78,46 @@ class SocketService {
     }
   }
 
+  /**
+   * Extract names from appointment object (handles both populated and lean objects)
+   */
+  private extractNames(appointment: any): { employeeName: string; visitorName: string } {
+    const getName = (obj: any, fallback: string): string => {
+      if (!obj) return fallback;
+      if (typeof obj === 'string') return fallback;
+      if (typeof obj === 'object' && obj !== null) {
+        const name = obj.name || obj.fullName;
+        return (name && typeof name === 'string' ? name.trim() : '') || fallback;
+      }
+      return fallback;
+    };
+
+    const employee = appointment?.employeeId || appointment?.employee;
+    const visitor = appointment?.visitorId || appointment?.visitor;
+
+    return {
+      employeeName: getName(employee, 'Unknown Employee'),
+      visitorName: getName(visitor, 'Unknown Visitor')
+    };
+  }
+
   emitAppointmentStatusChange(userId: string, appointmentData: {
     appointmentId: string;
     status: string;
     updatedAt?: Date;
     appointment?: any;
   }): void {
+    const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
+    
+    const payload = {
+      ...appointmentData,
+      employeeName,
+      visitorName
+    };
+
     this.emitToUser(userId, SocketEvents.APPOINTMENT_STATUS_CHANGED, {
       type: 'APPOINTMENT_STATUS_CHANGED',
-      payload: appointmentData,
+      payload,
       timestamp: new Date().toISOString()
     });
 
@@ -100,9 +129,17 @@ class SocketService {
   }
 
   emitAppointmentCreated(userId: string, appointmentData: any): void {
+    const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
+    
+    const payload = {
+      ...appointmentData,
+      employeeName,
+      visitorName
+    };
+
     this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
       type: 'APPOINTMENT_CREATED',
-      payload: appointmentData,
+      payload,
       timestamp: new Date().toISOString()
     });
   }

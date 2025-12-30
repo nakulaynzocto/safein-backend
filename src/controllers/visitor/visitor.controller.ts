@@ -108,41 +108,18 @@ export class VisitorController {
     }
 
     /**
-     * Get trashed visitors (user-specific)
-     * GET /api/visitors/trashed
+     * Check if visitor has appointments
+     * GET /api/visitors/:id/has-appointments
      */
-    @TryCatch('Failed to get trashed visitors')
-    static async getTrashedVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const query: IGetVisitorsQuery = req.query;
-        const userId = req.user._id.toString();
-        const result = await VisitorService.getTrashedVisitors(query, userId);
-        ResponseUtil.success(res, 'Trashed visitors retrieved successfully', result);
-    }
-
-    /**
-     * Restore visitor from trash (user-specific)
-     * PUT /api/visitors/:id/restore
-     */
-    @TryCatch('Failed to restore visitor')
-    static async restoreVisitor(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    @TryCatch('Failed to check visitor appointments')
+    static async hasAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
         
         const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const visitorRecord = await Visitor.findById(id);
-        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
-            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const visitor = await VisitorService.restoreVisitor(id);
-        ResponseUtil.success(res, 'Visitor restored successfully', visitor);
+        const result = await VisitorService.hasAppointments(id);
+        ResponseUtil.success(res, 'Appointment check completed', result);
     }
 
     /**

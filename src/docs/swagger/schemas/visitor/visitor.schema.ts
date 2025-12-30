@@ -4,8 +4,9 @@ export const visitorSchemas = {
         properties: {
             _id: {
                 type: 'string',
-                description: 'Visitor unique identifier',
-                example: '507f1f77bcf86cd799439011'
+                description: 'Visitor unique identifier (MongoDB _id)',
+                example: '507f1f77bcf86cd799439011',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             name: {
                 type: 'string',
@@ -149,13 +150,6 @@ export const visitorSchemas = {
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
             },
-            company: {
-                type: 'string',
-                description: 'Visitor company name',
-                example: 'ABC Corporation',
-                minLength: 2,
-                maxLength: 100
-            },
             designation: {
                 type: 'string',
                 description: 'Visitor designation',
@@ -237,7 +231,7 @@ export const visitorSchemas = {
                 maxLength: 500
             }
         },
-        required: ['name', 'email', 'phone', 'company', 'designation', 'address', 'idProof']
+        required: ['name', 'email', 'phone', 'designation', 'address', 'idProof']
     },
 
     UpdateVisitor: {
@@ -261,13 +255,6 @@ export const visitorSchemas = {
                 description: 'Visitor phone number',
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
-            },
-            company: {
-                type: 'string',
-                description: 'Visitor company name',
-                example: 'ABC Corporation',
-                minLength: 2,
-                maxLength: 100
             },
             designation: {
                 type: 'string',

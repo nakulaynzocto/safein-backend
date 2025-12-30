@@ -1,4 +1,5 @@
 import { Visitor } from '../../models/visitor/visitor.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import {
     ICreateVisitorDTO,
     IUpdateVisitorDTO,
@@ -13,6 +14,8 @@ import {
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
+import { toObjectId } from '../../utils/idExtractor.util';
+import { escapeRegex } from '../../utils/string.util';
 
 export class VisitorService {
     /**
@@ -22,9 +25,14 @@ export class VisitorService {
     static async createVisitor(visitorData: ICreateVisitorDTO, createdBy: string, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
+        const createdByObjectId = toObjectId(createdBy);
+        if (!createdByObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
         const existingVisitor = await Visitor.findOne({
             email: visitorData.email,
-            createdBy: createdBy
+            createdBy: createdByObjectId
         }).session(session);
 
         // If a visitor exists with the same email but is soft-deleted, restore it instead of blocking.
@@ -43,7 +51,7 @@ export class VisitorService {
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        const visitor = new Visitor({ ...visitorData, createdBy });
+        const visitor = new Visitor({ ...visitorData, createdBy: createdByObjectId });
         await visitor.save({ session });
 
         return visitor.toObject() as unknown as IVisitorResponse;
@@ -53,7 +61,12 @@ export class VisitorService {
      * Get visitor by ID
      */
     static async getVisitorById(visitorId: string): Promise<IVisitorResponse> {
-        const visitor = await Visitor.findOne({ _id: visitorId, isDeleted: false });
+        const visitorIdObjectId = toObjectId(visitorId);
+        if (!visitorIdObjectId) {
+            throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const visitor = await Visitor.findOne({ _id: visitorIdObjectId, isDeleted: false });
         if (!visitor) {
             throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -85,18 +98,19 @@ export class VisitorService {
         }
 
         if (search) {
+            const escapedSearch = escapeRegex(search);
             filter.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { phone: { $regex: search, $options: 'i' } },
-                { company: { $regex: search, $options: 'i' } },
-                { designation: { $regex: search, $options: 'i' } },
-                { 'address.street': { $regex: search, $options: 'i' } },
-                { 'address.city': { $regex: search, $options: 'i' } },
-                { 'address.state': { $regex: search, $options: 'i' } },
-                { 'address.country': { $regex: search, $options: 'i' } },
-                { 'idProof.type': { $regex: search, $options: 'i' } },
-                { 'idProof.number': { $regex: search, $options: 'i' } }
+                { name: { $regex: escapedSearch, $options: 'i' } },
+                { email: { $regex: escapedSearch, $options: 'i' } },
+                { phone: { $regex: escapedSearch, $options: 'i' } },
+                { company: { $regex: escapedSearch, $options: 'i' } },
+                { designation: { $regex: escapedSearch, $options: 'i' } },
+                { 'address.street': { $regex: escapedSearch, $options: 'i' } },
+                { 'address.city': { $regex: escapedSearch, $options: 'i' } },
+                { 'address.state': { $regex: escapedSearch, $options: 'i' } },
+                { 'address.country': { $regex: escapedSearch, $options: 'i' } },
+                { 'idProof.type': { $regex: escapedSearch, $options: 'i' } },
+                { 'idProof.number': { $regex: escapedSearch, $options: 'i' } }
             ];
         }
 
@@ -116,19 +130,19 @@ export class VisitorService {
         }
 
         if (city) {
-            filter['address.city'] = { $regex: city, $options: 'i' };
+            filter['address.city'] = { $regex: escapeRegex(city), $options: 'i' };
         }
 
         if (state) {
-            filter['address.state'] = { $regex: state, $options: 'i' };
+            filter['address.state'] = { $regex: escapeRegex(state), $options: 'i' };
         }
 
         if (country) {
-            filter['address.country'] = { $regex: country, $options: 'i' };
+            filter['address.country'] = { $regex: escapeRegex(country), $options: 'i' };
         }
 
         if (idProofType) {
-            filter['idProof.type'] = { $regex: idProofType, $options: 'i' };
+            filter['idProof.type'] = { $regex: escapeRegex(idProofType), $options: 'i' };
         }
 
         const skip = (page - 1) * limit;
@@ -166,10 +180,15 @@ export class VisitorService {
     static async updateVisitor(visitorId: string, updateData: IUpdateVisitorDTO, options: { session?: any } = {}): Promise<IVisitorResponse> {
         const { session } = options;
 
+        const visitorIdObjectId = toObjectId(visitorId);
+        if (!visitorIdObjectId) {
+            throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        const existingVisitor = await Visitor.findById(visitorId).session(session);
+        const existingVisitor = await Visitor.findById(visitorIdObjectId).session(session);
         if (!existingVisitor) {
             throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -178,7 +197,7 @@ export class VisitorService {
             const existingEmail = await Visitor.findOne({
                 email: safeUpdateData.email,
                 createdBy: existingVisitor.createdBy,
-                _id: { $ne: visitorId }
+                _id: { $ne: visitorIdObjectId }
             }).session(session);
 
             if (existingEmail) {
@@ -190,7 +209,7 @@ export class VisitorService {
         }
 
         const visitor = await Visitor.findByIdAndUpdate(
-            visitorId,
+            visitorIdObjectId,
             safeUpdateData,
             { new: true, runValidators: true, session }
         );
@@ -206,118 +225,60 @@ export class VisitorService {
     }
 
     /**
+     * Check if visitor has appointments
+     */
+    static async hasAppointments(visitorId: string): Promise<{ hasAppointments: boolean; count: number }> {
+        const visitorIdObjectId = toObjectId(visitorId);
+        if (!visitorIdObjectId) {
+            throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const count = await Appointment.countDocuments({ 
+            visitorId: visitorIdObjectId, 
+            isDeleted: false,
+            status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
+        });
+        return { hasAppointments: count > 0, count };
+    }
+
+    /**
      * Soft delete visitor
      */
     @Transaction('Failed to delete visitor')
     static async deleteVisitor(visitorId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
         const { session } = options;
 
-        const visitor = await Visitor.findOne({ _id: visitorId, isDeleted: false }).session(session);
+        const visitorIdObjectId = toObjectId(visitorId);
+        const deletedByObjectId = toObjectId(deletedBy);
+
+        if (!visitorIdObjectId) {
+            throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        if (!deletedByObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const visitor = await Visitor.findOne({ _id: visitorIdObjectId, isDeleted: false }).session(session);
         if (!visitor) {
             throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        await (visitor as any).softDelete(deletedBy);
+        // Check if any appointments exist for this visitor
+        const existingAppointments = await Appointment.countDocuments({ 
+            visitorId: visitorIdObjectId, 
+            isDeleted: false 
+        }).session(session);
+
+        if (existingAppointments > 0) {
+            throw new AppError(
+                `Cannot delete visitor. ${existingAppointments} appointment(s) have been created with this visitor. Please delete or reassign the appointments first.`,
+                ERROR_CODES.BAD_REQUEST
+            );
+        }
+
+        await (visitor as any).softDelete(deletedByObjectId);
     }
 
-    /**
-     * Get trashed visitors
-     */
-    static async getTrashedVisitors(query: IGetVisitorsQuery = {}, userId?: string): Promise<IVisitorListResponse> {
-        const {
-            page = 1,
-            limit = 10,
-            search = '',
-            city = '',
-            state = '',
-            country = '',
-            sortBy = 'deletedAt',
-            sortOrder = 'desc'
-        } = query;
-
-        const filter: any = { isDeleted: true };
-        
-        if (userId) {
-            filter.createdBy = userId;
-        }
-
-        if (search) {
-            filter.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { phone: { $regex: search, $options: 'i' } },
-                { 'address.street': { $regex: search, $options: 'i' } },
-                { 'address.city': { $regex: search, $options: 'i' } },
-                { 'address.state': { $regex: search, $options: 'i' } },
-                { 'address.country': { $regex: search, $options: 'i' } },
-                { 'address.zipCode': { $regex: search, $options: 'i' } },
-                { 'idProof.type': { $regex: search, $options: 'i' } },
-                { 'idProof.number': { $regex: search, $options: 'i' } }
-            ];
-        }
-
-
-        if (city) {
-            filter['address.city'] = { $regex: city, $options: 'i' };
-        }
-
-        if (state) {
-            filter['address.state'] = { $regex: state, $options: 'i' };
-        }
-
-        if (country) {
-            filter['address.country'] = { $regex: country, $options: 'i' };
-        }
-
-        const skip = (page - 1) * limit;
-
-        const sort: any = {};
-        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-
-        const [visitors, totalVisitors] = await Promise.all([
-            Visitor.find(filter)
-                .sort(sort)
-                .skip(skip)
-                .limit(limit)
-                .lean(),
-            Visitor.countDocuments(filter)
-        ]);
-
-        const totalPages = Math.ceil(totalVisitors / limit);
-
-        return {
-            visitors: visitors as unknown as IVisitorResponse[],
-            pagination: {
-                currentPage: page,
-                totalPages,
-                totalVisitors,
-                hasNextPage: page < totalPages,
-                hasPrevPage: page > 1
-            }
-        };
-    }
-
-    /**
-     * Restore visitor from trash
-     */
-    @Transaction('Failed to restore visitor')
-    static async restoreVisitor(visitorId: string, options: { session?: any } = {}): Promise<IVisitorResponse> {
-        const { session } = options;
-
-        const visitor = await Visitor.findById(visitorId).session(session);
-        if (!visitor) {
-            throw new AppError(ERROR_MESSAGES.VISITOR_NOT_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        if (!visitor.isDeleted) {
-            throw new AppError(ERROR_MESSAGES.VISITOR_NOT_DELETED, ERROR_CODES.BAD_REQUEST);
-        }
-
-        visitor.isDeleted = false;
-        visitor.deletedAt = null as unknown as Date;
-        await visitor.save({ session });
-        return visitor.toObject() as unknown as IVisitorResponse;
-    }
 
     /**
      * Bulk update visitors

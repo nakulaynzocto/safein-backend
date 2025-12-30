@@ -7,6 +7,7 @@ import subscriptionRoutes from './subscription/subscription.routes';
 import userSubscriptionRoutes from './userSubscription/userSubscription.routes';
 import uploadRoutes from './upload/upload.routes';
 import approvalLinkRoutes from './approvalLink/approvalLink.routes';
+import appointmentBookingLinkRoutes from './appointmentBookingLink/appointmentBookingLink.routes';
 import settingsRoutes from './settings/settings.routes';
 
 const router = Router();
@@ -22,6 +23,7 @@ router.get('/health', (_req, res) => {
 
 // Public routes (no authentication required)
 router.use('/', approvalLinkRoutes);
+router.use('/appointment-links', appointmentBookingLinkRoutes);
 
 // Protected routes (authentication required)
 router.use('/users', userRoutes);

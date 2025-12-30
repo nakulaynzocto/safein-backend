@@ -4,6 +4,7 @@ import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { userLimiter } from '../../middlewares';
 import {
     createVisitorValidation,
     updateVisitorValidation,
@@ -16,6 +17,7 @@ import {
 const router = Router();
 
 router.use(verifyToken);
+router.use(userLimiter);
 
 router.post(
     '/',
@@ -42,9 +44,9 @@ router.post(
 );
 
 router.get(
-    '/trashed',
-    validateRequest(getVisitorsValidation),
-    asyncWrapper(VisitorController.getTrashedVisitors)
+    '/:id/has-appointments',
+    validateRequest(visitorParamsValidation),
+    asyncWrapper(VisitorController.hasAppointments)
 );
 
 router.get(
@@ -58,12 +60,6 @@ router.put(
     validateRequest(visitorParamsValidation),
     validateRequest(updateVisitorValidation),
     asyncWrapper(VisitorController.updateVisitor)
-);
-
-router.put(
-    '/:id/restore',
-    validateRequest(visitorParamsValidation),
-    asyncWrapper(VisitorController.restoreVisitor)
 );
 
 router.put(

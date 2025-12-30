@@ -79,7 +79,6 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         razorpayPaymentId: {
             type: String,
             default: null,
-            index: true,
         },
         previousSubscriptionId: {
             type: Schema.Types.ObjectId,
@@ -106,7 +105,6 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
 
 // Indexes for better query performance
 subscriptionHistorySchema.index({ userId: 1, isDeleted: 1, purchaseDate: -1 });
-subscriptionHistorySchema.index({ subscriptionId: 1 });
 subscriptionHistorySchema.index({ razorpayPaymentId: 1 });
 
 export const SubscriptionHistory = mongoose.model<ISubscriptionHistory>(

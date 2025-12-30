@@ -54,7 +54,7 @@ export function getNewAppointmentRequestEmailTemplate(
                 <p><strong>👤 Name:</strong> ${visitorDetails.name}</p>
                 <p><strong>📧 Email:</strong> <a href="mailto:${visitorDetails.email}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.email}</a></p>
                 <p><strong>📞 Phone:</strong> <a href="tel:${visitorDetails.phone}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.phone}</a></p>
-                ${visitorDetails.visitorId ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails.visitorId}</p>` : ''}
+                ${visitorDetails._id ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails._id}</p>` : ''}
             </div>
             
             <div class="button-group" style="text-align: center; margin: 30px 0;">
@@ -68,7 +68,7 @@ export function getNewAppointmentRequestEmailTemplate(
             </div>
             
             <div class="message" style="text-align: center; margin-top: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
-                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/dashboard/notifications" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
+                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/appointment/list" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
             </div>
   `;
   
@@ -110,12 +110,12 @@ Visitor Information:
 - Email: ${visitorDetails.email}
 - Phone: ${visitorDetails.phone}
 - Company: ${visitorDetails.company || 'Not provided'}
-- Visitor ID: ${visitorDetails.visitorId || 'Not assigned'}
+- Visitor ID: ${visitorDetails._id || 'Not assigned'}
 
 To view full details and approve/reject this appointment, click:
 ${verifyUrl}
 
-Or visit your dashboard: ${baseUrl}/dashboard/notifications
+Or visit your dashboard: ${baseUrl}/appointment/list
 
 Important: Please respond to this request as soon as possible. The link is secure and will expire after use.
 

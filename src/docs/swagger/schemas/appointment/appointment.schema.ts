@@ -4,23 +4,21 @@ export const appointmentSchemas = {
         properties: {
             _id: {
                 type: 'string',
-                description: 'Appointment unique identifier',
-                example: '64f1a2b3c4d5e6f7g8h9i0j1'
-            },
-            appointmentId: {
-                type: 'string',
-                description: 'Auto-generated appointment ID',
-                example: 'APT123456789'
+                description: 'Appointment unique identifier (MongoDB _id)',
+                example: '64f1a2b3c4d5e6f7g8h9i0j1',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             employeeId: {
                 type: 'string',
-                description: 'Employee ID reference',
-                example: '64f1a2b3c4d5e6f7g8h9i0j2'
+                description: 'Employee MongoDB ObjectId reference',
+                example: '64f1a2b3c4d5e6f7g8h9i0j2',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             visitorId: {
                 type: 'string',
-                description: 'Visitor ID reference',
-                example: '64f1a2b3c4d5e6f7g8h9i0j3'
+                description: 'Visitor MongoDB ObjectId reference',
+                example: '64f1a2b3c4d5e6f7g8h9i0j3',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             visitor: {
                 type: 'object',
@@ -28,13 +26,8 @@ export const appointmentSchemas = {
                 properties: {
                     _id: {
                         type: 'string',
-                        description: 'Visitor unique identifier',
+                        description: 'Visitor unique identifier (MongoDB _id)',
                         example: '64f1a2b3c4d5e6f7g8h9i0j3'
-                    },
-                    visitorId: {
-                        type: 'string',
-                        description: 'Auto-generated visitor ID',
-                        example: 'VIS123456789'
                     },
                     name: {
                         type: 'string',
@@ -586,8 +579,8 @@ export const appointmentSchemas = {
         properties: {
             appointmentId: {
                 type: 'string',
-                description: 'Appointment ID',
-                example: 'APT123456789'
+                description: 'Appointment ID (MongoDB _id)',
+                example: '64f1a2b3c4d5e6f7g8h9i0j1'
             },
             badgeNumber: {
                 type: 'string',
@@ -608,8 +601,8 @@ export const appointmentSchemas = {
         properties: {
             appointmentId: {
                 type: 'string',
-                description: 'Appointment ID',
-                example: 'APT123456789'
+                description: 'Appointment ID (MongoDB _id)',
+                example: '64f1a2b3c4d5e6f7g8h9i0j1'
             },
             notes: {
                 type: 'string',
@@ -773,8 +766,8 @@ export const appointmentSchemas = {
                         properties: {
                             appointmentId: {
                                 type: 'string',
-                                description: 'Appointment ID',
-                                example: 'APT123456789'
+                                description: 'Appointment ID (MongoDB _id)',
+                                example: '64f1a2b3c4d5e6f7g8h9i0j1'
                             },
                             visitorName: {
                                 type: 'string',

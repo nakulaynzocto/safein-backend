@@ -5,6 +5,7 @@ import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { userLimiter } from '../../middlewares';
 import {
     createEmployeeValidation,
     updateEmployeeValidation,
@@ -37,6 +38,7 @@ const upload = multer({
 });
 
 router.use(verifyToken);
+router.use(userLimiter);
 
 router.post(
     '/',
@@ -69,9 +71,9 @@ router.post(
 );
 
 router.get(
-    '/trashed',
-    validateRequest(getEmployeesValidation),
-    asyncWrapper(EmployeeController.getTrashedEmployees)
+    '/:id/has-appointments',
+    validateRequest(employeeParamsValidation),
+    asyncWrapper(EmployeeController.hasAppointments)
 );
 
 router.get(
@@ -92,12 +94,6 @@ router.put(
     validateRequest(employeeParamsValidation),
     validateRequest(updateEmployeeStatusValidation),
     asyncWrapper(EmployeeController.updateEmployeeStatus)
-);
-
-router.put(
-    '/:id/restore',
-    validateRequest(employeeParamsValidation),
-    asyncWrapper(EmployeeController.restoreEmployee)
 );
 
 router.put(

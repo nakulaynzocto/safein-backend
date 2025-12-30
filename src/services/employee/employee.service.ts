@@ -1,4 +1,5 @@
 import { Employee } from '../../models/employee/employee.model';
+import { Appointment } from '../../models/appointment/appointment.model';
 import {
     ICreateEmployeeDTO,
     IUpdateEmployeeDTO,
@@ -14,6 +15,8 @@ import {
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
+import { toObjectId } from '../../utils/idExtractor.util';
+import { escapeRegex } from '../../utils/string.util';
 
 export class EmployeeService {
     /**
@@ -23,9 +26,14 @@ export class EmployeeService {
     static async createEmployee(employeeData: ICreateEmployeeDTO, createdBy: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
+        const createdByObjectId = toObjectId(createdBy);
+        if (!createdByObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
         const existingEmployee = await Employee.findOne({
             email: employeeData.email,
-            createdBy: createdBy
+            createdBy: createdByObjectId
         }).session(session);
 
         // If an employee exists with the same email but is soft-deleted, restore it instead of blocking.
@@ -44,7 +52,7 @@ export class EmployeeService {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        const employee = new Employee({ ...employeeData, createdBy });
+        const employee = new Employee({ ...employeeData, createdBy: createdByObjectId });
         await employee.save({ session });
 
         return employee.toObject() as unknown as IEmployeeResponse;
@@ -54,7 +62,12 @@ export class EmployeeService {
      * Get employee by ID
      */
     static async getEmployeeById(employeeId: string): Promise<IEmployeeResponse> {
-        const employee = await Employee.findOne({ _id: employeeId, isDeleted: false });
+        const employeeIdObjectId = toObjectId(employeeId);
+        if (!employeeIdObjectId) {
+            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const employee = await Employee.findOne({ _id: employeeIdObjectId, isDeleted: false });
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -84,12 +97,13 @@ export class EmployeeService {
         }
 
         if (search) {
+            const escapedSearch = escapeRegex(search);
             filter.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { employeeId: { $regex: search, $options: 'i' } },
-                { department: { $regex: search, $options: 'i' } },
-                { designation: { $regex: search, $options: 'i' } }
+                { name: { $regex: escapedSearch, $options: 'i' } },
+                { email: { $regex: escapedSearch, $options: 'i' } },
+                { _id: { $regex: escapedSearch, $options: 'i' } },
+                { department: { $regex: escapedSearch, $options: 'i' } },
+                { designation: { $regex: escapedSearch, $options: 'i' } }
             ];
         }
 
@@ -151,10 +165,15 @@ export class EmployeeService {
     static async updateEmployee( employeeId: string,updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
+        const employeeIdObjectId = toObjectId(employeeId);
+        if (!employeeIdObjectId) {
+            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
         const safeUpdateData = { ...updateData };
         delete (safeUpdateData as any).session;
 
-        const existingEmployee = await Employee.findById(employeeId).session(session);
+        const existingEmployee = await Employee.findById(employeeIdObjectId).session(session);
         if (!existingEmployee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
@@ -163,7 +182,7 @@ export class EmployeeService {
             const existingEmail = await Employee.findOne({
                 email: safeUpdateData.email,
                 createdBy: existingEmployee.createdBy,
-                _id: { $ne: employeeId }
+                _id: { $ne: employeeIdObjectId }
             }).session(session);
 
             if (existingEmail) {
@@ -175,7 +194,7 @@ export class EmployeeService {
         }
 
         const employee = await Employee.findByIdAndUpdate(
-            employeeId,
+            employeeIdObjectId,
             safeUpdateData,
             { new: true, runValidators: true, session }
         );
@@ -191,102 +210,61 @@ export class EmployeeService {
     }
 
     /**
+     * Check if employee has appointments
+     */
+    static async hasAppointments(employeeId: string): Promise<{ hasAppointments: boolean; count: number }> {
+        const employeeIdObjectId = toObjectId(employeeId);
+        if (!employeeIdObjectId) {
+            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const count = await Appointment.countDocuments({ 
+            employeeId: employeeIdObjectId, 
+            isDeleted: false,
+            status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
+        });
+        return { hasAppointments: count > 0, count };
+    }
+
+    /**
      * Soft delete employee
      */
     @Transaction('Failed to delete employee')
     static async deleteEmployee(employeeId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
         const { session } = options;
 
-        const employee = await Employee.findOne({ _id: employeeId, isDeleted: false }).session(session);
+        const employeeIdObjectId = toObjectId(employeeId);
+        const deletedByObjectId = toObjectId(deletedBy);
+
+        if (!employeeIdObjectId) {
+            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        if (!deletedByObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const employee = await Employee.findOne({ _id: employeeIdObjectId, isDeleted: false }).session(session);
         if (!employee) {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
         }
 
-        await (employee as any).softDelete(deletedBy);
+        // Check if any appointments exist for this employee
+        const existingAppointments = await Appointment.countDocuments({ 
+            employeeId: employeeIdObjectId, 
+            isDeleted: false 
+        }).session(session);
+
+        if (existingAppointments > 0) {
+            throw new AppError(
+                `Cannot delete employee. ${existingAppointments} appointment(s) have been created with this employee. Please delete or reassign the appointments first.`,
+                ERROR_CODES.BAD_REQUEST
+            );
+        }
+
+        await (employee as any).softDelete(deletedByObjectId);
     }
 
-    /**
-     * Get trashed employees (user-specific)
-     */
-    static async getTrashedEmployees(query: IGetEmployeesQuery = {}, userId?: string): Promise<IEmployeeListResponse> {
-        const {
-            page = 1,
-            limit = 10,
-            search = '',
-            department = '',
-            sortBy = 'deletedAt',
-            sortOrder = 'desc'
-        } = query;
 
-        const filter: any = { isDeleted: true };
-        
-        if (userId) {
-            filter.createdBy = userId;
-        }
-
-        if (search) {
-            filter.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { employeeId: { $regex: search, $options: 'i' } },
-                { department: { $regex: search, $options: 'i' } },
-                { designation: { $regex: search, $options: 'i' } }
-            ];
-        }
-
-        if (department) {
-            filter.department = { $regex: department, $options: 'i' };
-        }
-
-        const skip = (page - 1) * limit;
-
-        const sort: any = {};
-        sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-
-        const [employees, totalEmployees] = await Promise.all([
-            Employee.find(filter)
-                .sort(sort)
-                .skip(skip)
-                .limit(limit)
-                .lean(),
-            Employee.countDocuments(filter)
-        ]);
-
-        const totalPages = Math.ceil(totalEmployees / limit);
-
-        return {
-            employees: employees as unknown as IEmployeeResponse[],
-            pagination: {
-                currentPage: page,
-                totalPages,
-                totalEmployees,
-                hasNextPage: page < totalPages,
-                hasPrevPage: page > 1
-            }
-        };
-    }
-
-    /**
-     * Restore employee from trash
-     */
-    @Transaction('Failed to restore employee')
-    static async restoreEmployee(employeeId: string, options: { session?: any } = {}): Promise<IEmployeeResponse> {
-        const { session } = options;
-
-        const employee = await Employee.findById(employeeId).session(session);
-        if (!employee) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        if (!employee.isDeleted) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_DELETED, ERROR_CODES.BAD_REQUEST);
-        }
-
-        employee.isDeleted = false;
-        employee.deletedAt = null as unknown as Date;
-        await employee.save({ session });
-        return employee.toObject() as unknown as IEmployeeResponse;
-    }
 
     /**
      * Update employee status

@@ -4,13 +4,9 @@ export const employeeSchemas = {
         properties: {
             _id: {
                 type: 'string',
-                description: 'Employee unique identifier',
-                example: '507f1f77bcf86cd799439011'
-            },
-            employeeId: {
-                type: 'string',
-                description: 'Employee ID',
-                example: 'EMP001'
+                description: 'Employee unique identifier (MongoDB _id)',
+                example: '507f1f77bcf86cd799439011',
+                pattern: '^[0-9a-fA-F]{24}$'
             },
             name: {
                 type: 'string',
@@ -93,20 +89,12 @@ export const employeeSchemas = {
                 example: '2023-01-01T00:00:00.000Z'
             }
         },
-        required: ['_id', 'employeeId', 'name', 'email', 'phone', 'department', 'designation', 'role', 'officeLocation', 'status', 'isDeleted', 'createdAt', 'updatedAt']
+        required: ['_id', 'name', 'email', 'phone', 'department', 'designation', 'role', 'officeLocation', 'status', 'isDeleted', 'createdAt', 'updatedAt']
     },
 
     CreateEmployee: {
         type: 'object',
         properties: {
-            employeeId: {
-                type: 'string',
-                description: 'Employee ID',
-                example: 'EMP001',
-                minLength: 2,
-                maxLength: 20,
-                pattern: '^[A-Z0-9]+$'
-            },
             name: {
                 type: 'string',
                 description: 'Employee full name',
@@ -168,7 +156,7 @@ export const employeeSchemas = {
                 default: 'Active'
             }
         },
-        required: ['employeeId', 'name', 'email', 'phone', 'department', 'designation', 'role', 'officeLocation']
+        required: ['name', 'email', 'phone', 'department', 'designation', 'role', 'officeLocation']
     },
 
     UpdateEmployee: {

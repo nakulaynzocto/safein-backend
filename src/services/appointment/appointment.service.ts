@@ -5,6 +5,7 @@ import { EmailService } from '../email/email.service';
 import { ApprovalLinkService } from '../approvalLink/approvalLink.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SettingsService } from '../settings/settings.service';
+import { socketService } from '../socket/socket.service';
 import {
     ICreateAppointmentDTO,
     IUpdateAppointmentDTO,
@@ -21,11 +22,10 @@ import {
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
+import { toObjectId } from '../../utils/idExtractor.util';
+import { escapeRegex } from '../../utils/string.util';
 
 export class AppointmentService {
-    /**
-     * Create a new appointment
-     */
     @Transaction('Failed to create appointment')
     static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
@@ -38,7 +38,6 @@ export class AppointmentService {
             throw new AppError('Employee is inactive. Please select an active employee.', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Prevent double booking for the same employee, date, and time while an earlier appointment is pending/approved
         const conflictAppointment = await Appointment.findOne({
             employeeId: appointmentData.employeeId,
             'appointmentDetails.scheduledDate': appointmentData.appointmentDetails.scheduledDate,
@@ -60,24 +59,21 @@ export class AppointmentService {
 
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
             .session(session);
 
-        // Generate approval link for the appointment
         let approvalLink = null;
         try {
             const appointmentId = (appointment._id as any).toString();
             approvalLink = await ApprovalLinkService.createApprovalLink(appointmentId);
-        } catch (error) {
-            console.error('Failed to create approval link:', error);
+        } catch {
+            // Approval link creation failed, continue without it
         }
 
-        // Check settings for notifications
         const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // Send email notification to employee (if enabled and approval link exists)
         try {
             if (populatedAppointment && emailEnabled && approvalLink?.token) {
                 await EmailService.sendNewAppointmentRequestEmail(
@@ -87,18 +83,30 @@ export class AppointmentService {
                     populatedAppointment.appointmentDetails.scheduledDate,
                     populatedAppointment.appointmentDetails.scheduledTime,
                     populatedAppointment.appointmentDetails.purpose,
-                    approvalLink.token // Pass the approval token instead of appointment ID
+                    approvalLink.token
                 );
-                
-                // Mark email as sent only if notification is enabled and sent successfully
                 appointment.notifications.emailSent = true;
             } else {
-                // Mark as not sent if disabled or no approval link
                 appointment.notifications.emailSent = false;
             }
-        } catch (error) {
-            console.error('Failed to send new appointment request email to employee:', error);
+        } catch {
             appointment.notifications.emailSent = false;
+        }
+
+        // Send confirmation email to visitor (if enabled)
+        try {
+            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
+                await EmailService.sendAppointmentConfirmationEmail(
+                    (populatedAppointment.visitorId as any).email,
+                    (populatedAppointment.visitorId as any).name,
+                    (populatedAppointment.employeeId as any).name,
+                    populatedAppointment.appointmentDetails.scheduledDate,
+                    populatedAppointment.appointmentDetails.scheduledTime,
+                    populatedAppointment.appointmentDetails.purpose
+                );
+            }
+        } catch {
+            // Visitor confirmation email failed, continue
         }
 
         // Send WhatsApp notification to employee (if enabled)
@@ -108,8 +116,6 @@ export class AppointmentService {
                 const employeeName = (populatedAppointment.employeeId as any).name;
                 
                 if (employeePhone) {
-                    console.log(`Sending WhatsApp notification to employee: ${employeeName} (${employeePhone})`);
-                    
                     const whatsappSent = await WhatsAppService.sendAppointmentNotification(
                         employeePhone,
                         employeeName,
@@ -118,7 +124,7 @@ export class AppointmentService {
                             email: (populatedAppointment.visitorId as any).email,
                             phone: (populatedAppointment.visitorId as any).phone,
                             company: (populatedAppointment.visitorId as any).company,
-                            visitorId: (populatedAppointment.visitorId as any).visitorId
+                            _id: (populatedAppointment.visitorId as any)._id?.toString()
                         },
                         populatedAppointment.appointmentDetails.scheduledDate,
                         populatedAppointment.appointmentDetails.scheduledTime,
@@ -129,58 +135,53 @@ export class AppointmentService {
                     
                     // Mark WhatsApp as sent only if notification is enabled and sent successfully
                     appointment.notifications.whatsappSent = whatsappSent;
-                    
-                    if (whatsappSent) {
-                        console.log(`WhatsApp notification sent successfully to employee: ${employeeName}`);
-                    } else {
-                        console.warn(`Failed to send WhatsApp notification to employee: ${employeeName}. Check WhatsApp Cloud API configuration.`);
-                    }
                 } else {
-                    console.warn(`Employee ${employeeName} does not have a phone number. WhatsApp notification not sent.`);
                     appointment.notifications.whatsappSent = false;
                 }
             } else {
-                if (!whatsappEnabled) {
-                    console.log('WhatsApp notifications are disabled in settings');
-                } else if (!approvalLink?.link) {
-                    console.warn('Approval link not generated. WhatsApp notification not sent.');
-                }
-                // Mark as not sent if disabled
                 appointment.notifications.whatsappSent = false;
             }
-        } catch (error: any) {
-            console.error('Failed to send WhatsApp notification to employee:', error?.message || error);
+        } catch {
             appointment.notifications.whatsappSent = false;
         }
 
-        // SMS notifications (if SMS service is implemented)
-        // For now, mark as not sent if disabled
         appointment.notifications.smsSent = false;
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // const smsSent = await SmsService.sendAppointmentNotification(...);
-            // appointment.notifications.smsSent = smsSent;
         }
 
-        // Save notification status
         await appointment.save({ session });
 
+        try {
+            if (populatedAppointment) {
+                const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
+                const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
+                const userId = (createdBy as any)?.toString() || createdBy;
+                
+                if (userId) {
+                    socketService.emitAppointmentCreated(userId, {
+                        appointmentId: (appointment._id as any).toString(),
+                        appointment: serializedAppointment,
+                        status: appointment.status,
+                        createdAt: appointment.createdAt,
+                    });
+                }
+            }
+        } catch {
+            // Socket notification failed, continue
+        }
+
         const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
-        
-        // Add approval link to response
         return {
             ...appointmentResponse,
             approvalLink: approvalLink?.link || null
         } as IAppointmentResponse;
     }
 
-    /**
-     * Get appointment by ID
-     */
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -195,9 +196,13 @@ export class AppointmentService {
      * Get appointment by appointment ID
      */
     static async getAppointmentByAppointmentId(appointmentId: string): Promise<IAppointmentResponse> {
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false })
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -232,7 +237,8 @@ export class AppointmentService {
         }
 
         if (search) {
-            const searchRegex = { $regex: search, $options: 'i' };
+            const escapedSearch = escapeRegex(search);
+            const searchRegex = { $regex: escapedSearch, $options: 'i' };
             
             const matchingVisitors = await Visitor.find({
                 $or: [
@@ -256,7 +262,7 @@ export class AppointmentService {
             const employeeIds = matchingEmployees.map((e: any) => e._id);
             
             filter.$or = [
-                { appointmentId: searchRegex },
+                { _id: searchRegex },
                 { 'appointmentDetails.purpose': searchRegex },
                 { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
@@ -323,7 +329,7 @@ export class AppointmentService {
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
                 .sort(sort)
@@ -420,7 +426,11 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, badgeNumber, securityNotes } = request;
 
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
@@ -454,7 +464,11 @@ export class AppointmentService {
         const { session } = options;
         const { appointmentId, notes } = request;
 
-        const appointment = await Appointment.findOne({ appointmentId, isDeleted: false }).session(session);
+        const appointmentIdObjectId = toObjectId(appointmentId);
+        if (!appointmentIdObjectId) {
+            throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
+        }
+        const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false }).session(session);
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
@@ -479,11 +493,47 @@ export class AppointmentService {
 
     /**
      * Get appointment statistics (user-specific)
+     * @param userId - Optional user ID to filter by creator
+     * @param startDate - Optional start date for filtering (YYYY-MM-DD)
+     * @param endDate - Optional end date for filtering (YYYY-MM-DD)
      */
-    static async getAppointmentStats(userId?: string): Promise<IAppointmentStats> {
-        const baseFilter: any = {};
+    static async getAppointmentStats(userId?: string, startDate?: string, endDate?: string): Promise<IAppointmentStats> {
+        const baseFilter: any = { isDeleted: false };
         if (userId) {
             baseFilter.createdBy = userId;
+        }
+
+        // Build date range filter
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $gte: start,
+                $lt: endExclusive
+            };
+        } else if (startDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const endExclusive = new Date(startDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $gte: start,
+                $lt: endExclusive
+            };
+        } else if (endDate) {
+            const endExclusive = new Date(endDate);
+            endExclusive.setDate(endExclusive.getDate() + 1);
+            endExclusive.setHours(0, 0, 0, 0);
+            
+            baseFilter['appointmentDetails.scheduledDate'] = {
+                $lt: endExclusive
+            };
         }
 
         const [
@@ -497,19 +547,19 @@ export class AppointmentService {
             appointmentsByEmployee,
             appointmentsByDate
         ] = await Promise.all([
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'scheduled' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'checked_in' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'completed' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'cancelled' }),
-            Appointment.countDocuments({ ...baseFilter, isDeleted: false, status: 'no_show' }),
+            Appointment.countDocuments(baseFilter),
+            Appointment.countDocuments({ ...baseFilter, status: 'scheduled' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'checked_in' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'completed' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'cancelled' }),
+            Appointment.countDocuments({ ...baseFilter, status: 'no_show' }),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 { $group: { _id: '$status', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ]),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 { $group: { _id: '$employeeId', count: { $sum: 1 } } },
                 { $lookup: { from: 'employees', localField: '_id', foreignField: '_id', as: 'employee' } },
                 { $unwind: '$employee' },
@@ -518,7 +568,7 @@ export class AppointmentService {
                 { $limit: 10 }
             ]),
             Appointment.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
+                { $match: baseFilter },
                 {
                     $group: {
                         _id: {
@@ -570,6 +620,7 @@ export class AppointmentService {
             isDeleted: false
         })
             .populate('employeeId', 'name')
+            .populate('visitorId', 'name')
             .sort({ 'appointmentDetails.scheduledDate': 1, 'appointmentDetails.scheduledTime': 1 })
             .lean();
 
@@ -581,9 +632,9 @@ export class AppointmentService {
             }
 
             acc[date].push({
-                appointmentId: appointment.appointmentId,
-                visitorName: appointment.visitorDetails.name,
-                employeeName: appointment.employeeId.name,
+                _id: appointment._id.toString(),
+                visitorName: (appointment.visitorId as any)?.name || 'Unknown Visitor',
+                employeeName: (appointment.employeeId as any)?.name || 'Unknown Employee',
                 scheduledTime: appointment.appointmentDetails.scheduledTime,
                 duration: appointment.appointmentDetails.duration,
                 status: appointment.status,
@@ -606,23 +657,54 @@ export class AppointmentService {
         const { query, type, page = 1, limit = 10 } = request;
 
         const filter: any = { isDeleted: false };
+        const escapedQuery = escapeRegex(query);
 
         switch (type) {
             case 'visitor_name':
-                filter['visitorDetails.name'] = { $regex: query, $options: 'i' };
-                break;
             case 'visitor_phone':
-                filter['visitorDetails.phone'] = { $regex: query, $options: 'i' };
+            case 'visitor_email': {
+                // Search in Visitor collection first, then filter appointments by visitorId
+                const visitorSearchRegex = { $regex: escapedQuery, $options: 'i' };
+                const visitorFilter: any = {};
+                
+                if (type === 'visitor_name') {
+                    visitorFilter.name = visitorSearchRegex;
+                } else if (type === 'visitor_phone') {
+                    visitorFilter.phone = visitorSearchRegex;
+                } else if (type === 'visitor_email') {
+                    visitorFilter.email = visitorSearchRegex;
+                }
+                
+                const matchingVisitors = await Visitor.find(visitorFilter).select('_id').lean();
+                const visitorIds = matchingVisitors.map((v: any) => v._id);
+                
+                if (visitorIds.length > 0) {
+                    filter.visitorId = { $in: visitorIds };
+                } else {
+                    // No matching visitors, return empty result
+                    filter.visitorId = { $in: [] };
+                }
                 break;
-            case 'visitor_email':
-                filter['visitorDetails.email'] = { $regex: query, $options: 'i' };
-                break;
+            }
             case 'appointment_id':
-                filter.appointmentId = { $regex: query, $options: 'i' };
+                filter._id = { $regex: escapedQuery, $options: 'i' };
                 break;
-            case 'employee_name':
-                filter['employeeId'] = { $exists: true };
+            case 'employee_name': {
+                // Search in Employee collection first, then filter appointments by employeeId
+                const employeeSearchRegex = { $regex: escapedQuery, $options: 'i' };
+                const matchingEmployees = await Employee.find({
+                    name: employeeSearchRegex
+                }).select('_id').lean();
+                const employeeIds = matchingEmployees.map((e: any) => e._id);
+                
+                if (employeeIds.length > 0) {
+                    filter.employeeId = { $in: employeeIds };
+                } else {
+                    // No matching employees, return empty result
+                    filter.employeeId = { $in: [] };
+                }
                 break;
+            }
         }
 
         const skip = (page - 1) * limit;
@@ -630,7 +712,7 @@ export class AppointmentService {
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo visitorId designation address idProof')
+                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .sort({ createdAt: -1 })
                 .skip(skip)
@@ -683,22 +765,6 @@ export class AppointmentService {
     }
 
     /**
-     * Restore appointment from trash
-     */
-    @Transaction('Failed to restore appointment')
-    static async restoreAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
-
-        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: true }).session(session);
-        if (!appointment) {
-            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
-        }
-
-        await (appointment as any).restore();
-        return appointment.toObject() as unknown as IAppointmentResponse;
-    }
-
-    /**
      * Cancel appointment
      */
     @Transaction('Failed to cancel appointment')
@@ -732,7 +798,7 @@ export class AppointmentService {
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
-            .populate('visitorId', 'name email phone photo visitorId')
+            .populate('visitorId', 'name email phone photo')
             .session(session);
             
         if (!appointment) {
@@ -745,6 +811,12 @@ export class AppointmentService {
 
         appointment.status = 'approved';
         await appointment.save({ session });
+
+        // Re-populate after save to ensure populated fields are available for socket emission
+        const populatedAppointment = await Appointment.findById(appointment._id)
+            .populate('employeeId', 'name email phone department')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .session(session);
 
         // Get user ID who created the appointment (for settings check)
         const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
@@ -765,8 +837,8 @@ export class AppointmentService {
                     appointment.appointmentDetails.scheduledTime
                 );
             }
-        } catch (error) {
-            console.error('Failed to send approval email to visitor:', error);
+        } catch {
+            // Email sending failed, continue
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -784,17 +856,14 @@ export class AppointmentService {
                     );
                 }
             }
-        } catch (error) {
-            console.error('Failed to send approval WhatsApp to visitor:', error);
+        } catch {
+            // WhatsApp sending failed, continue
         }
 
-        // SMS notifications (if SMS service is implemented and enabled)
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // await SmsService.sendAppointmentStatusUpdate(...);
         }
 
-        // Send email notification to employee
         try {
             await EmailService.sendEmployeeAppointmentApprovalEmail(
                 (appointment.employeeId as any).email,
@@ -803,22 +872,28 @@ export class AppointmentService {
                 appointment.appointmentDetails.scheduledDate,
                 appointment.appointmentDetails.scheduledTime
             );
-        } catch (error) {
-            console.error('Failed to send approval email to employee:', error);
+        } catch {
+            // Email sending failed, continue
+        }
+
+        if (populatedAppointment && userId) {
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: 'approved',
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            });
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
-    /**
-     * Reject appointment
-     */
     static async rejectAppointment(appointmentId: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
-            .populate('visitorId', 'name email phone photo visitorId')
+            .populate('visitorId', 'name email phone photo')
             .session(session);
             
         if (!appointment) {
@@ -834,6 +909,12 @@ export class AppointmentService {
 
         // Get user ID who created the appointment (for settings check)
         const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+
+        // Re-populate after save to ensure populated fields are available for socket emission
+        const populatedAppointment = await Appointment.findById(appointment._id)
+            .populate('employeeId', 'name email phone department')
+            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .session(session);
 
         // Check settings for notifications
         const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
@@ -851,8 +932,8 @@ export class AppointmentService {
                     appointment.appointmentDetails.scheduledTime
                 );
             }
-        } catch (error) {
-            console.error('Failed to send rejection email to visitor:', error);
+        } catch {
+            // Email sending failed, continue
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -870,17 +951,14 @@ export class AppointmentService {
                     );
                 }
             }
-        } catch (error) {
-            console.error('Failed to send rejection WhatsApp to visitor:', error);
+        } catch {
+            // WhatsApp sending failed, continue
         }
 
-        // SMS notifications (if SMS service is implemented and enabled)
         if (smsEnabled) {
             // TODO: Implement SMS service when available
-            // await SmsService.sendAppointmentStatusUpdate(...);
         }
 
-        // Send email notification to employee
         try {
             await EmailService.sendEmployeeAppointmentRejectionEmail(
                 (appointment.employeeId as any).email,
@@ -889,8 +967,17 @@ export class AppointmentService {
                 appointment.appointmentDetails.scheduledDate,
                 appointment.appointmentDetails.scheduledTime
             );
-        } catch (error) {
-            console.error('Failed to send rejection email to employee:', error);
+        } catch {
+            // Email sending failed, continue
+        }
+
+        if (populatedAppointment && userId) {
+            socketService.emitAppointmentStatusChange(userId, {
+                appointmentId: (appointment._id as any).toString(),
+                status: 'rejected',
+                updatedAt: new Date(),
+                appointment: populatedAppointment
+            });
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;

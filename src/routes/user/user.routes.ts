@@ -3,9 +3,15 @@ import { UserController } from '../../controllers/user/user.controller';
 import {
     protect,
     validateRequest,
-    authLimiter,
-    passwordResetLimiter
+    passwordResetLimiter,
+    userLimiter
 } from '../../middlewares';
+import {
+    authLimiter,
+    bruteForceProtection,
+    checkAccountLock,
+    loginAttemptTracker
+} from '../../middlewares/security';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createUserValidation,
@@ -30,9 +36,13 @@ router.post('/register',
 
 router.post('/login',
     authLimiter,
+    bruteForceProtection,
+    checkAccountLock,
     validateRequest(loginValidation),
+    loginAttemptTracker,
     asyncWrapper(UserController.login)
 );
+
 
 router.post('/forgot-password',
     passwordResetLimiter,
@@ -59,6 +69,7 @@ router.post('/resend-otp',
 );
 
 router.use(protect);
+router.use(userLimiter);
 
 router.get('/profile', asyncWrapper(UserController.getProfile));
 router.put('/profile',
@@ -66,6 +77,7 @@ router.put('/profile',
     asyncWrapper(UserController.updateProfile)
 );
 router.post('/change-password',
+    passwordResetLimiter,
     validateRequest(changePasswordValidation),
     asyncWrapper(UserController.changePassword)
 );

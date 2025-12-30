@@ -5,3 +5,4 @@ export * from './errorResponse.util';
 export * from './asyncHandler.util';
 export * from './tryCatch.util';
 export * from './transaction.util';
+export * from './string.util';

@@ -4,12 +4,19 @@ dotenv.config();
 import express, { Express } from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
-import helmet from 'helmet';
 import morgan from 'morgan';
+import hpp from 'hpp';
 import swaggerUi from 'swagger-ui-express';
 import { connectDatabase } from './config/database.config';
 import { connectRedis } from './config/redis.config';
-import { notFoundHandler, generalLimiter, errorHandler } from './middlewares';
+import { notFoundHandler, errorHandler } from './middlewares';
+import {
+  generalLimiter,
+  securityHeaders,
+  customSecurityHeaders,
+  inputSanitization,
+  securityLogger
+} from './middlewares/security';
 import { requestLogger, errorLogger } from './logging';
 import { devFormat, combinedFormat, morganOptions, morganFileOptions, morganErrorOptions, errorFormat } from './logging';
 import routes from './routes';
@@ -20,6 +27,8 @@ import { webhookRouter } from './routes/userSubscription/userSubscription.routes
 import { socketService } from './services/socket/socket.service';
 
 const app: Express = express();
+// Trust proxy (required for correct IP detection behind proxies/load balancers)
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 // Initialize Socket.IO
@@ -38,10 +47,9 @@ EmailService.verifyConnection().catch((error) => {
   console.error('Email service initialization error:', error);
 });
 
-app.use(helmet({
-  // Disable contentSecurityPolicy for webhook route
-  contentSecurityPolicy: false,
-}));
+// Enhanced Security Headers
+app.use(securityHeaders);
+app.use(customSecurityHeaders);
 
 app.use(cors({
   origin: CONSTANTS.FRONTEND_URLS,
@@ -49,6 +57,12 @@ app.use(cors({
 }));
 
 app.use(requestLogger);
+
+// Security Logging
+app.use(securityLogger);
+
+// Input Sanitization (protects against NoSQL injection, XSS, etc.)
+app.use(inputSanitization);
 
 if (CONSTANTS.NODE_ENV === 'development') {
   app.use(morgan(devFormat, morganOptions));
@@ -66,8 +80,12 @@ app.use(generalLimiter);
 // This allows us to verify the webhook signature using the raw request body
 app.use('/api/v1/user-subscriptions', webhookRouter);
 
+// Request size limits (security best practice)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Prevent HTTP Parameter Pollution (HPP)
+app.use(hpp());
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -80,8 +98,10 @@ app.use(notFoundHandler);
 
 const PORT = CONSTANTS.PORT;
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
-  console.log(`📡 WebSocket server ready for connections`);
+  if (CONSTANTS.NODE_ENV === 'development') {
+    console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+    console.log(`📡 WebSocket server ready for connections`);
+  }
 });
 
 export default app;

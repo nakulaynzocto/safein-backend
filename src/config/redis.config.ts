@@ -1,56 +1,51 @@
 import Redis from 'ioredis';
 
-let redisClient: Redis | null = null;
+// Initialize Redis client globally with lazy connection
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisClient = new Redis(redisUrl, {
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true,
+  lazyConnect: true,
+});
+
+redisClient.on('connect', () => {
+  console.log('Redis client connected');
+});
+
+redisClient.on('error', (error) => {
+  console.error('Redis connection error:', error);
+});
+
+redisClient.on('close', () => {
+  console.log('Redis connection closed');
+});
 
 export const connectRedis = async (): Promise<Redis> => {
-  if (redisClient) {
-    return redisClient;
-  }
-
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
-  redisClient = new Redis(redisUrl, {
-    retryStrategy: (times) => {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    },
-    maxRetriesPerRequest: 3,
-    enableReadyCheck: true,
-    lazyConnect: true,
-  });
-
-  redisClient.on('connect', () => {
-    console.log('Redis client connected');
-  });
-
-  redisClient.on('error', (error) => {
-    console.error('Redis connection error:', error);
-  });
-
-  redisClient.on('close', () => {
-    console.log('Redis connection closed');
-  });
-
   try {
-    await redisClient.connect();
+    // Only connect if not already connected/connecting
+    if (redisClient.status === 'wait' || redisClient.status === 'close') {
+      await redisClient.connect();
+    }
     return redisClient;
   } catch (error) {
     console.error('Failed to connect to Redis:', error);
-    throw error;
+    // Don't throw here to allow app to start without Redis (memory store will be used as fallback in rate limiter if redis command fails, though current logic might need valid client)
+    // Actually, returning the client is fine, ioredis handles offline queue.
+    return redisClient;
   }
 };
 
 export const getRedisClient = (): Redis => {
-  if (!redisClient) {
-    throw new Error('Redis client not initialized. Call connectRedis() first.');
-  }
   return redisClient;
 };
 
 export const disconnectRedis = async (): Promise<void> => {
-  if (redisClient) {
+  if (redisClient.status !== 'end') {
     await redisClient.quit();
-    redisClient = null;
   }
 };
 

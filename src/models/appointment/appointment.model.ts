@@ -1,7 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 
 export interface IAppointment extends mongoose.Document {
-    appointmentId: string;
     employeeId: mongoose.Types.ObjectId; // Reference to Employee
     visitorId: mongoose.Types.ObjectId; // Reference to Visitor
     accompaniedBy?: {
@@ -51,13 +50,6 @@ export interface IAppointment extends mongoose.Document {
 
 const appointmentSchema = new Schema<IAppointment>(
     {
-        appointmentId: {
-            type: String,
-            required: [true, 'Appointment ID is required'],
-            unique: true,
-            uppercase: true,
-            trim: true
-        },
         employeeId: {
             type: Schema.Types.ObjectId,
             ref: 'Employee',
@@ -244,14 +236,6 @@ appointmentSchema.index({ isDeleted: 1 });
 appointmentSchema.index({ createdAt: -1 });
 appointmentSchema.index({ employeeId: 1, 'appointmentDetails.scheduledDate': 1 });
 
-appointmentSchema.pre('save', function (next) {
-    if (!this.appointmentId) {
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        this.appointmentId = `APT${timestamp}${random}`;
-    }
-    next();
-});
 
 appointmentSchema.virtual('visitorFullName').get(function () {
     return this.populated('visitorId')?.name || 'Visitor not loaded';

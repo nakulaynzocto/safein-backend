@@ -117,27 +117,11 @@ export class EmployeeController {
     }
 
     /**
-     * Get trashed employees (user-specific)
-     * GET /api/employees/trashed
+     * Check if employee has appointments
+     * GET /api/employees/:id/has-appointments
      */
-    @TryCatch('Failed to get trashed employees')
-    static async getTrashedEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const query: IGetEmployeesQuery = req.query;
-        const userId = req.user._id.toString();
-        const result = await EmployeeService.getTrashedEmployees(query, userId);
-        ResponseUtil.success(res, 'Trashed employees retrieved successfully', result);
-    }
-
-    /**
-     * Restore employee from trash (user-specific)
-     * PUT /api/employees/:id/restore
-     */
-    @TryCatch('Failed to restore employee')
-    static async restoreEmployee(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    @TryCatch('Failed to check employee appointments')
+    static async hasAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
@@ -150,8 +134,8 @@ export class EmployeeController {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
         }
         
-        const employee = await EmployeeService.restoreEmployee(id);
-        ResponseUtil.success(res, 'Employee restored successfully', employee);
+        const result = await EmployeeService.hasAppointments(id);
+        ResponseUtil.success(res, 'Appointment check completed', result);
     }
 
     /**

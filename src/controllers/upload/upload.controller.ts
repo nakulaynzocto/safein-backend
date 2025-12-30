@@ -9,7 +9,7 @@ import { UploadService } from '../../services/upload/upload.service';
  */
 export class UploadController {
   /**
-   * Upload a single file to Cloudinary
+   * Upload a single file to Cloudinary (Authenticated)
    * POST /upload
    */
   @TryCatch('Failed to upload file')
@@ -19,6 +19,30 @@ export class UploadController {
     }
 
     const folder = req.body.folder;
+
+    const uploadResult = await UploadService.uploadFile(req.file, folder);
+    
+    ResponseUtil.success(res, 'File uploaded successfully', uploadResult);
+  }
+
+  /**
+   * Upload a single file to Cloudinary (Public - requires appointment link token)
+   * POST /upload/public?token=xxx
+   */
+  @TryCatch('Failed to upload file')
+  static async uploadFilePublic(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    if (!req.file) {
+      throw new Error('No file uploaded');
+    }
+
+    // Get appointment link from middleware
+    const appointmentLink = (req as any).appointmentLink;
+    if (!appointmentLink) {
+      throw new Error('Appointment link not found');
+    }
+
+    // Use a specific folder for appointment booking uploads
+    const folder = `appointment-booking/${appointmentLink._id}`;
 
     const uploadResult = await UploadService.uploadFile(req.file, folder);
     
