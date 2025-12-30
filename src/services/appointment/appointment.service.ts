@@ -74,81 +74,75 @@ export class AppointmentService {
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // Only send notifications if explicitly enabled (e.g., public booking)
-        if (sendNotifications) {
-            try {
-                if (populatedAppointment && emailEnabled && approvalLink?.token) {
-                    await EmailService.sendNewAppointmentRequestEmail(
-                        (populatedAppointment.employeeId as any).email,
-                        (populatedAppointment.employeeId as any).name,
-                        populatedAppointment.visitorId as any,
+        // 📧 Handle Email Notifications (Always send if enabled in settings)
+        try {
+            if (populatedAppointment && emailEnabled && approvalLink?.token) {
+                await EmailService.sendNewAppointmentRequestEmail(
+                    (populatedAppointment.employeeId as any).email,
+                    (populatedAppointment.employeeId as any).name,
+                    populatedAppointment.visitorId as any,
+                    populatedAppointment.appointmentDetails.scheduledDate,
+                    populatedAppointment.appointmentDetails.scheduledTime,
+                    populatedAppointment.appointmentDetails.purpose,
+                    approvalLink.token
+                );
+                appointment.notifications.emailSent = true;
+            } else {
+                appointment.notifications.emailSent = false;
+            }
+        } catch (error) {
+            appointment.notifications.emailSent = false;
+        }
+
+        // 📧 Send confirmation email to visitor (if enabled in settings)
+        try {
+            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
+                await EmailService.sendAppointmentConfirmationEmail(
+                    (populatedAppointment.visitorId as any).email,
+                    (populatedAppointment.visitorId as any).name,
+                    (populatedAppointment.employeeId as any).name,
+                    populatedAppointment.appointmentDetails.scheduledDate,
+                    populatedAppointment.appointmentDetails.scheduledTime,
+                    populatedAppointment.appointmentDetails.purpose
+                );
+            }
+        } catch (error) {
+            // Visitor confirmation email failed, continue
+        }
+
+        // 📱 Send WhatsApp notification to employee (if enabled in settings)
+        try {
+            if (populatedAppointment && approvalLink?.link && whatsappEnabled) {
+                const employeePhone = (populatedAppointment.employeeId as any).phone;
+                const employeeName = (populatedAppointment.employeeId as any).name;
+
+                if (employeePhone) {
+                    const whatsappSent = await WhatsAppService.sendAppointmentNotification(
+                        employeePhone,
+                        employeeName,
+                        {
+                            name: (populatedAppointment.visitorId as any).name,
+                            email: (populatedAppointment.visitorId as any).email,
+                            phone: (populatedAppointment.visitorId as any).phone,
+                            company: (populatedAppointment.visitorId as any).company,
+                            _id: (populatedAppointment.visitorId as any)._id?.toString()
+                        },
                         populatedAppointment.appointmentDetails.scheduledDate,
                         populatedAppointment.appointmentDetails.scheduledTime,
                         populatedAppointment.appointmentDetails.purpose,
-                        approvalLink.token
+                        approvalLink.link,
+                        (populatedAppointment._id as any).toString()
                     );
-                    appointment.notifications.emailSent = true;
-                } else {
-                    appointment.notifications.emailSent = false;
-                }
-            } catch {
-                appointment.notifications.emailSent = false;
-            }
 
-            // Send confirmation email to visitor (if enabled)
-            try {
-                if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
-                    await EmailService.sendAppointmentConfirmationEmail(
-                        (populatedAppointment.visitorId as any).email,
-                        (populatedAppointment.visitorId as any).name,
-                        (populatedAppointment.employeeId as any).name,
-                        populatedAppointment.appointmentDetails.scheduledDate,
-                        populatedAppointment.appointmentDetails.scheduledTime,
-                        populatedAppointment.appointmentDetails.purpose
-                    );
-                }
-            } catch {
-                // Visitor confirmation email failed, continue
-            }
-
-            // Send WhatsApp notification to employee (if enabled)
-            try {
-                if (populatedAppointment && approvalLink?.link && whatsappEnabled) {
-                    const employeePhone = (populatedAppointment.employeeId as any).phone;
-                    const employeeName = (populatedAppointment.employeeId as any).name;
-
-                    if (employeePhone) {
-                        const whatsappSent = await WhatsAppService.sendAppointmentNotification(
-                            employeePhone,
-                            employeeName,
-                            {
-                                name: (populatedAppointment.visitorId as any).name,
-                                email: (populatedAppointment.visitorId as any).email,
-                                phone: (populatedAppointment.visitorId as any).phone,
-                                company: (populatedAppointment.visitorId as any).company,
-                                _id: (populatedAppointment.visitorId as any)._id?.toString()
-                            },
-                            populatedAppointment.appointmentDetails.scheduledDate,
-                            populatedAppointment.appointmentDetails.scheduledTime,
-                            populatedAppointment.appointmentDetails.purpose,
-                            approvalLink.link,
-                            (populatedAppointment._id as any).toString()
-                        );
-
-                        // Mark WhatsApp as sent only if notification is enabled and sent successfully
-                        appointment.notifications.whatsappSent = whatsappSent;
-                    } else {
-                        appointment.notifications.whatsappSent = false;
-                    }
+                    // Mark WhatsApp as sent only if notification is enabled and sent successfully
+                    appointment.notifications.whatsappSent = whatsappSent;
                 } else {
                     appointment.notifications.whatsappSent = false;
                 }
-            } catch {
+            } else {
                 appointment.notifications.whatsappSent = false;
             }
-        } else {
-            // Notifications disabled or not requested
-            appointment.notifications.emailSent = false;
+        } catch (error) {
             appointment.notifications.whatsappSent = false;
         }
 
