@@ -34,7 +34,7 @@ export class ApprovalLinkService {
         // Generate unique token
         let token: string = '';
         let isUnique = false;
-        
+
         while (!isUnique) {
             token = this.generateToken();
             const existing = await ApprovalLink.findOne({ token });
@@ -83,7 +83,7 @@ export class ApprovalLinkService {
         }
 
         const appointment = approvalLink.appointmentId as any;
-        
+
         return {
             isValid: true,
             isUsed: false,
@@ -152,13 +152,13 @@ export class ApprovalLinkService {
                 .populate('employeeId', 'name email department designation phone')
                 .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
                 .lean();
-            
+
             socketService.emitAppointmentStatusChange(userId, {
                 appointmentId: appointment._id.toString(),
                 status: status,
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            });
+            }, true);
         }
 
         return {
