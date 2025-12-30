@@ -411,7 +411,7 @@ export class AppointmentBookingLinkService {
     }
 
     // Create appointment
-    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy);
+    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { sendNotifications: true });
 
     // Mark link as booked
     await this.markAsBooked(token);

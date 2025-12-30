@@ -27,8 +27,8 @@ import { escapeRegex } from '../../utils/string.util';
 
 export class AppointmentService {
     @Transaction('Failed to create appointment')
-    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
+    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false } = options;
 
         const employee = await Employee.findOne({ _id: appointmentData.employeeId, isDeleted: false }).session(session);
         if (!employee) {
@@ -74,74 +74,81 @@ export class AppointmentService {
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        try {
-            if (populatedAppointment && emailEnabled && approvalLink?.token) {
-                await EmailService.sendNewAppointmentRequestEmail(
-                    (populatedAppointment.employeeId as any).email,
-                    (populatedAppointment.employeeId as any).name,
-                    populatedAppointment.visitorId as any,
-                    populatedAppointment.appointmentDetails.scheduledDate,
-                    populatedAppointment.appointmentDetails.scheduledTime,
-                    populatedAppointment.appointmentDetails.purpose,
-                    approvalLink.token
-                );
-                appointment.notifications.emailSent = true;
-            } else {
-                appointment.notifications.emailSent = false;
-            }
-        } catch {
-            appointment.notifications.emailSent = false;
-        }
-
-        // Send confirmation email to visitor (if enabled)
-        try {
-            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
-                await EmailService.sendAppointmentConfirmationEmail(
-                    (populatedAppointment.visitorId as any).email,
-                    (populatedAppointment.visitorId as any).name,
-                    (populatedAppointment.employeeId as any).name,
-                    populatedAppointment.appointmentDetails.scheduledDate,
-                    populatedAppointment.appointmentDetails.scheduledTime,
-                    populatedAppointment.appointmentDetails.purpose
-                );
-            }
-        } catch {
-            // Visitor confirmation email failed, continue
-        }
-
-        // Send WhatsApp notification to employee (if enabled)
-        try {
-            if (populatedAppointment && approvalLink?.link && whatsappEnabled) {
-                const employeePhone = (populatedAppointment.employeeId as any).phone;
-                const employeeName = (populatedAppointment.employeeId as any).name;
-                
-                if (employeePhone) {
-                    const whatsappSent = await WhatsAppService.sendAppointmentNotification(
-                        employeePhone,
-                        employeeName,
-                        {
-                            name: (populatedAppointment.visitorId as any).name,
-                            email: (populatedAppointment.visitorId as any).email,
-                            phone: (populatedAppointment.visitorId as any).phone,
-                            company: (populatedAppointment.visitorId as any).company,
-                            _id: (populatedAppointment.visitorId as any)._id?.toString()
-                        },
+        // Only send notifications if explicitly enabled (e.g., public booking)
+        if (sendNotifications) {
+            try {
+                if (populatedAppointment && emailEnabled && approvalLink?.token) {
+                    await EmailService.sendNewAppointmentRequestEmail(
+                        (populatedAppointment.employeeId as any).email,
+                        (populatedAppointment.employeeId as any).name,
+                        populatedAppointment.visitorId as any,
                         populatedAppointment.appointmentDetails.scheduledDate,
                         populatedAppointment.appointmentDetails.scheduledTime,
                         populatedAppointment.appointmentDetails.purpose,
-                        approvalLink.link,
-                        (populatedAppointment._id as any).toString()
+                        approvalLink.token
                     );
-                    
-                    // Mark WhatsApp as sent only if notification is enabled and sent successfully
-                    appointment.notifications.whatsappSent = whatsappSent;
+                    appointment.notifications.emailSent = true;
+                } else {
+                    appointment.notifications.emailSent = false;
+                }
+            } catch {
+                appointment.notifications.emailSent = false;
+            }
+
+            // Send confirmation email to visitor (if enabled)
+            try {
+                if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
+                    await EmailService.sendAppointmentConfirmationEmail(
+                        (populatedAppointment.visitorId as any).email,
+                        (populatedAppointment.visitorId as any).name,
+                        (populatedAppointment.employeeId as any).name,
+                        populatedAppointment.appointmentDetails.scheduledDate,
+                        populatedAppointment.appointmentDetails.scheduledTime,
+                        populatedAppointment.appointmentDetails.purpose
+                    );
+                }
+            } catch {
+                // Visitor confirmation email failed, continue
+            }
+
+            // Send WhatsApp notification to employee (if enabled)
+            try {
+                if (populatedAppointment && approvalLink?.link && whatsappEnabled) {
+                    const employeePhone = (populatedAppointment.employeeId as any).phone;
+                    const employeeName = (populatedAppointment.employeeId as any).name;
+
+                    if (employeePhone) {
+                        const whatsappSent = await WhatsAppService.sendAppointmentNotification(
+                            employeePhone,
+                            employeeName,
+                            {
+                                name: (populatedAppointment.visitorId as any).name,
+                                email: (populatedAppointment.visitorId as any).email,
+                                phone: (populatedAppointment.visitorId as any).phone,
+                                company: (populatedAppointment.visitorId as any).company,
+                                _id: (populatedAppointment.visitorId as any)._id?.toString()
+                            },
+                            populatedAppointment.appointmentDetails.scheduledDate,
+                            populatedAppointment.appointmentDetails.scheduledTime,
+                            populatedAppointment.appointmentDetails.purpose,
+                            approvalLink.link,
+                            (populatedAppointment._id as any).toString()
+                        );
+
+                        // Mark WhatsApp as sent only if notification is enabled and sent successfully
+                        appointment.notifications.whatsappSent = whatsappSent;
+                    } else {
+                        appointment.notifications.whatsappSent = false;
+                    }
                 } else {
                     appointment.notifications.whatsappSent = false;
                 }
-            } else {
+            } catch {
                 appointment.notifications.whatsappSent = false;
             }
-        } catch {
+        } else {
+            // Notifications disabled or not requested
+            appointment.notifications.emailSent = false;
             appointment.notifications.whatsappSent = false;
         }
 
@@ -157,7 +164,7 @@ export class AppointmentService {
                 const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
                 const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
                 const userId = (createdBy as any)?.toString() || createdBy;
-                
+
                 if (userId) {
                     socketService.emitAppointmentCreated(userId, {
                         appointmentId: (appointment._id as any).toString(),
@@ -231,7 +238,7 @@ export class AppointmentService {
         } = query;
 
         const filter: any = { isDeleted: false };
-        
+
         if (userId) {
             filter.createdBy = userId;
         }
@@ -239,7 +246,7 @@ export class AppointmentService {
         if (search) {
             const escapedSearch = escapeRegex(search);
             const searchRegex = { $regex: escapedSearch, $options: 'i' };
-            
+
             const matchingVisitors = await Visitor.find({
                 $or: [
                     { name: searchRegex },
@@ -248,9 +255,9 @@ export class AppointmentService {
                     { company: searchRegex }
                 ]
             }).select('_id').lean();
-            
+
             const visitorIds = matchingVisitors.map((v: any) => v._id);
-            
+
             const matchingEmployees = await Employee.find({
                 $or: [
                     { name: searchRegex },
@@ -258,20 +265,20 @@ export class AppointmentService {
                     { department: searchRegex }
                 ]
             }).select('_id').lean();
-            
+
             const employeeIds = matchingEmployees.map((e: any) => e._id);
-            
+
             filter.$or = [
                 { _id: searchRegex },
                 { 'appointmentDetails.purpose': searchRegex },
                 { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
             ];
-            
+
             if (visitorIds.length > 0) {
                 filter.$or.push({ visitorId: { $in: visitorIds } });
             }
-            
+
             if (employeeIds.length > 0) {
                 filter.$or.push({ employeeId: { $in: employeeIds } });
             }
@@ -359,7 +366,7 @@ export class AppointmentService {
     @Transaction('Failed to update appointment')
     static async updateAppointment(appointmentId: string, updateData: IUpdateAppointmentDTO, options: { session?: any } = {}): Promise<IAppointmentResponse> {
         const { session } = options;
-        
+
         const cleanUpdateData = { ...updateData };
         delete (cleanUpdateData as any).session;
 
@@ -510,7 +517,7 @@ export class AppointmentService {
             const endExclusive = new Date(endDate);
             endExclusive.setDate(endExclusive.getDate() + 1);
             endExclusive.setHours(0, 0, 0, 0);
-            
+
             baseFilter['appointmentDetails.scheduledDate'] = {
                 $gte: start,
                 $lt: endExclusive
@@ -521,7 +528,7 @@ export class AppointmentService {
             const endExclusive = new Date(startDate);
             endExclusive.setDate(endExclusive.getDate() + 1);
             endExclusive.setHours(0, 0, 0, 0);
-            
+
             baseFilter['appointmentDetails.scheduledDate'] = {
                 $gte: start,
                 $lt: endExclusive
@@ -530,7 +537,7 @@ export class AppointmentService {
             const endExclusive = new Date(endDate);
             endExclusive.setDate(endExclusive.getDate() + 1);
             endExclusive.setHours(0, 0, 0, 0);
-            
+
             baseFilter['appointmentDetails.scheduledDate'] = {
                 $lt: endExclusive
             };
@@ -666,7 +673,7 @@ export class AppointmentService {
                 // Search in Visitor collection first, then filter appointments by visitorId
                 const visitorSearchRegex = { $regex: escapedQuery, $options: 'i' };
                 const visitorFilter: any = {};
-                
+
                 if (type === 'visitor_name') {
                     visitorFilter.name = visitorSearchRegex;
                 } else if (type === 'visitor_phone') {
@@ -674,10 +681,10 @@ export class AppointmentService {
                 } else if (type === 'visitor_email') {
                     visitorFilter.email = visitorSearchRegex;
                 }
-                
+
                 const matchingVisitors = await Visitor.find(visitorFilter).select('_id').lean();
                 const visitorIds = matchingVisitors.map((v: any) => v._id);
-                
+
                 if (visitorIds.length > 0) {
                     filter.visitorId = { $in: visitorIds };
                 } else {
@@ -696,7 +703,7 @@ export class AppointmentService {
                     name: employeeSearchRegex
                 }).select('_id').lean();
                 const employeeIds = matchingEmployees.map((e: any) => e._id);
-                
+
                 if (employeeIds.length > 0) {
                     filter.employeeId = { $in: employeeIds };
                 } else {
@@ -800,7 +807,7 @@ export class AppointmentService {
             .populate('employeeId', 'name email')
             .populate('visitorId', 'name email phone photo')
             .session(session);
-            
+
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
@@ -895,7 +902,7 @@ export class AppointmentService {
             .populate('employeeId', 'name email')
             .populate('visitorId', 'name email phone photo')
             .session(session);
-            
+
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
