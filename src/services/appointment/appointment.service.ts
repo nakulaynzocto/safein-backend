@@ -160,7 +160,7 @@ export class AppointmentService {
         await appointment.save({ session });
 
         try {
-            if (populatedAppointment) {
+            if (sendNotifications && populatedAppointment) {
                 const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
                 const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
                 const userId = (createdBy as any)?.toString() || createdBy;
