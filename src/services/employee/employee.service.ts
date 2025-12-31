@@ -91,7 +91,7 @@ export class EmployeeService {
         } = query;
 
         const filter: any = { isDeleted: false };
-        
+
         if (userId) {
             filter.createdBy = userId;
         }
@@ -101,7 +101,6 @@ export class EmployeeService {
             filter.$or = [
                 { name: { $regex: escapedSearch, $options: 'i' } },
                 { email: { $regex: escapedSearch, $options: 'i' } },
-                { _id: { $regex: escapedSearch, $options: 'i' } },
                 { department: { $regex: escapedSearch, $options: 'i' } },
                 { designation: { $regex: escapedSearch, $options: 'i' } }
             ];
@@ -162,7 +161,7 @@ export class EmployeeService {
      * Update employee
      */
     @Transaction('Failed to update employee')
-    static async updateEmployee( employeeId: string,updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
+    static async updateEmployee(employeeId: string, updateData: IUpdateEmployeeDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
         const { session } = options;
 
         const employeeIdObjectId = toObjectId(employeeId);
@@ -218,8 +217,8 @@ export class EmployeeService {
             throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
         }
 
-        const count = await Appointment.countDocuments({ 
-            employeeId: employeeIdObjectId, 
+        const count = await Appointment.countDocuments({
+            employeeId: employeeIdObjectId,
             isDeleted: false,
             status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
         });
@@ -249,9 +248,9 @@ export class EmployeeService {
         }
 
         // Check if any appointments exist for this employee
-        const existingAppointments = await Appointment.countDocuments({ 
-            employeeId: employeeIdObjectId, 
-            isDeleted: false 
+        const existingAppointments = await Appointment.countDocuments({
+            employeeId: employeeIdObjectId,
+            isDeleted: false
         }).session(session);
 
         if (existingAppointments > 0) {
@@ -396,7 +395,7 @@ export class EmployeeService {
 
             try {
                 const emailLower = employeeData.email.toLowerCase().trim();
-                
+
                 // Skip if email is duplicate within the same batch
                 if (processedEmails.has(emailLower)) {
                     errors.push({
