@@ -74,7 +74,7 @@ export class AppointmentBookingLinkService {
 
     // Calculate expiration date
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+    expiresAt.setTime(expiresAt.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
 
     // Create appointment booking link
     const appointmentLink = new AppointmentBookingLink({
