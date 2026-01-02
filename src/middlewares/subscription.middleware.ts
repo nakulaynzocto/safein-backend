@@ -19,7 +19,8 @@ export const checkPremiumSubscription = async (
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(req.user._id.toString());
+        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
+        const hasPremium = activeSubscription && activeSubscription.planType !== 'free';
 
         if (!hasPremium) {
             throw new AppError(

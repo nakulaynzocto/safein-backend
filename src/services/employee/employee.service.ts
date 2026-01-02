@@ -6,9 +6,6 @@ import {
     IEmployeeResponse,
     IGetEmployeesQuery,
     IEmployeeListResponse,
-    IUpdateEmployeeStatusDTO,
-    IBulkUpdateEmployeesDTO,
-    IEmployeeStats,
     IBulkCreateEmployeeDTO,
     IBulkCreateEmployeeResponse
 } from '../../types/employee/employee.types';
@@ -208,22 +205,7 @@ export class EmployeeService {
         return employee.toObject() as unknown as IEmployeeResponse;
     }
 
-    /**
-     * Check if employee has appointments
-     */
-    static async hasAppointments(employeeId: string): Promise<{ hasAppointments: boolean; count: number }> {
-        const employeeIdObjectId = toObjectId(employeeId);
-        if (!employeeIdObjectId) {
-            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
-        }
 
-        const count = await Appointment.countDocuments({
-            employeeId: employeeIdObjectId,
-            isDeleted: false,
-            status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
-        });
-        return { hasAppointments: count > 0, count };
-    }
 
     /**
      * Soft delete employee
@@ -265,104 +247,8 @@ export class EmployeeService {
 
 
 
-    /**
-     * Update employee status
-     */
-    @Transaction('Failed to update employee status')
-    static async updateEmployeeStatus(employeeId: string, statusData: IUpdateEmployeeStatusDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
-        const { session } = options;
 
-        const employee = await Employee.findOneAndUpdate(
-            { _id: employeeId, isDeleted: false },
-            { status: statusData.status },
-            { new: true, runValidators: true, session }
-        );
 
-        if (!employee) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        return employee.toObject() as unknown as IEmployeeResponse;
-    }
-
-    /**
-     * Bulk update employees
-     */
-    @Transaction('Failed to bulk update employees')
-    static async bulkUpdateEmployees(bulkData: IBulkUpdateEmployeesDTO, options: { session?: any } = {}): Promise<{ updatedCount: number }> {
-        const { session } = options;
-        const { employeeIds, ...updateData } = bulkData;
-
-        const cleanUpdateData = Object.fromEntries(
-            Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
-        );
-
-        if (Object.keys(cleanUpdateData).length === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_UPDATE_DATA, ERROR_CODES.BAD_REQUEST);
-        }
-
-        const result = await Employee.updateMany(
-            { _id: { $in: employeeIds }, isDeleted: false },
-            cleanUpdateData,
-            { session }
-        );
-
-        if (result.matchedCount === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_EMPLOYEES_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        return { updatedCount: result.modifiedCount };
-    }
-
-    /**
-     * Get employee statistics (user-specific)
-     */
-    static async getEmployeeStats(userId?: string): Promise<IEmployeeStats> {
-        const baseFilter: any = {};
-        if (userId) {
-            baseFilter.createdBy = userId;
-        }
-
-        const [
-            totalEmployees,
-            activeEmployees,
-            inactiveEmployees,
-            deletedEmployees,
-            employeesByDepartment,
-            employeesByStatus
-        ] = await Promise.all([
-            Employee.countDocuments({ ...baseFilter, isDeleted: false }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Active' }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Inactive' }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: true }),
-            Employee.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$department', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Employee.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$status', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ])
-        ]);
-
-        return {
-            totalEmployees,
-            activeEmployees,
-            inactiveEmployees,
-            deletedEmployees,
-            employeesByDepartment: employeesByDepartment.map(item => ({
-                department: item._id,
-                count: item.count
-            })),
-            employeesByStatus: employeesByStatus.map(item => ({
-                status: item._id,
-                count: item.count
-            }))
-        };
-    }
 
     /**
      * Bulk create employees

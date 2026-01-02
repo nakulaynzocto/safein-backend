@@ -33,10 +33,6 @@ router.get(
     asyncWrapper(UserSubscriptionController.getUserActiveSubscription)
 );
 
-router.get(
-    '/check-premium/:userId',
-    asyncWrapper(UserSubscriptionController.checkPremiumSubscription)
-);
 
 router.get(
     '/trial-limits',

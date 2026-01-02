@@ -5,36 +5,15 @@ import {
     ICreateUserSubscriptionDTO,
     IUpdateUserSubscriptionDTO,
     IGetUserSubscriptionsQuery,
-    IAssignFreePlanRequest,
     IGetUserActiveSubscriptionRequest,
-    ICheckPremiumSubscriptionRequest
 } from '../../types/userSubscription/userSubscription.types';
-import { ERROR_CODES, TRIAL_LIMITS } from '../../utils/constants';
+import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
 import { RazorpayService } from '../../services/razorpay/razorpay.service';
 
 export class UserSubscriptionController {
-    /**
-     * Assign free plan to new user
-     * POST /api/v1/user-subscriptions/assign-free-plan
-     */
-    @TryCatch('Failed to assign free plan')
-    static async assignFreePlanToNewUser(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-
-        const request: IAssignFreePlanRequest = {
-            userId: req.user._id.toString(),
-        };
-
-        // Free trial: 3 days only, planType = 'free'
-        const subscription = await UserSubscriptionService.createFreeTrial(request.userId);
-
-        ResponseUtil.success(res, 'Free plan assigned successfully', subscription, ERROR_CODES.CREATED);
-    }
 
     /**
      * Get user's active subscription
@@ -55,24 +34,6 @@ export class UserSubscriptionController {
         ResponseUtil.success(res, 'Active subscription retrieved successfully', subscription);
     }
 
-    /**
-     * Check if user has premium subscription
-     * GET /api/v1/user-subscriptions/check-premium/:userId
-     */
-    @TryCatch('Failed to check premium subscription')
-    static async checkPremiumSubscription(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-
-        const request: ICheckPremiumSubscriptionRequest = {
-            userId: req.user._id.toString()
-        };
-
-        const hasPremium = await UserSubscriptionService.hasActivePremiumSubscription(request.userId);
-
-        ResponseUtil.success(res, 'Premium subscription check completed', { hasPremium });
-    }
 
     /**
      * Get trial limits status
@@ -85,44 +46,9 @@ export class UserSubscriptionController {
         }
 
         const userId = req.user._id.toString();
-        const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(userId);
+        const status = await UserSubscriptionService.getSubscriptionStatus(userId);
 
-        const isTrialLikePlan = !activeSubscription || activeSubscription.planType === 'free' || activeSubscription.isTrialing;
-
-        if (isTrialLikePlan) {
-            const counts = await UserSubscriptionService.getTrialLimitsCounts(userId);
-
-            ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
-                isTrial: true,
-                limits: {
-                    employees: {
-                        limit: TRIAL_LIMITS.employees,
-                        current: counts.employees,
-                        reached: counts.employees >= TRIAL_LIMITS.employees
-                    },
-                    visitors: {
-                        limit: TRIAL_LIMITS.visitors,
-                        current: counts.visitors,
-                        reached: counts.visitors >= TRIAL_LIMITS.visitors
-                    },
-                    appointments: {
-                        limit: TRIAL_LIMITS.appointments,
-                        current: counts.appointments,
-                        reached: counts.appointments >= TRIAL_LIMITS.appointments
-                    },
-                }
-            });
-            return;
-        }
-
-        ResponseUtil.success(res, 'Trial limits status retrieved successfully', {
-            isTrial: false,
-            limits: {
-                employees: { limit: -1, current: 0, reached: false },
-                visitors: { limit: -1, current: 0, reached: false },
-                appointments: { limit: -1, current: 0, reached: false },
-            }
-        });
+        ResponseUtil.success(res, 'Trial limits status retrieved successfully', status);
     }
 
     /**
@@ -194,6 +120,7 @@ export class UserSubscriptionController {
 
         ResponseUtil.success(res, 'User subscriptions retrieved successfully', result);
     }
+
 
     /**
      * Get user subscription history (all successful purchases)
@@ -302,7 +229,7 @@ export class UserSubscriptionController {
     static async handleRazorpayWebhook(req: any, res: Response, _next: NextFunction): Promise<void> {
         // Get webhook signature from header
         const webhookSignature = req.headers['x-razorpay-signature'];
-        
+
         if (!webhookSignature) {
             throw new AppError('Missing Razorpay webhook signature', ERROR_CODES.UNAUTHORIZED);
         }
@@ -312,22 +239,20 @@ export class UserSubscriptionController {
 
         // Verify webhook signature
         const isValidSignature = RazorpayService.verifyWebhookSignature(rawBody, webhookSignature);
-        
+
         if (!isValidSignature) {
             throw new AppError('Invalid Razorpay webhook signature', ERROR_CODES.UNAUTHORIZED);
         }
 
         // Parse webhook event (already parsed in middleware, but handle both cases)
         const event = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        
-        // Razorpay webhook structure: { event: 'payment.captured', payload: { payment: {...}, order: {...} } }
+
         const eventType = event.event || event.type;
         const payload = event.payload || event;
 
         // Handle different webhook events
         switch (eventType) {
             case 'payment.captured':
-                // Payment successfully captured
                 await this.handlePaymentCaptured(payload);
                 break;
 
@@ -355,10 +280,9 @@ export class UserSubscriptionController {
      */
     private static async handlePaymentCaptured(payload: any): Promise<void> {
         try {
-            // Razorpay webhook payload structure: { payment: { entity: {...} }, order: { entity: {...} } }
             const payment = payload.payment?.entity || payload.payment;
             const order = payload.order?.entity || payload.order;
-            
+
             if (!payment || !order) {
                 console.error('Invalid payment.captured payload - missing payment or order:', {
                     hasPayment: !!payment,
@@ -370,14 +294,13 @@ export class UserSubscriptionController {
 
             const orderId = order.id || order.order_id;
             const paymentId = payment.id || payment.payment_id;
-            
-            // Get userId and planId from order notes (we stored them when creating the order)
+
             const userId = order.notes?.userId || payment.notes?.userId;
             const planId = order.notes?.planId || payment.notes?.planId;
 
             if (!userId || !planId) {
-                console.error('Missing userId or planId in payment notes:', { 
-                    orderId, 
+                console.error('Missing userId or planId in payment notes:', {
+                    orderId,
                     paymentId,
                     orderNotes: order.notes,
                     paymentNotes: payment.notes
@@ -387,7 +310,7 @@ export class UserSubscriptionController {
 
             // Create subscription from plan with idempotency check
             await UserSubscriptionService.createPaidSubscriptionFromPlan(
-                userId, 
+                userId,
                 planId,
                 orderId,
                 paymentId
@@ -403,9 +326,7 @@ export class UserSubscriptionController {
      */
     private static async handlePaymentFailed(_payload: any): Promise<void> {
         try {
-            // Log failed payment for monitoring
-            // You can add additional logic here like sending notification to user
-            // const { payment, order } = _payload.payment?.entity || _payload;
+            // Payment failure logic
         } catch (error: any) {
             console.error('Error handling payment.failed:', error);
         }
@@ -416,10 +337,9 @@ export class UserSubscriptionController {
      */
     private static async handleOrderPaid(payload: any): Promise<void> {
         try {
-            // Razorpay webhook payload structure: { order: { entity: {...} }, payment: { entity: {...} } }
             const order = payload.order?.entity || payload.order;
             const payment = payload.payment?.entity || payload.payment;
-            
+
             if (!order || !payment) {
                 console.error('Invalid order.paid payload - missing order or payment:', {
                     hasOrder: !!order,
@@ -435,8 +355,8 @@ export class UserSubscriptionController {
             const planId = order.notes?.planId || payment.notes?.planId;
 
             if (!userId || !planId) {
-                console.error('Missing userId or planId in order notes:', { 
-                    orderId, 
+                console.error('Missing userId or planId in order notes:', {
+                    orderId,
                     paymentId,
                     orderNotes: order.notes,
                     paymentNotes: payment.notes
@@ -444,14 +364,12 @@ export class UserSubscriptionController {
                 return;
             }
 
-            // Create subscription from plan with order and payment IDs
             await UserSubscriptionService.createPaidSubscriptionFromPlan(
-                userId, 
-                planId, 
-                orderId, 
+                userId,
+                planId,
+                orderId,
                 paymentId
             );
-            console.log(`✅ Subscription created for user ${userId} from plan ${planId} via order.paid webhook`);
         } catch (error: any) {
             console.error('Error handling order.paid:', error);
             // Don't throw - webhook should still return 200

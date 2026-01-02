@@ -64,7 +64,7 @@ const appointmentDetailsValidation = Joi.object({
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(value.getFullYear(), value.getMonth(), value.getDate());
-                
+
                 if (selectedDate < today) {
                     return helpers.error('date.min');
                 }
@@ -78,11 +78,11 @@ const appointmentDetailsValidation = Joi.object({
                 if (isNaN(date.getTime())) {
                     return helpers.error('date.invalid');
                 }
-                
+
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                
+
                 if (selectedDate < today) {
                     return helpers.error('date.min');
                 }
@@ -107,11 +107,11 @@ const appointmentDetailsValidation = Joi.object({
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(scheduledDate);
                 const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-                
+
                 if (selectedDateOnly.getTime() === today.getTime()) {
                     const [hours, minutes] = value.split(':').map(Number);
                     const selectedDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
-                    
+
                     if (selectedDateTime <= now) {
                         return helpers.error('time.min');
                     }

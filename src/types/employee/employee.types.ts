@@ -55,30 +55,11 @@ export interface IEmployeeListResponse {
     };
 }
 
-export interface IUpdateEmployeeStatusDTO {
-    status: 'Active' | 'Inactive';
-}
 
-export interface IBulkUpdateEmployeesDTO {
-    employeeIds: string[];
-    status?: 'Active' | 'Inactive';
-    department?: string;
-}
 
-export interface IEmployeeStats {
-    totalEmployees: number;
-    activeEmployees: number;
-    inactiveEmployees: number;
-    deletedEmployees: number;
-    employeesByDepartment: Array<{
-        department: string;
-        count: number;
-    }>;
-    employeesByStatus: Array<{
-        status: string;
-        count: number;
-    }>;
-}
+
+
+
 
 export interface IBulkCreateEmployeeDTO {
     employees: ICreateEmployeeDTO[];

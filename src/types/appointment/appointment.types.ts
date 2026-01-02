@@ -142,51 +142,8 @@ export interface ICheckOutRequest {
     notes?: string;
 }
 
-export interface IAppointmentStats {
-    totalAppointments: number;
-    scheduledAppointments: number;
-    checkedInAppointments: number;
-    completedAppointments: number;
-    cancelledAppointments: number;
-    noShowAppointments: number;
-    appointmentsByStatus: Array<{
-        status: string;
-        count: number;
-    }>;
-    appointmentsByEmployee: Array<{
-        employeeId: string;
-        employeeName: string;
-        count: number;
-    }>;
-    appointmentsByDate: Array<{
-        date: string;
-        count: number;
-    }>;
-}
 
-export interface IBulkUpdateAppointmentsDTO {
-    appointmentIds: string[];
-    status?: AppointmentStatus;
-    employeeId?: string;
-    meetingRoom?: string;
-}
 
-export interface IAppointmentCalendarResponse {
-    date: string;
-    appointments: Array<{
-        _id: string;
-        visitorName: string;
-        employeeName: string;
-        scheduledTime: string;
-        duration: number;
-        status: AppointmentStatus;
-        purpose: string;
-    }>;
-}
 
-export interface IAppointmentSearchRequest {
-    query: string;
-    type: 'visitor_name' | 'visitor_phone' | 'visitor_email' | 'appointment_id' | 'employee_name';
-    page?: number;
-    limit?: number;
-}
+
+

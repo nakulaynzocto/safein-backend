@@ -3,12 +3,14 @@ import { AppointmentBookingLinkController } from '../../controllers/appointmentB
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import { publicActionLimiter } from '../../middlewares';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
 
 const router = Router();
 
 router.post(
   '/',
   verifyToken,
+  checkSubscriptionStatus,
   asyncWrapper(AppointmentBookingLinkController.createAppointmentLink)
 );
 

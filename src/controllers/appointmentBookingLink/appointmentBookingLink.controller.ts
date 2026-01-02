@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppointmentBookingLinkService } from '../../services/appointmentBookingLink/appointmentBookingLink.service';
 import { VisitorService } from '../../services/visitor/visitor.service';
+import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 import { ResponseUtil } from '../../utils/response.util';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils';
@@ -39,7 +40,7 @@ export class AppointmentBookingLinkController {
 
     // Decode the token in case it's URL encoded
     const decodedToken = decodeURIComponent(token);
-    
+
     const link = await AppointmentBookingLinkService.getAppointmentLinkByToken(decodedToken);
     ResponseUtil.success(res, 'Appointment link retrieved successfully', link);
   };
@@ -118,6 +119,9 @@ export class AppointmentBookingLinkController {
 
       const createdBy = await AppointmentBookingLinkService.getLinkCreatorId(token);
       if (!createdBy) throw new AppError('Failed to get appointment link creator', ERROR_CODES.INTERNAL_SERVER_ERROR);
+
+      // Check creator subscription limits
+      await UserSubscriptionService.checkPlanLimits(createdBy, 'visitors');
 
       const visitor = await VisitorService.createVisitor(visitorData, createdBy);
       if (!visitor?._id) throw new AppError('Failed to create visitor', ERROR_CODES.INTERNAL_SERVER_ERROR);

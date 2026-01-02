@@ -97,17 +97,38 @@ export interface IUserSubscriptionStats {
     averageSubscriptionValue: number;
 }
 
-export interface IAssignFreePlanRequest {
-    userId: string;
-}
 
 export interface IGetUserActiveSubscriptionRequest {
     userId: string;
 }
 
-export interface ICheckPremiumSubscriptionRequest {
-    userId: string;
-}
 
-// Stripe customer interfaces removed (Razorpay-only integration)
+// Razorpay-only integration
+export interface ITrialLimitsStatus {
+    isTrial: boolean;
+    planType: string;
+    subscriptionStatus: string;
+    isActive: boolean;
+    isExpired: boolean;
+    limits: {
+        employees: {
+            limit: number;
+            current: number;
+            reached: boolean;
+            canCreate: boolean;
+        };
+        visitors: {
+            limit: number;
+            current: number;
+            reached: boolean;
+            canCreate: boolean;
+        };
+        appointments: {
+            limit: number;
+            current: number;
+            reached: boolean;
+            canCreate: boolean;
+        };
+    };
+}
 

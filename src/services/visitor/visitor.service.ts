@@ -5,11 +5,7 @@ import {
     IUpdateVisitorDTO,
     IVisitorResponse,
     IGetVisitorsQuery,
-    IVisitorListResponse,
-    IBulkUpdateVisitorsDTO,
-    IVisitorStats,
-    IVisitorSearchQuery,
-    IVisitorSearchResponse
+    IVisitorListResponse
 } from '../../types/visitor/visitor.types';
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
@@ -92,7 +88,7 @@ export class VisitorService {
         } = query;
 
         const filter: any = { isDeleted: false };
-        
+
         if (userId) {
             filter.createdBy = userId;
         }
@@ -233,8 +229,8 @@ export class VisitorService {
             throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
         }
 
-        const count = await Appointment.countDocuments({ 
-            visitorId: visitorIdObjectId, 
+        const count = await Appointment.countDocuments({
+            visitorId: visitorIdObjectId,
             isDeleted: false,
             status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
         });
@@ -264,9 +260,9 @@ export class VisitorService {
         }
 
         // Check if any appointments exist for this visitor
-        const existingAppointments = await Appointment.countDocuments({ 
-            visitorId: visitorIdObjectId, 
-            isDeleted: false 
+        const existingAppointments = await Appointment.countDocuments({
+            visitorId: visitorIdObjectId,
+            isDeleted: false
         }).session(session);
 
         if (existingAppointments > 0) {
@@ -280,142 +276,9 @@ export class VisitorService {
     }
 
 
-    /**
-     * Bulk update visitors
-     */
-    @Transaction('Failed to bulk update visitors')
-    static async bulkUpdateVisitors(bulkData: IBulkUpdateVisitorsDTO, options: { session?: any } = {}): Promise<{ updatedCount: number }> {
-        const { session } = options;
-        const { visitorIds, ...updateData } = bulkData;
 
-        const cleanUpdateData = Object.fromEntries(
-            Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
-        );
 
-        if (Object.keys(cleanUpdateData).length === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_UPDATE_DATA, ERROR_CODES.BAD_REQUEST);
-        }
 
-        const result = await Visitor.updateMany(
-            { _id: { $in: visitorIds }, isDeleted: false },
-            cleanUpdateData,
-            { session }
-        );
 
-        if (result.matchedCount === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_VISITORS_FOUND, ERROR_CODES.NOT_FOUND);
-        }
 
-        return { updatedCount: result.modifiedCount };
-    }
-
-    /**
-     * Search visitors by phone or email
-     */
-    static async searchVisitors(searchQuery: IVisitorSearchQuery, userId?: string): Promise<IVisitorSearchResponse> {
-        const { phone, email } = searchQuery;
-
-        const searchCriteria: any = { isDeleted: false };
-        
-        if (userId) {
-            searchCriteria.createdBy = userId;
-        }
-
-        if (phone && email) {
-            searchCriteria.$or = [
-                { phone: phone },
-                { email: email }
-            ];
-        } else if (phone) {
-            searchCriteria.phone = phone;
-        } else if (email) {
-            searchCriteria.email = email;
-        } else {
-            throw new AppError('Either phone or email must be provided for search', ERROR_CODES.BAD_REQUEST);
-        }
-
-        const visitors = await Visitor.find(searchCriteria).sort({ createdAt: -1 });
-        const visitorResponses = visitors.map(visitor => visitor.toObject() as unknown as IVisitorResponse);
-
-        return {
-            visitors: visitorResponses,
-            found: visitorResponses.length > 0,
-            message: visitorResponses.length > 0 
-                ? `Found ${visitorResponses.length} visitor(s)` 
-                : 'No visitors found with the provided criteria'
-        };
-    }
-
-    /**
-     * Get visitor statistics (user-specific)
-     */
-    static async getVisitorStats(userId?: string): Promise<IVisitorStats> {
-        const baseFilter: any = {};
-        if (userId) {
-            baseFilter.createdBy = userId;
-        }
-
-        const [
-            totalVisitors,
-            deletedVisitors,
-            visitorsByCity,
-            visitorsByState,
-            visitorsByCountry,
-            visitorsByIdProofType
-        ] = await Promise.all([
-            Visitor.countDocuments({ ...baseFilter, isDeleted: false }),
-            Visitor.countDocuments({ ...baseFilter, isDeleted: true }),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.city', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.city', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.state', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.country', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$idProof.type', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ])
-        ]);
-
-        return {
-            totalVisitors,
-            deletedVisitors,
-            visitorsByCity: visitorsByCity.map((item: any) => ({
-                city: item._id,
-                count: item.count
-            })),
-            visitorsByState: visitorsByState.map((item: any) => ({
-                state: item._id,
-                count: item.count
-            })),
-            visitorsByCountry: visitorsByCountry.map((item: any) => ({
-                country: item._id,
-                count: item.count
-            })),
-            visitorsByIdProofType: visitorsByIdProofType.map((item: any) => ({
-                idProofType: item._id,
-                count: item.count
-            }))
-        };
-    }
 }

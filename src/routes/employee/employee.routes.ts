@@ -4,15 +4,13 @@ import { EmployeeController } from '../../controllers/employee/employee.controll
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
 import { userLimiter } from '../../middlewares';
 import {
     createEmployeeValidation,
     updateEmployeeValidation,
     employeeParamsValidation,
-    getEmployeesValidation,
-    updateEmployeeStatusValidation,
-    bulkUpdateEmployeesValidation
+    getEmployeesValidation
 } from '../../validations/employee/employee.validation';
 
 const router = Router();
@@ -42,7 +40,7 @@ router.use(userLimiter);
 
 router.post(
     '/',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     validateRequest(createEmployeeValidation),
     asyncWrapper(EmployeeController.createEmployee)
 );
@@ -53,10 +51,7 @@ router.get(
     asyncWrapper(EmployeeController.getAllEmployees)
 );
 
-router.get(
-    '/stats',
-    asyncWrapper(EmployeeController.getEmployeeStats)
-);
+
 
 router.get(
     '/template',
@@ -65,16 +60,12 @@ router.get(
 
 router.post(
     '/bulk-create',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     upload.single('file'),
     asyncWrapper(EmployeeController.bulkCreateEmployees)
 );
 
-router.get(
-    '/:id/has-appointments',
-    validateRequest(employeeParamsValidation),
-    asyncWrapper(EmployeeController.hasAppointments)
-);
+
 
 router.get(
     '/:id',
@@ -89,18 +80,9 @@ router.put(
     asyncWrapper(EmployeeController.updateEmployee)
 );
 
-router.put(
-    '/:id/status',
-    validateRequest(employeeParamsValidation),
-    validateRequest(updateEmployeeStatusValidation),
-    asyncWrapper(EmployeeController.updateEmployeeStatus)
-);
 
-router.put(
-    '/bulk-update',
-    validateRequest(bulkUpdateEmployeesValidation),
-    asyncWrapper(EmployeeController.bulkUpdateEmployees)
-);
+
+
 
 router.delete(
     '/:id',

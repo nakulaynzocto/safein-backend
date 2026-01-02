@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
 import { ICreateAppointmentDTO } from '../../types/appointment/appointment.types';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 
 interface ICreateAppointmentLinkDTO {
   visitorEmail: string;
@@ -411,6 +412,9 @@ export class AppointmentBookingLinkService {
     }
 
     // Create appointment
+    // Check creator subscription limits before final creation
+    await UserSubscriptionService.checkPlanLimits(createdBy, 'appointments');
+
     const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { sendNotifications: true });
 
     // Mark link as booked

@@ -17,3 +17,4 @@ export {
     checkTrialSubscription,
     addSubscriptionInfo
 } from './subscription.middleware';
+export { checkSubscriptionStatus } from './checkSubscriptionStatus.middleware';

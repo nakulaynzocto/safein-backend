@@ -6,72 +6,12 @@ import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
-import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats } from '../../types/userSubscription/userSubscription.types';
+import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats, ITrialLimitsStatus } from '../../types/userSubscription/userSubscription.types';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
 
+
 export class UserSubscriptionService {
-    /**
-     * Activate a free trial for a user.
-     * This is typically called after verifying eligibility (no payment provider dependency).
-     */
-    static async createFreeTrial(userId: string, trialDays: number = 3): Promise<IUserSubscription & Document> {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-        try {
-            const user = await User.findById(userId).session(session);
-            if (!user) {
-                throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
-            }
-
-            const existingSubscription = await UserSubscription.findOne({
-                userId: new mongoose.Types.ObjectId(userId),
-                isActive: true,
-                isDeleted: false,
-            }).session(session);
-
-            if (existingSubscription) {
-                if (existingSubscription.planType === 'free') {
-                    existingSubscription.startDate = new Date();
-                    existingSubscription.endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-                    await existingSubscription.save({ session });
-                    await session.commitTransaction();
-                    return existingSubscription;
-                } else {
-                    throw new AppError('User already has an active subscription.', ERROR_CODES.CONFLICT);
-                }
-            }
-
-            const startDate = new Date();
-            const endDate = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
-
-            const newSubscription = new UserSubscription({
-                userId: new mongoose.Types.ObjectId(userId),
-                planType: 'free',
-                startDate,
-                endDate,
-                isActive: true,
-                paymentStatus: 'succeeded',
-                trialDays,
-            });
-
-            await newSubscription.save({ session });
-
-            user.activeSubscriptionId = newSubscription._id as mongoose.Types.ObjectId;
-            await user.save({ session });
-
-            await session.commitTransaction();
-            return newSubscription;
-        } catch (error) {
-            await session.abortTransaction();
-            if (error instanceof AppError) {
-                throw error;
-            }
-            throw new AppError('Failed to activate free trial', ERROR_CODES.INTERNAL_SERVER_ERROR);
-        } finally {
-            session.endSession();
-        }
-    }
 
     /**
      * Get user's active subscription
@@ -132,23 +72,23 @@ export class UserSubscriptionService {
                 throw new AppError('Subscription plan not found or inactive', ERROR_CODES.NOT_FOUND);
             }
 
-            // ✅ PREFERRED APPROACH: Find existing subscription and update it instead of creating new
+            // Find existing subscription and update it instead of creating new
             const existingSubscription = await UserSubscription.findOne({
                 userId: new mongoose.Types.ObjectId(userId),
                 isDeleted: false,
             }).sort({ createdAt: -1 }).session(session);
 
             const startDate = new Date();
-            
-            // ✅ Calculate remaining days from existing subscription and add to new plan
+
+            // Calculate remaining days from existing subscription and add to new plan
             let remainingDaysFromPrevious = 0;
             let previousSubscriptionId: mongoose.Types.ObjectId | undefined = undefined;
-            
+
             if (existingSubscription && existingSubscription.isActive && existingSubscription.endDate > startDate) {
                 // Calculate remaining days from previous subscription
                 const remainingTime = existingSubscription.endDate.getTime() - startDate.getTime();
                 remainingDaysFromPrevious = Math.ceil(remainingTime / (1000 * 60 * 60 * 24));
-                
+
                 // Only carry forward if there are remaining days (positive value)
                 if (remainingDaysFromPrevious > 0) {
                     previousSubscriptionId = existingSubscription._id as mongoose.Types.ObjectId;
@@ -156,11 +96,11 @@ export class UserSubscriptionService {
                     remainingDaysFromPrevious = 0;
                 }
             }
-            
+
             // Calculate base end date for new plan
             const baseEndDate = this.calculateEndDate(startDate, plan.planType);
-            
-            // ✅ Add remaining days to the new plan's end date
+
+            // Add remaining days to the new plan's end date
             const endDate = new Date(baseEndDate);
             if (remainingDaysFromPrevious > 0) {
                 endDate.setDate(endDate.getDate() + remainingDaysFromPrevious);
@@ -169,7 +109,7 @@ export class UserSubscriptionService {
             let subscription: IUserSubscription & Document;
 
             if (existingSubscription) {
-                // ✅ UPDATE existing subscription instead of creating new
+                // UPDATE existing subscription instead of creating new
                 existingSubscription.planType = plan.planType;
                 existingSubscription.startDate = startDate;
                 existingSubscription.endDate = endDate;
@@ -179,7 +119,7 @@ export class UserSubscriptionService {
                 existingSubscription.razorpayOrderId = razorpayOrderId || undefined;
                 existingSubscription.razorpayPaymentId = razorpayPaymentId || undefined;
                 existingSubscription.updatedAt = new Date();
-                
+
                 await existingSubscription.save({ session });
                 subscription = existingSubscription;
             } else {
@@ -199,7 +139,7 @@ export class UserSubscriptionService {
                 await subscription.save({ session });
             }
 
-            // ✅ Store purchase history
+            // Store purchase history
             const subscriptionHistory = new SubscriptionHistory({
                 userId: new mongoose.Types.ObjectId(userId),
                 subscriptionId: subscription._id as mongoose.Types.ObjectId,
@@ -259,20 +199,6 @@ export class UserSubscriptionService {
         return end;
     }
 
-    /**
-     * Check if user has active premium subscription
-     */
-    static async hasActivePremiumSubscription(userId: string): Promise<boolean> {
-        try {
-            const activeSubscription = await this.getUserActiveSubscription(userId);
-            if (!activeSubscription) {
-                return false;
-            }
-            return activeSubscription.planType !== 'free';
-        } catch (error) {
-            throw error;
-        }
-    }
 
     /**
      * Get all user subscriptions with pagination, filtering, and sorting.
@@ -477,6 +403,86 @@ export class UserSubscriptionService {
     }
 
     /**
+     * Get a comprehensive subscription status for a user
+     */
+    static async getSubscriptionStatus(userId: string): Promise<ITrialLimitsStatus> {
+        // Fetch necessary data in parallel
+        const subDocPromise = UserSubscription.findOne({
+            userId: new mongoose.Types.ObjectId(userId),
+            isDeleted: false
+        }).sort({ createdAt: -1 });
+
+        const countsPromise = this.getTrialLimitsCounts(userId);
+
+        const [subDoc, counts] = await Promise.all([subDocPromise, countsPromise]);
+
+        const formattedSub = subDoc ? this.formatUserSubscriptionResponse(subDoc) : null;
+
+        // Determine plan type to fetch limits
+        const planType = formattedSub ? formattedSub.planType : 'free';
+
+        // Fetch plan details to get limits
+        const planDoc = await SubscriptionPlan.findOne({ planType: planType, isActive: true });
+
+        const isActive = !!formattedSub && formattedSub.hasActiveSubscription;
+        const isTrial = !formattedSub || formattedSub.planType === 'free' || formattedSub.isTrialing;
+        const subscriptionStatus = formattedSub ? formattedSub.subscriptionStatus || 'none' : 'none';
+        const isExpired = !isActive;
+
+        const checkCreationLimit = (type: 'employees' | 'visitors' | 'appointments') => {
+            // Default to -1 (unlimited) if plan not found
+            // If plan found, use its limit. If limit is undefined in DB, default to -1.
+            const limit = planDoc?.limits?.[type] ?? -1;
+            const current = counts[type];
+
+            // If limit is -1, it's unlimited.
+            if (limit === -1) {
+                const reached = isExpired; // Only reached if expired
+                return { limit, current, reached, canCreate: !isExpired };
+            }
+
+            // If limit is set (> -1)
+            const reached = isExpired || current >= limit;
+            return { limit, current, reached, canCreate: !isExpired && !reached };
+        };
+
+        return {
+            isTrial,
+            planType,
+            subscriptionStatus,
+            isActive: isActive || false,
+            isExpired,
+            limits: {
+                employees: checkCreationLimit('employees'),
+                visitors: checkCreationLimit('visitors'),
+                appointments: checkCreationLimit('appointments'),
+            }
+        };
+    }
+
+    /**
+     * Check if a user can create another resource based on their plan limits
+     */
+    static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments'): Promise<void> {
+        const status = await this.getSubscriptionStatus(userId);
+
+        if (status.isExpired) {
+            throw new AppError(
+                'Your subscription has expired. Please upgrade or recharge to create new items.',
+                ERROR_CODES.PAYMENT_REQUIRED
+            );
+        }
+
+        const limitInfo = status.limits[type];
+        if (status.isTrial && limitInfo.reached) {
+            throw new AppError(
+                `Your free ${type} limit (${limitInfo.limit}) has been reached. Please upgrade to continue.`,
+                ERROR_CODES.PAYMENT_REQUIRED
+            );
+        }
+    }
+
+    /**
      * Process expired subscriptions (e.g., set to inactive, update payment status).
      * This method would typically be called by a cron job.
      */
@@ -500,6 +506,7 @@ export class UserSubscriptionService {
         }
     }
 
+
     /**
      * Get subscription history for a user (all successful purchases)
      */
@@ -510,9 +517,9 @@ export class UserSubscriptionService {
                 isDeleted: false,
                 paymentStatus: 'succeeded', // Only successful payments
             })
-            .sort({ purchaseDate: -1 }) // Most recent first
-            .populate('planId', 'name amount currency')
-            .exec();
+                .sort({ purchaseDate: -1 }) // Most recent first
+                .populate('planId', 'name amount currency')
+                .exec();
 
             return history.map((item) => ({
                 _id: (item._id as mongoose.Types.ObjectId).toString(),
@@ -542,16 +549,16 @@ export class UserSubscriptionService {
         const now = new Date();
         const isTrialing = subscription.planType === 'free' && subscription.endDate > now;
         const isExpired = subscription.endDate <= now;
-        
-        // ✅ Calculate permission flags on backend for security
-        const hasActiveSubscription = 
-            subscription.isActive && 
-            !subscription.isDeleted && 
-            subscription.paymentStatus === 'succeeded' && 
+
+        // Calculate permission flags on backend for security
+        const hasActiveSubscription =
+            subscription.isActive &&
+            !subscription.isDeleted &&
+            subscription.paymentStatus === 'succeeded' &&
             !isExpired;
-        
+
         const canAccessDashboard = hasActiveSubscription || isTrialing;
-        
+
         // Determine subscription status
         let subscriptionStatus: 'active' | 'trialing' | 'cancelled' | 'expired' | 'pending';
         if (subscription.paymentStatus === 'cancelled') {

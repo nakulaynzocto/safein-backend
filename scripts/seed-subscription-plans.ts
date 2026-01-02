@@ -29,13 +29,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: 5,
+            visitors: 5,
+            appointments: 5
         }
     },
     {
         name: "Premium - 1 Month",
-        description: "Monthly billing at ₹6,999/month",
+        description: "Monthly billing at ₹5,999/month",
         planType: 'monthly',
-        amount: 699900, // ₹6,999.00 in paise
+        amount: 599900, // ₹5,999.00 in paise
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -55,13 +60,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     },
     {
         name: "Premium - 3 Months",
         description: "Save 5% with 3-month billing",
         planType: 'quarterly',
-        amount: 1991700, // ₹19,917.00 in paise (3 * 6999 * 0.95 = 19,917)
+        amount: 1709715, // ₹17,097.15 in paise (3 * 5999 * 0.95 = 17,097.15)
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -81,13 +91,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     },
     {
         name: "Premium - 12 Months",
         description: "Save 10% with annual billing - Best value!",
         planType: 'yearly',
-        amount: 7558900, // ₹75,589.00 in paise (12 * 6999 * 0.90 = 75,589)
+        amount: 6478920, // ₹64,789.20 in paise (12 * 5999 * 0.90 = 64,789.20)
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -107,6 +122,11 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     }
 ];
@@ -114,7 +134,6 @@ const defaultPlans = [
 async function seedSubscriptionPlans() {
     try {
         console.log('🌱 Starting subscription plans seeding...');
-        
         // Connect to database
         await connectDatabase();
         console.log('✅ Connected to database');
@@ -174,7 +193,6 @@ async function seedSubscriptionPlans() {
         }
 
         console.log('\n🎉 Subscription plans seeding completed successfully!');
-        
     } catch (error) {
         console.error('❌ Error seeding subscription plans:', error);
         process.exit(1);

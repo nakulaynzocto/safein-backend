@@ -51,10 +51,5 @@ const ERROR_CODES = {
     TOO_MANY_REQUESTS: 429,
 };
 
-export const TRIAL_LIMITS = {
-    employees: 1,
-    visitors: 1,
-    appointments: 5,
-} as const;
 
 export { CONSTANTS, ERROR_MESSAGES, ERROR_CODES };

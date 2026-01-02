@@ -23,6 +23,11 @@ export interface ISubscriptionPlan extends Document {
     deletedBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
+    limits: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+    };
 }
 
 const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -106,6 +111,20 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
+        },
+        limits: {
+            employees: {
+                type: Number,
+                default: -1,
+            },
+            visitors: {
+                type: Number,
+                default: -1,
+            },
+            appointments: {
+                type: Number,
+                default: -1,
+            },
         },
     },
     {
