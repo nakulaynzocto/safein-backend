@@ -119,7 +119,7 @@ export class EmployeeService {
         }
 
         if (department) {
-            filter.department = { $regex: department, $options: 'i' };
+            filter.department = { $regex: escapeRegex(department), $options: 'i' };
         }
 
         if (status) {

@@ -7,7 +7,7 @@ export interface IUser extends Document {
     password: string;
     profilePicture?: string;
     companyId?: mongoose.Types.ObjectId; // Reference to Company
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -37,7 +37,7 @@ export interface ICreateUserDTO {
     email: string;
     password: string;
     companyId?: string;
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
 }
@@ -46,7 +46,7 @@ export interface IUpdateUserDTO {
     companyName?: string;
     profilePicture?: string;
     companyId?: string;
-    role?: "admin" | "safein" | "employee" | "visitor";
+    roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
 }
@@ -77,7 +77,7 @@ export interface IUserResponse {
     profilePicture?: string;
     stripeCustomerId?: string; // Stripe Customer ID
     companyId?: mongoose.Types.ObjectId;
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
     employeeId?: string;

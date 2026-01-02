@@ -110,24 +110,36 @@ export const xssProtection = (req: Request, _res: Response, next: NextFunction):
 };
 
 /**
+ * Common fields that are safe to contain special characters in search/filter contexts.
+ */
+const EXEMPT_KEYS = ['search', 'search_query', 'query', 'department', 'designation', 'company', 'city', 'state', 'country', 'purpose', 'notes', 'securityNotes', 'meetingRoom'];
+
+/**
+ * Filter out exempt fields from an input object for security scanning
+ */
+const filterExemptFields = (inputs: any): any => {
+  return Object.fromEntries(
+    Object.entries(inputs).filter(([key]) => !EXEMPT_KEYS.includes(key))
+  );
+};
+
+/**
  * Path Traversal Protection
  * Prevents directory traversal attacks in file paths
  */
 export const pathTraversalProtection = (req: Request, res: Response, next: NextFunction): void => {
   const dangerousPatterns = [
     /(^|[/\\])\.\.([/\\]|$)/, // Parent directory traversal (matches ../ or ..\ or .. at end)
-    /\/\//,           // Double slashes
     /%2e%2e/i,        // URL encoded ..
-    /%2f/i,           // URL encoded /
-    /\\/,             // Backslashes
-    /^\/+/,           // Leading slashes
+    /\.[\/\\]\.\./,   // ./..
   ];
 
   const allInputs = { ...req.body, ...req.query, ...req.params };
+  const scanInputs = filterExemptFields(allInputs);
 
   const isDangerous = (str: string) => dangerousPatterns.some(pattern => pattern.test(str));
 
-  if (hasDangerousValue(allInputs, isDangerous)) {
+  if (hasDangerousValue(scanInputs, isDangerous)) {
     console.warn(`[SECURITY] Path traversal attempt detected from IP: ${req.ip}`);
     res.status(400).json({
       success: false,
@@ -151,10 +163,11 @@ export const commandInjectionProtection = (req: Request, res: Response, next: Ne
   const dangerousChars = ['`', '$'];
 
   const allInputs = { ...req.body, ...req.query, ...req.params };
+  const scanInputs = filterExemptFields(allInputs);
 
   const isDangerous = (str: string) => dangerousChars.some(char => str.includes(char));
 
-  if (hasDangerousValue(allInputs, isDangerous)) {
+  if (hasDangerousValue(scanInputs, isDangerous)) {
     console.warn(`[SECURITY] Command injection attempt detected from IP: ${req.ip}`);
     res.status(400).json({
       success: false,

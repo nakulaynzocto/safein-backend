@@ -211,7 +211,7 @@ export class UserSubscriptionController {
      */
     @TryCatch('Failed to process expired subscriptions')
     static async processExpiredSubscriptions(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user || req.user.role !== 'admin') {
+        if (!req.user || !req.user.roles.includes('admin')) {
             throw new AppError('Admin access required', ERROR_CODES.FORBIDDEN);
         }
 

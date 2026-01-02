@@ -301,12 +301,11 @@ export const getAppointmentsValidation = Joi.object({
     limit: Joi.number()
         .integer()
         .min(1)
-        // Dashboard may request higher limits to compute accurate stats client-side.
-        // Keep a reasonable upper bound to protect the API.
         .max(5000)
         .default(10),
     search: Joi.string()
         .optional()
+        .allow('', null)
         .trim(),
     employeeId: Joi.string()
         .optional()
@@ -360,12 +359,10 @@ export const bulkUpdateAppointmentsValidation = Joi.object({
 
 export const appointmentSearchValidation = Joi.object({
     query: Joi.string()
-        .required()
+        .allow('', null)
         .trim()
-        .min(1)
         .messages({
-            'any.required': 'Search query is required',
-            'string.min': 'Search query cannot be empty'
+            'any.required': 'Search query is required'
         }),
     type: Joi.string()
         .valid('visitor_name', 'visitor_phone', 'visitor_email', 'appointment_id', 'employee_name')
@@ -400,14 +397,28 @@ export const calendarValidation = Joi.object({
         })
 });
 
-export const employeeIdParamsValidation = Joi.object({
-    employeeId: Joi.string()
-        .required()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .messages({
-            'string.pattern.base': 'Invalid employee ID format',
-            'any.required': 'Employee ID is required'
-        })
+export const getAppointmentBookingLinksValidation = Joi.object({
+    page: Joi.number()
+        .integer()
+        .min(1)
+        .default(1),
+    limit: Joi.number()
+        .integer()
+        .min(1)
+        .max(100)
+        .default(10),
+    search: Joi.string()
+        .optional()
+        .allow('', null)
+        .trim(),
+    isBooked: Joi.boolean()
+        .optional(),
+    sortBy: Joi.string()
+        .valid('createdAt', 'expiresAt', 'visitorEmail')
+        .default('createdAt'),
+    sortOrder: Joi.string()
+        .valid('asc', 'desc')
+        .default('desc')
 });
 
 export const dateRangeValidation = Joi.object({

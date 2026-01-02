@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { User } from '../../models/user/user.model';
 import {
   ICreateUserDTO,
@@ -14,6 +15,8 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
 import { RedisOtpService } from '../redis/redisOtp.service';
+import { SubscriptionPlan } from '../../models/subscription/subscription.model';
+import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
 import * as crypto from 'crypto';
 
 export class UserService {
@@ -87,9 +90,34 @@ export class UserService {
     const user = new User(otpData.userData);
     await user.save({ session });
 
-    // According to documentation: After OTP verification, subscription_status should be "pending"
-    // Do NOT create any subscription automatically. User must select a plan and complete payment first.
-    // Subscription will be created only after successful payment via Stripe webhook.
+    // Auto-assign free trial subscription on registration
+    // Find active free plan and create subscription
+    const freePlan = await SubscriptionPlan.findOne({
+      planType: 'free',
+      isActive: true,
+      isDeleted: false
+    }).session(session);
+
+    if (freePlan) {
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + (freePlan.trialDays || 3));
+
+      const subscription = new UserSubscription({
+        userId: user._id,
+        planType: 'free',
+        startDate,
+        endDate,
+        isActive: true,
+        paymentStatus: 'succeeded',
+        trialDays: freePlan.trialDays || 3,
+      });
+      await subscription.save({ session });
+
+      // Update user's activeSubscriptionId
+      user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
+      await user.save({ session });
+    }
 
     // Delete OTP from Redis after successful verification
     await RedisOtpService.deleteOtp(email);
@@ -221,8 +249,8 @@ export class UserService {
     if (updateData.companyId !== undefined) {
       safeUpdateData.companyId = updateData.companyId;
     }
-    if (updateData.role !== undefined) {
-      safeUpdateData.role = updateData.role;
+    if (updateData.roles !== undefined) {
+      safeUpdateData.roles = updateData.roles;
     }
     if (updateData.department !== undefined) {
       safeUpdateData.department = updateData.department;

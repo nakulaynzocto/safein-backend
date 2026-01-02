@@ -118,6 +118,7 @@ export const getEmployeesValidation = Joi.object({
         }),
     search: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -125,6 +126,7 @@ export const getEmployeesValidation = Joi.object({
         }),
     department: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(50)
         .messages({

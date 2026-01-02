@@ -49,6 +49,14 @@ export const userSchemas = {
         format: 'date-time',
         description: 'Last login timestamp'
       },
+      roles: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['admin', 'visitor', 'employee', 'superadmin']
+        },
+        description: 'User system roles'
+      },
       createdAt: {
         type: 'string',
         format: 'date-time',
@@ -90,6 +98,14 @@ export const userSchemas = {
         type: 'string',
         format: 'uri',
         description: 'User profile picture URL'
+      },
+      roles: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['admin', 'visitor', 'employee', 'superadmin']
+        },
+        description: 'User system roles'
       }
     }
   },

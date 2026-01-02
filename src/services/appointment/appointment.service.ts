@@ -259,11 +259,16 @@ export class AppointmentService {
             const employeeIds = matchingEmployees.map((e: any) => e._id);
 
             filter.$or = [
-                { _id: searchRegex },
                 { 'appointmentDetails.purpose': searchRegex },
                 { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
             ];
+
+            // If it's a valid ObjectId, search by ID directly
+            const searchId = toObjectId(search);
+            if (searchId) {
+                filter.$or.push({ _id: searchId });
+            }
 
             if (visitorIds.length > 0) {
                 filter.$or.push({ visitorId: { $in: visitorIds } });

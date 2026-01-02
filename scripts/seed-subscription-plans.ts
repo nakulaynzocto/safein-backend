@@ -11,7 +11,7 @@ const defaultPlans = [
         name: "3 Day Trial",
         description: "Experience full SafeIn features for 3 days",
         planType: 'free',
-        amount: 200, // ₹2 (200 paise) for card verification
+        amount: 0, // Free - no card verification required
         currency: 'inr',
         features: [
             "Full SafeIn features access",

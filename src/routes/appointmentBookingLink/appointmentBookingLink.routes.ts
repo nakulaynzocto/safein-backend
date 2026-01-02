@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { AppointmentBookingLinkController } from '../../controllers/appointmentBookingLink/appointmentBookingLink.controller';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { publicActionLimiter } from '../../middlewares';
+import { publicActionLimiter, validateRequest } from '../../middlewares';
 import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
+import { getAppointmentBookingLinksValidation } from '../../validations/appointment/appointment.validation';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.post(
 router.get(
   '/',
   verifyToken,
+  validateRequest(getAppointmentBookingLinksValidation),
   asyncWrapper(AppointmentBookingLinkController.getAllAppointmentLinks)
 );
 

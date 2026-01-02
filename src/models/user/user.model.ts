@@ -38,13 +38,13 @@ const userSchema = new Schema<IUser>(
             ref: 'Company',
             required: false
         },
-        role: {
-            type: String,
+        roles: {
+            type: [String],
             enum: {
-                values: ['admin', 'safein', 'employee', 'visitor'],
-                message: 'Role must be admin, safein, employee, or visitor'
+                values: ['admin', 'visitor', 'employee', 'superadmin'],
+                message: 'Role must be admin, visitor, employee, or superadmin'
             },
-            default: 'visitor'
+            default: ['admin']
         },
         department: {
             type: String,
@@ -114,8 +114,8 @@ const userSchema = new Schema<IUser>(
 userSchema.index({ isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ companyId: 1, role: 1 });
+userSchema.index({ roles: 1 });
+userSchema.index({ companyId: 1, roles: 1 });
 userSchema.index({ isDeleted: 1 });
 userSchema.index({ deletedAt: 1 });
 

@@ -106,7 +106,7 @@ export class UserController {
     }
 
     const currentUserId = req.user._id.toString();
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.roles.includes('admin');
 
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only access your own profile.', ERROR_CODES.FORBIDDEN);
@@ -125,7 +125,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 
@@ -150,7 +150,7 @@ export class UserController {
     }
 
     const currentUserId = req.user._id.toString();
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.roles.includes('admin');
 
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only update your own profile.', ERROR_CODES.FORBIDDEN);
@@ -170,7 +170,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 
@@ -189,7 +189,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 

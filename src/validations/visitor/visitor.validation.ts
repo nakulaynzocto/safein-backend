@@ -200,6 +200,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     search: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -207,6 +208,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     company: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -214,6 +216,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     designation: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -221,6 +224,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     city: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -228,6 +232,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     state: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -235,6 +240,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     country: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -242,6 +248,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     idProofType: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(50)
         .messages({
