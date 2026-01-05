@@ -20,9 +20,8 @@ export class WhatsAppService {
         try {
             // Format phone number (remove spaces, ensure + prefix)
             const formattedPhone = this.formatPhoneNumber(to);
-            
+
             if (!formattedPhone) {
-                console.error('Invalid phone number format:', to);
                 return false;
             }
 
@@ -59,7 +58,7 @@ export class WhatsAppService {
             // Remove + from phone number for WhatsApp Cloud API
             const phoneNumber = to.replace('+', '');
             const url = `https://graph.facebook.com/v18.0/${this.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-            
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -80,25 +79,9 @@ export class WhatsAppService {
 
             if (!response.ok) {
                 const errorData: any = await response.json().catch(() => ({}));
-                console.error('WhatsApp Cloud API error:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    error: errorData
-                });
                 const errorMessage = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
                 const errorCode = errorData.error?.code || errorData.error?.error_subcode || '';
-                
-                // Log specific error details for debugging
-                if (errorData.error) {
-                    console.error('WhatsApp Cloud API Error Details:', {
-                        code: errorData.error.code,
-                        type: errorData.error.type,
-                        message: errorData.error.message,
-                        error_subcode: errorData.error.error_subcode,
-                        fbtrace_id: errorData.error.fbtrace_id
-                    });
-                }
-                
+
                 throw new Error(`WhatsApp Cloud API error: ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}`);
             }
 
@@ -129,7 +112,6 @@ export class WhatsAppService {
 
             if (!response.ok) {
                 const errorData: any = await response.json().catch(() => ({}));
-                console.error('Custom WhatsApp API error:', errorData);
                 const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
                 throw new Error(`Custom WhatsApp API error: ${errorMessage}`);
             }
@@ -216,7 +198,7 @@ export class WhatsAppService {
             });
 
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            
+
             // Create approve and reject URLs if appointmentId is provided
             let actionUrls = '';
             if (appointmentId) {
@@ -296,7 +278,7 @@ SafeIn Security Team`;
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const statusEmoji = status === 'approved' ? '✅' : '❌';
             const statusText = status === 'approved' ? 'Approved' : 'Rejected';
-            const actionText = status === 'approved' 
+            const actionText = status === 'approved'
                 ? 'Your appointment has been confirmed! Please arrive on time.'
                 : 'Unfortunately, your appointment request has been declined.';
 
@@ -311,9 +293,9 @@ ${actionText}
 🕐 Time: ${scheduledTime}
 👤 Meeting With: ${employeeName}
 
-${status === 'approved' 
-    ? `✅ Your appointment is confirmed. Please arrive on time and bring a valid ID.`
-    : `❌ Your appointment request has been rejected. Please contact ${employeeName} for more information.`}
+${status === 'approved'
+                    ? `✅ Your appointment is confirmed. Please arrive on time and bring a valid ID.`
+                    : `❌ Your appointment request has been rejected. Please contact ${employeeName} for more information.`}
 
 Visit your dashboard: ${baseUrl}/dashboard/notifications
 

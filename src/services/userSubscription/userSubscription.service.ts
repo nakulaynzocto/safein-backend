@@ -78,40 +78,36 @@ export class UserSubscriptionService {
                 isDeleted: false,
             }).sort({ createdAt: -1 }).session(session);
 
-            const startDate = new Date();
 
-            // Calculate remaining days from existing subscription and add to new plan
-            let remainingDaysFromPrevious = 0;
-            let previousSubscriptionId: mongoose.Types.ObjectId | undefined = undefined;
+            const now = new Date();
+            let segmentStart = now;
+            const isExtension = existingSubscription && existingSubscription.isActive && existingSubscription.endDate > now;
 
-            if (existingSubscription && existingSubscription.isActive && existingSubscription.endDate > startDate) {
-                // Calculate remaining days from previous subscription
-                const remainingTime = existingSubscription.endDate.getTime() - startDate.getTime();
-                remainingDaysFromPrevious = Math.ceil(remainingTime / (1000 * 60 * 60 * 24));
-
-                // Only carry forward if there are remaining days (positive value)
-                if (remainingDaysFromPrevious > 0) {
-                    previousSubscriptionId = existingSubscription._id as mongoose.Types.ObjectId;
-                } else {
-                    remainingDaysFromPrevious = 0;
-                }
+            if (isExtension && existingSubscription) {
+                segmentStart = existingSubscription.endDate;
             }
 
             // Calculate base end date for new plan
-            const baseEndDate = this.calculateEndDate(startDate, plan.planType);
+            const baseEndDate = this.calculateEndDate(segmentStart, plan.planType);
 
-            // Add remaining days to the new plan's end date
+            // Subtract 1 day so it expires the day before renewal
             const endDate = new Date(baseEndDate);
-            if (remainingDaysFromPrevious > 0) {
-                endDate.setDate(endDate.getDate() + remainingDaysFromPrevious);
-            }
+            endDate.setDate(endDate.getDate() - 1);
+
+            // NOTE: We don't add remaining days anymore because we are chaining the dates sequentially.
 
             let subscription: IUserSubscription & Document;
 
             if (existingSubscription) {
                 // UPDATE existing subscription instead of creating new
                 existingSubscription.planType = plan.planType;
-                existingSubscription.startDate = startDate;
+
+                // Only update start date if we are resetting/overwriting (not extending)
+                if (!isExtension) {
+                    existingSubscription.startDate = segmentStart;
+                }
+
+                // End date is always extended to the new segment end
                 existingSubscription.endDate = endDate;
                 existingSubscription.isActive = true;
                 existingSubscription.paymentStatus = 'succeeded';
@@ -127,7 +123,7 @@ export class UserSubscriptionService {
                 subscription = new UserSubscription({
                     userId: new mongoose.Types.ObjectId(userId),
                     planType: plan.planType,
-                    startDate,
+                    startDate: segmentStart,
                     endDate,
                     isActive: true,
                     paymentStatus: 'succeeded',
@@ -145,16 +141,17 @@ export class UserSubscriptionService {
                 subscriptionId: subscription._id as mongoose.Types.ObjectId,
                 planType: plan.planType,
                 planId: new mongoose.Types.ObjectId(planId),
-                purchaseDate: startDate,
-                startDate: startDate,
+                purchaseDate: new Date(),
+                startDate: segmentStart,
                 endDate: endDate,
                 amount: plan.amount,
                 currency: plan.currency || 'INR',
                 paymentStatus: 'succeeded',
                 razorpayOrderId: razorpayOrderId || undefined,
                 razorpayPaymentId: razorpayPaymentId || undefined,
-                previousSubscriptionId: previousSubscriptionId,
-                remainingDaysFromPrevious: remainingDaysFromPrevious,
+                // previousSubscriptionId: previousSubscriptionId,
+                // remainingDaysFromPrevious: remainingDaysFromPrevious,
+                source: 'user'
             });
 
             await subscriptionHistory.save({ session });

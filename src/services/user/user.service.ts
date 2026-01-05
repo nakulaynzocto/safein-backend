@@ -34,7 +34,7 @@ export class UserService {
     try {
       await EmailService.sendOtpEmail(email, otp, companyName);
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
+      if (CONSTANTS.NODE_ENV === 'development') {
         return;
       }
       throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
@@ -403,7 +403,7 @@ export class UserService {
     await user.save({ validateBeforeSave: false });
 
     // Create reset URL - Use APPROVAL_LINK_BASE_URL (same as approve/reject links) or fallback to FRONTEND_URL
-    const baseUrl = CONSTANTS.APPROVAL_LINK_BASE_URL || CONSTANTS.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
+    const baseUrl = CONSTANTS.APPROVAL_LINK_BASE_URL;
     const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`;
 
     try {
@@ -415,7 +415,7 @@ export class UserService {
       user.resetPasswordExpires = undefined;
       await user.save({ validateBeforeSave: false });
 
-      if (process.env.NODE_ENV === 'development') {
+      if (CONSTANTS.NODE_ENV === 'development') {
         console.error('Failed to send password reset email:', error.message);
         return { message: 'Password reset email could not be sent. Please try again later.' };
       }

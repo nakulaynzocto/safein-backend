@@ -11,6 +11,8 @@ import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
 
+import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
+
 export class SubscriptionPlanController {
     /**
      * Create a new subscription plan
@@ -37,6 +39,20 @@ export class SubscriptionPlanController {
     static async getAllSubscriptionPlans(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const query: IGetSubscriptionPlansQuery = req.query;
         const result = await SubscriptionPlanService.getAllSubscriptionPlans(query);
+
+        // If user is authenticated, check if they have ever purchased a premium plan
+        if (req.user) {
+            const hasPurchasedPremium = await SubscriptionHistory.exists({
+                userId: req.user._id,
+                amount: { $gt: 0 },
+                paymentStatus: 'succeeded'
+            });
+
+            if (hasPurchasedPremium) {
+                // Filter out trial plans (plans with trialDays > 0)
+                result.plans = result.plans.filter(plan => !plan.trialDays || plan.trialDays <= 0);
+            }
+        }
 
         ResponseUtil.success(res, 'Subscription plans retrieved successfully', result);
     }

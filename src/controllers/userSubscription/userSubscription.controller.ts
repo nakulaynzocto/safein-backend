@@ -284,11 +284,6 @@ export class UserSubscriptionController {
             const order = payload.order?.entity || payload.order;
 
             if (!payment || !order) {
-                console.error('Invalid payment.captured payload - missing payment or order:', {
-                    hasPayment: !!payment,
-                    hasOrder: !!order,
-                    payloadKeys: Object.keys(payload)
-                });
                 return;
             }
 
@@ -299,12 +294,6 @@ export class UserSubscriptionController {
             const planId = order.notes?.planId || payment.notes?.planId;
 
             if (!userId || !planId) {
-                console.error('Missing userId or planId in payment notes:', {
-                    orderId,
-                    paymentId,
-                    orderNotes: order.notes,
-                    paymentNotes: payment.notes
-                });
                 return;
             }
 
@@ -316,7 +305,6 @@ export class UserSubscriptionController {
                 paymentId
             );
         } catch (error: any) {
-            console.error('Error handling payment.captured:', error);
             // Don't throw - webhook should still return 200
         }
     }
@@ -328,7 +316,7 @@ export class UserSubscriptionController {
         try {
             // Payment failure logic
         } catch (error: any) {
-            console.error('Error handling payment.failed:', error);
+            // Silently handle error
         }
     }
 
@@ -341,11 +329,6 @@ export class UserSubscriptionController {
             const payment = payload.payment?.entity || payload.payment;
 
             if (!order || !payment) {
-                console.error('Invalid order.paid payload - missing order or payment:', {
-                    hasOrder: !!order,
-                    hasPayment: !!payment,
-                    payloadKeys: Object.keys(payload)
-                });
                 return;
             }
 
@@ -355,12 +338,6 @@ export class UserSubscriptionController {
             const planId = order.notes?.planId || payment.notes?.planId;
 
             if (!userId || !planId) {
-                console.error('Missing userId or planId in order notes:', {
-                    orderId,
-                    paymentId,
-                    orderNotes: order.notes,
-                    paymentNotes: payment.notes
-                });
                 return;
             }
 
@@ -371,7 +348,6 @@ export class UserSubscriptionController {
                 paymentId
             );
         } catch (error: any) {
-            console.error('Error handling order.paid:', error);
             // Don't throw - webhook should still return 200
         }
     }

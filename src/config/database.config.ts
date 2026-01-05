@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
+import { CONSTANTS } from '../utils/constants';
 
 export const connectDatabase = async (): Promise<void> => {
   try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/my-project-db';
+    const mongoUri = CONSTANTS.MONGODB_URI || 'mongodb://localhost:27017/my-project-db';
 
     await mongoose.connect(mongoUri);
 

@@ -1,26 +1,12 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { CONSTANTS } from './constants';
 
 const getCloudCreds = () => {
-  const cloudNameUrl = process.env.CLOUDINARY_CLOUD_NAME || '';
-  
-  let cloudName = '';
-  let apiKey = process.env.CLOUDINARY_API_KEY || '';
-  let apiSecret = process.env.CLOUDINARY_API_SECRET || '';
-  
-  if (cloudNameUrl.startsWith('cloudinary://')) {
-    const match = cloudNameUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
-    if (match && match.length >= 4) {
-      cloudName = match[3].trim();
-      apiKey = match[1];
-      apiSecret = match[2];
-    } else {
-      console.error('Failed to parse Cloudinary connection URL');
-    }
-  } else {
-    cloudName = cloudNameUrl;
-  }
-  
-  return { cloudName, apiKey, apiSecret };
+  return {
+    cloudName: CONSTANTS.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: CONSTANTS.CLOUDINARY_API_KEY || '',
+    apiSecret: CONSTANTS.CLOUDINARY_API_SECRET || ''
+  };
 };
 
 const { cloudName, apiKey, apiSecret } = getCloudCreds();
@@ -31,8 +17,6 @@ if (cloudName && apiKey && apiSecret) {
     api_key: apiKey,
     api_secret: apiSecret,
   });
-} else {
-  console.error('Cloudinary configuration incomplete');
 }
 
 export const UPLOAD_CONFIG = {
@@ -143,7 +127,7 @@ export const uploadToCloudinary = async (
  */
 export const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
   try {
-    const actualPublicId = publicId.includes('/') 
+    const actualPublicId = publicId.includes('/')
       ? publicId.split('/').pop()?.split('.')[0] || publicId
       : publicId;
 

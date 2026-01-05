@@ -13,38 +13,40 @@ export interface IUserSubscription extends Document {
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     deletedBy?: mongoose.Types.ObjectId; // User who deleted this subscription
+    source: 'self' | 'admin' | 'system';
+    assignedBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
 
 const userSubscriptionSchema = new Schema<IUserSubscription>({
-        userId: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
+    userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
         required: true,
     },
     planType: {
-            type: String,
+        type: String,
         enum: ['free', 'weekly', 'monthly', 'quarterly', 'yearly'],
         required: true,
-        },
-        startDate: {
-            type: Date,
+    },
+    startDate: {
+        type: Date,
         required: true,
-        },
-        endDate: {
-            type: Date,
+    },
+    endDate: {
+        type: Date,
         required: true,
     },
     isActive: {
-            type: Boolean,
+        type: Boolean,
         default: true,
     },
     paymentStatus: {
-            type: String,
+        type: String,
         enum: ['pending', 'succeeded', 'failed', 'cancelled'],
         default: 'pending',
-        },
+    },
     trialDays: {
         type: Number,
         default: 0,
@@ -59,23 +61,32 @@ const userSubscriptionSchema = new Schema<IUserSubscription>({
         default: null,
         index: true, // Index for faster lookups and idempotency
     },
-        isDeleted: {
-            type: Boolean,
-            default: false,
-        },
-        deletedAt: {
-            type: Date,
-        default: null,
-        },
-        deletedBy: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
+    isDeleted: {
+        type: Boolean,
+        default: false,
+    },
+    deletedAt: {
+        type: Date,
         default: null,
     },
+    deletedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
     },
+    source: {
+        type: String,
+        enum: ['self', 'admin', 'system'],
+        default: 'self',
+    },
+    assignedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+    },
+},
     {
         timestamps: true,
-});
+    });
 
 export const UserSubscription = mongoose.model<IUserSubscription>('UserSubscription', userSubscriptionSchema);
 

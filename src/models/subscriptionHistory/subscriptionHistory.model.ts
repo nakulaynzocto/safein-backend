@@ -15,6 +15,7 @@ export interface ISubscriptionHistory extends Document {
     razorpayPaymentId?: string; // Razorpay payment ID
     previousSubscriptionId?: mongoose.Types.ObjectId; // Reference to previous subscription (if upgraded)
     remainingDaysFromPrevious?: number; // Days carried forward from previous subscription
+    source?: 'user' | 'admin' | 'system'; // Who initiated the subscription
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     createdAt: Date;
@@ -88,6 +89,11 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         remainingDaysFromPrevious: {
             type: Number,
             default: 0,
+        },
+        source: {
+            type: String,
+            enum: ['user', 'admin', 'system'],
+            default: 'user', // Default to user for backward compatibility
         },
         isDeleted: {
             type: Boolean,

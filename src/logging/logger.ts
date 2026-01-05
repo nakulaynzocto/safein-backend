@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { CONSTANTS } from '../utils/constants';
+
 export interface LogEntry {
     timestamp: string;
     level: 'INFO' | 'ERROR' | 'WARN' | 'DEBUG';
@@ -72,7 +74,7 @@ class Logger {
             logData.error = entry.error;
             logData.message = entry.message;
             logData.responseTime = entry.responseTime ? `${entry.responseTime}ms` : undefined;
-            if (process.env.NODE_ENV === 'development') {
+            if (CONSTANTS.NODE_ENV === 'development') {
                 logData.stack = entry.stack;
             }
         }
@@ -143,7 +145,7 @@ class Logger {
     }
 
     public logDebug(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
-        if (process.env.NODE_ENV === 'development') {
+        if (CONSTANTS.NODE_ENV === 'development') {
             const logEntry: LogEntry = {
                 ...entry,
                 level: 'DEBUG',

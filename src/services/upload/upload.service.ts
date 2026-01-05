@@ -1,5 +1,6 @@
 import { AppError } from '../../middlewares/errorHandler';
 import { uploadToCloudinary, UPLOAD_CONFIG } from '../../utils/cloudinary';
+import { validateUploadRequest } from '../../utils/upload-helpers';
 import { ERROR_CODES } from '../../utils/constants';
 import sharp from 'sharp';
 
@@ -14,23 +15,9 @@ export class UploadService {
    * @throws AppError if validation fails
    */
   static validateFile(file: Express.Multer.File): void {
-    if (!file) {
-      throw new AppError('No file uploaded', ERROR_CODES.BAD_REQUEST);
-    }
-
-    if (!file.mimetype.startsWith('image/')) {
-      throw new AppError(
-        'Invalid file type. Only images are allowed (JPEG, PNG, GIF, WebP)',
-        ERROR_CODES.BAD_REQUEST
-      );
-    }
-
-    if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE) {
-      const maxSizeMB = UPLOAD_CONFIG.MAX_FILE_SIZE / (1024 * 1024);
-      throw new AppError(
-        `File size exceeds ${maxSizeMB}MB limit`,
-        ERROR_CODES.BAD_REQUEST
-      );
+    const { valid, error } = validateUploadRequest(file);
+    if (!valid && error) {
+      throw new AppError(error, ERROR_CODES.BAD_REQUEST);
     }
 
     if (!file.buffer || file.buffer.length === 0) {
@@ -135,16 +122,16 @@ export class UploadService {
   static async uploadFile(
     file: Express.Multer.File,
     customFolder?: string
-  ): Promise<{ 
-    url: string; 
-    filename: string; 
+  ): Promise<{
+    url: string;
+    filename: string;
     size: number;
   }> {
     this.validateFile(file);
 
     // Compress image if it's larger than 400KB
     const compressedBuffer = await this.compressImage(file);
-    
+
     // Create a new file object with compressed buffer
     const compressedFile: Express.Multer.File = {
       ...file,
@@ -155,6 +142,8 @@ export class UploadService {
     const result = await uploadToCloudinary(compressedFile, {
       folder: customFolder || UPLOAD_CONFIG.UPLOAD_FOLDER
     });
+
+
 
     if (!result.success || !result.data) {
       throw new AppError(
@@ -181,7 +170,7 @@ export class UploadService {
     );
 
     const successful = results
-      .filter((result): result is PromiseFulfilledResult<any> => 
+      .filter((result): result is PromiseFulfilledResult<any> =>
         result.status === 'fulfilled'
       )
       .map(result => result.value);

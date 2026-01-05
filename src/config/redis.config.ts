@@ -1,7 +1,8 @@
 import Redis from 'ioredis';
+import { CONSTANTS } from '../utils/constants';
 
 // Initialize Redis client globally with lazy connection
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisUrl = CONSTANTS.REDIS_URL;
 const redisClient = new Redis(redisUrl, {
   retryStrategy: (times) => {
     const delay = Math.min(times * 50, 2000);

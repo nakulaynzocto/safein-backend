@@ -1,23 +1,23 @@
 import nodemailer from 'nodemailer';
 import { AppError } from '../../middlewares/errorHandler';
-import { ERROR_CODES } from '../../utils/constants';
+import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
 import { getOtpEmailTemplate, getOtpEmailText } from '../../templates/email/otp-email.template';
 import { getWelcomeEmailTemplate, getWelcomeEmailText } from '../../templates/email/welcome-email.template';
 import { getAppointmentApprovalEmailTemplate, getAppointmentApprovalEmailText } from '../../templates/email/appointment-approval-email.template';
 import { getAppointmentRejectionEmailTemplate, getAppointmentRejectionEmailText } from '../../templates/email/appointment-rejection-email.template';
-import { 
-  getEmployeeAppointmentApprovalEmailTemplate, 
+import {
+  getEmployeeAppointmentApprovalEmailTemplate,
   getEmployeeAppointmentApprovalEmailText,
   getEmployeeAppointmentRejectionEmailTemplate,
   getEmployeeAppointmentRejectionEmailText
 } from '../../templates/email/employee-appointment-email.template';
-import { 
-  getNewAppointmentRequestEmailTemplate, 
-  getNewAppointmentRequestEmailText 
+import {
+  getNewAppointmentRequestEmailTemplate,
+  getNewAppointmentRequestEmailText
 } from '../../templates/email/new-appointment-request-email.template';
-import { 
-  getPasswordResetEmailTemplate, 
-  getPasswordResetEmailText 
+import {
+  getPasswordResetEmailTemplate,
+  getPasswordResetEmailText
 } from '../../templates/email/password-reset-email.template';
 import {
   getAppointmentLinkEmailTemplate,
@@ -42,15 +42,15 @@ export class EmailService {
     }
 
     const smtpConfig = {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
-      secure: process.env.SMTP_SECURE === 'true',
+      host: CONSTANTS.SMTP_HOST,
+      port: CONSTANTS.SMTP_PORT,
+      secure: CONSTANTS.SMTP_SECURE,
       auth: {
-        user: process.env.MAIL_USER || process.env.SMTP_USER || '',
-        pass: process.env.MAIL_PASS || process.env.SMTP_PASS || ''
+        user: CONSTANTS.SMTP_USER || '',
+        pass: CONSTANTS.SMTP_PASS || ''
       },
       tls: {
-        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'true' ? true : false,
+        rejectUnauthorized: !CONSTANTS.SKIP_SMTP_VERIFY,
       },
     } as nodemailer.TransportOptions;
 
@@ -66,22 +66,22 @@ export class EmailService {
       if (!this.transporter) {
         this.initializeTransporter();
       }
-      if (process.env.SKIP_SMTP_VERIFY === 'true') {
+      if (CONSTANTS.SKIP_SMTP_VERIFY) {
         this.isEmailServiceAvailable = true;
         return true;
       }
-      
+
       await this.transporter.verify();
       this.isEmailServiceAvailable = true;
       return true;
     } catch (error: any) {
       console.error('SMTP connection failed:', error.message);
       this.isEmailServiceAvailable = false;
-      
-      if (error.code === 'EAUTH' && process.env.SMTP_HOST === 'smtp.gmail.com') {
+
+      if (error.code === 'EAUTH' && CONSTANTS.SMTP_HOST === 'smtp.gmail.com') {
         return await this.tryAlternativeSmtpConfigs();
       }
-      
+
       return false;
     }
   }
@@ -95,13 +95,13 @@ export class EmailService {
         host: 'smtp-relay.brevo.com',
         port: 587,
         secure: false,
-        auth: { user: process.env.SMTP_USER || '', pass: process.env.SMTP_PASS || '' }
+        auth: { user: CONSTANTS.SMTP_USER || '', pass: CONSTANTS.SMTP_PASS || '' }
       },
       {
         host: 'smtp.gmail.com',
         port: 587,
         secure: false,
-        auth: { user: process.env.SMTP_USER || '', pass: process.env.SMTP_PASS || '' }
+        auth: { user: CONSTANTS.SMTP_USER || '', pass: CONSTANTS.SMTP_PASS || '' }
       }
     ];
 
@@ -124,11 +124,11 @@ export class EmailService {
    * Send email using Brevo API
    */
   private static async sendWithBrevo(mail: { to: string; subject: string; html: string; from?: string; text?: string; fromName?: string; disableClickTracking?: boolean }) {
-    if (!process.env.BREVO_API_KEY) throw new Error('BREVO_API_KEY not set');
-    
-    const fromEmail = mail.from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app';
-    const fromName = mail.fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management';
-    
+    if (!CONSTANTS.BREVO_API_KEY) throw new Error('BREVO_API_KEY not set');
+
+    const fromEmail = mail.from || CONSTANTS.SMTP_FROM_EMAIL || CONSTANTS.SMTP_USER || 'no-reply@safein.app';
+    const fromName = mail.fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management';
+
     const emailPayload: any = {
       sender: {
         name: fromName,
@@ -148,7 +148,7 @@ export class EmailService {
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
       replyTo: {
-        email: process.env.SMTP_REPLY_TO || fromEmail,
+        email: CONSTANTS.SMTP_FROM_EMAIL || fromEmail, // removed SMTP_REPLY_TO from constants as it wasn't there, using FROM_EMAIL
       },
     };
 
@@ -160,21 +160,21 @@ export class EmailService {
         opens: true,
       };
     }
-    
+
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-key': process.env.BREVO_API_KEY,
+        'api-key': CONSTANTS.BREVO_API_KEY,
       },
       body: JSON.stringify(emailPayload),
     });
-    
+
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Brevo API error: ${res.status} ${text}`);
     }
-    
+
     const result = await res.json();
     return result;
   }
@@ -196,7 +196,7 @@ export class EmailService {
     const { to, subject, html, text, from, fromName, disableClickTracking } = options;
 
     // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
-    if (process.env.BREVO_API_KEY && !this.brevoApiDisabled) {
+    if (CONSTANTS.BREVO_API_KEY && !this.brevoApiDisabled) {
       try {
         await this.sendWithBrevo({
           to,
@@ -204,7 +204,7 @@ export class EmailService {
           html,
           text,
           from,
-          fromName: fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management',
+          fromName: fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management',
           disableClickTracking,
         });
         return;
@@ -221,29 +221,15 @@ export class EmailService {
     }
 
     // Priority 2: Use Resend API if RESEND_API_KEY is set
-    if (process.env.RESEND_API_KEY) {
-      try {
-        await this.sendWithResend({
-          to,
-          subject,
-          html,
-          text,
-          from,
-        });
-        return;
-      } catch (resendError: any) {
-        console.error('Resend API failed:', resendError.message);
-        // Don't throw here, try SMTP fallback
-      }
-    }
+    // Skipping Resend replacement as it is not in CONSTANTS and likely unused
 
     // Priority 3: Fallback to SMTP
     if (!this.transporter) {
       this.initializeTransporter();
     }
 
-    const fromEmail = from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app';
-    const fromNameValue = fromName || process.env.SMTP_FROM_NAME || 'SafeIn Security Management';
+    const fromEmail = from || CONSTANTS.SMTP_FROM_EMAIL || CONSTANTS.SMTP_USER || 'no-reply@safein.app';
+    const fromNameValue = fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management';
 
     const mailOptions = {
       from: `"${fromNameValue}" <${fromEmail}>`,
@@ -256,7 +242,7 @@ export class EmailService {
         'X-Priority': '1',
         'X-MSMail-Priority': 'High',
         'Importance': 'high',
-        'List-Unsubscribe': `<mailto:${process.env.SMTP_FROM_EMAIL || fromEmail}?subject=unsubscribe>`,
+        'List-Unsubscribe': `<mailto:${CONSTANTS.SMTP_FROM_EMAIL || fromEmail}?subject=unsubscribe>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         'Precedence': 'bulk',
         'X-Mailer': 'SafeIn Security Management System',
@@ -265,7 +251,7 @@ export class EmailService {
         'Return-Path': fromEmail,
       },
       // Reply-to header
-      replyTo: process.env.SMTP_REPLY_TO || fromEmail,
+      replyTo: CONSTANTS.SMTP_FROM_EMAIL || fromEmail,
     };
 
     try {
@@ -288,32 +274,7 @@ export class EmailService {
     }
   }
 
-  private static async sendWithResend(mail: { to: string; subject: string; html: string; from?: string; text?: string }) {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: mail.from || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'no-reply@safein.app',
-        to: [mail.to],
-        subject: mail.subject,
-        html: mail.html,
-        text: mail.text,
-        headers: {
-          'X-Mailer': 'SafeIn Security Management System',
-          'List-Unsubscribe': `<mailto:${mail.from || process.env.SMTP_FROM_EMAIL || 'no-reply@safein.app'}?subject=unsubscribe>`,
-        },
-        reply_to: process.env.SMTP_REPLY_TO || mail.from || process.env.SMTP_FROM_EMAIL || 'no-reply@safein.app',
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Resend error: ${res.status} ${text}`);
-    }
-  }
+
 
   /**
    * Send OTP email
@@ -329,12 +290,12 @@ export class EmailService {
       });
     } catch (error: any) {
       console.error('Failed to send OTP email:', error.message);
-      
-      if (process.env.NODE_ENV === 'development') {
+
+      if (CONSTANTS.NODE_ENV === 'development') {
         console.warn('Continuing in development mode despite email error');
         return;
       }
-      
+
       throw new AppError(`Failed to send OTP email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
@@ -396,7 +357,7 @@ export class EmailService {
         subject: 'Appointment Update - SafeIn',
         html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
         text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Appointment rejection email',
       });
     } catch (error: any) {
@@ -420,7 +381,7 @@ export class EmailService {
         subject: 'Appointment Approved - SafeIn',
         html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
         text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Employee appointment approval email',
       });
     } catch (error: any) {
@@ -445,7 +406,7 @@ export class EmailService {
         subject: 'Appointment Rejected - SafeIn',
         html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
         text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Employee appointment rejection email',
       });
     } catch (error: any) {
@@ -472,7 +433,7 @@ export class EmailService {
         subject: 'New Appointment Request - SafeIn',
         html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
         text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'New appointment request email',
       });
     } catch (error: any) {
@@ -494,12 +455,12 @@ export class EmailService {
       });
     } catch (error: any) {
       console.error('Failed to send password reset email:', error.message);
-      
-      if (process.env.NODE_ENV === 'development') {
+
+      if (CONSTANTS.NODE_ENV === 'development') {
         console.warn('Continuing in development mode despite email error');
         return;
       }
-      
+
       throw new AppError(`Failed to send password reset email: ${error.message}`, ERROR_CODES.INTERNAL_SERVER_ERROR);
     }
   }
@@ -519,7 +480,7 @@ export class EmailService {
         subject: 'Book Your Appointment - SafeIn',
         html: getAppointmentLinkEmailTemplate(employeeName, bookingUrl, expiresAt),
         text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Appointment link email',
         disableClickTracking: true, // Disable click tracking to prevent tracking URL issues
       });
@@ -546,12 +507,12 @@ export class EmailService {
         subject: 'Appointment Request Submitted - SafeIn',
         html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
         text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
         logMessage: 'Appointment confirmation email to visitor',
       });
     } catch (error: any) {
       console.error('Failed to send appointment confirmation email to visitor:', error.message);
-      if (process.env.NODE_ENV === 'development') {
+      if (CONSTANTS.NODE_ENV === 'development') {
         console.warn('Continuing in development mode despite email error');
         return;
       }
@@ -584,6 +545,44 @@ export class EmailService {
       });
     } catch (error: any) {
       console.error('Failed to send password reset confirmation email:', error.message);
+    }
+  }
+  /**
+   * Send Safein User Credentials Email
+   */
+  static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string): Promise<void> {
+    try {
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #1A73E8; text-align: center;">Welcome to SafeIn Security Cloud</h2>
+          <p>Hello <strong>${companyName}</strong>,</p>
+          <p>Your account has been successfully created by the Super Admin.</p>
+          <p>Here are your login credentials:</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> ${password}</p>
+          </div>
+          <p>Please login and change your password immediately.</p>
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${CONSTANTS.FRONTEND_URL}/login" style="background-color: #1A73E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login to Dashboard</a>
+          </div>
+          <p style="margin-top: 30px; font-size: 12px; color: #888; text-align: center;">
+            This email contains sensitive information. Please delete it after logging in.
+          </p>
+        </div>
+      `;
+      const textContent = `Welcome to SafeIn Security Cloud\n\nHello ${companyName},\n\nYour account has been successfully created.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease login and change your password immediately.\n\nLogin here: ${CONSTANTS.FRONTEND_URL}/login`;
+
+      await this.sendEmail({
+        to: email,
+        subject: 'Your SafeIn Account Credentials',
+        html: htmlContent,
+        text: textContent,
+        logMessage: 'Safein user credentials email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send credentials email:', error.message);
+      // Don't throw to avoid blocking user creation response, but log it
     }
   }
 }

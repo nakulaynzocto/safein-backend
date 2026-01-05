@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { SubscriptionPlanController } from '../../controllers/subscription/subscription.controller';
 import { validateRequest } from '../../middlewares/validateRequest';
-import { verifyToken } from '../../middlewares/auth.middleware';
+import { verifyToken, verifyTokenOptional } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createSubscriptionPlanValidation,
@@ -15,6 +15,7 @@ const router = Router();
 
 router.get(
     '/',
+    verifyTokenOptional, // Check for token but allow guests
     validateRequest(getSubscriptionPlansValidation),
     asyncWrapper(SubscriptionPlanController.getAllSubscriptionPlans)
 );

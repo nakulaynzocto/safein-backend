@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 import express, { Express } from 'express';
 import { createServer } from 'http';
@@ -25,6 +24,7 @@ import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
 import { webhookRouter } from './routes/userSubscription/userSubscription.routes';
 import { socketService } from './services/socket/socket.service';
+import superAdminRoutes from './routes/internal/superAdmin.routes';
 
 const app: Express = express();
 // Trust proxy (required for correct IP detection behind proxies/load balancers)
@@ -86,6 +86,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Prevent HTTP Parameter Pollution (HPP)
 app.use(hpp());
+
+app.use('/internal/super-admin', superAdminRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

@@ -12,7 +12,7 @@ export function Transaction(_errorMessage: string = 'Transaction failed') {
         descriptor.value = async function (...args: any[]) {
             return TransactionUtil.executeTransaction(async (session) => {
                 const newArgs = [...args];
-                
+
                 const lastArg = newArgs[newArgs.length - 1];
                 if (typeof lastArg === 'object' && lastArg !== null && !lastArg.session) {
                     newArgs[newArgs.length - 1] = { ...lastArg, session };
@@ -38,6 +38,15 @@ export function TryCatch(errorMessage: string = 'Operation failed') {
             try {
                 return await method.apply(this, args);
             } catch (error) {
+                const next = args.length > 2 && typeof args[2] === 'function' ? args[2] : null;
+
+                if (next) {
+                    if (error instanceof AppError) {
+                        return next(error);
+                    }
+                    return next(new AppError(`${errorMessage}: ${error instanceof Error ? error.message : 'Unknown error'}`, 500));
+                }
+
                 if (error instanceof AppError) {
                     throw error;
                 }
