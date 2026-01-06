@@ -144,7 +144,8 @@ export class AppointmentService {
 
         appointment.notifications.smsSent = false;
         if (smsEnabled) {
-            // TODO: Implement SMS service when available
+            // NOTE: SMS service integration pending
+            // Will send appointment creation notification via SMS provider (e.g., Twilio)
         }
 
         await appointment.save({ session });
@@ -632,7 +633,8 @@ export class AppointmentService {
         }
 
         if (smsEnabled) {
-            // TODO: Implement SMS service when available
+            // NOTE: SMS service integration pending
+            // Will send appointment approval notification via SMS provider
         }
 
         try {
@@ -727,7 +729,8 @@ export class AppointmentService {
         }
 
         if (smsEnabled) {
-            // TODO: Implement SMS service when available
+            // NOTE: SMS service integration pending
+            // Will send appointment rejection notification via SMS provider
         }
 
         try {

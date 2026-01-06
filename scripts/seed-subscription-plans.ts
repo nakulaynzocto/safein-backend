@@ -40,7 +40,7 @@ const defaultPlans = [
         name: "Premium - 1 Month",
         description: "Monthly billing at ₹5,999/month",
         planType: 'monthly',
-        amount: 599900, // ₹5,999.00 in paise
+        amount: 5999, // ₹5,999.00
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -71,7 +71,7 @@ const defaultPlans = [
         name: "Premium - 3 Months",
         description: "Save 5% with 3-month billing",
         planType: 'quarterly',
-        amount: 1709715, // ₹17,097.15 in paise (3 * 5999 * 0.95 = 17,097.15)
+        amount: 17097.15, // ₹17,097.15
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -102,7 +102,7 @@ const defaultPlans = [
         name: "Premium - 12 Months",
         description: "Save 10% with annual billing - Best value!",
         planType: 'yearly',
-        amount: 6478920, // ₹64,789.20 in paise (12 * 5999 * 0.90 = 64,789.20)
+        amount: 64789.20, // ₹64,789.20
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -164,7 +164,7 @@ async function seedSubscriptionPlans() {
             console.log('ℹ️  All subscription plans already exist. No new plans to insert.');
             console.log('\n📋 Existing Subscription Plans:');
             existingPlans.forEach((plan, index) => {
-                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${plan.amount.toFixed(2)}`);
             });
         } else {
             // Insert only new plans (no duplicates)
@@ -174,7 +174,7 @@ async function seedSubscriptionPlans() {
             // Display inserted plans
             console.log('\n📋 Newly Inserted Subscription Plans:');
             insertedPlans.forEach((plan, index) => {
-                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${plan.amount.toFixed(2)}`);
             });
 
             // Display skipped (duplicate) plans

@@ -259,6 +259,12 @@ export class UserService {
     if (updateData.designation !== undefined) {
       safeUpdateData.designation = updateData.designation;
     }
+    if (updateData.mobileNumber !== undefined) {
+      safeUpdateData.mobileNumber = updateData.mobileNumber;
+    }
+    if (updateData.isActive !== undefined) {
+      safeUpdateData.isActive = updateData.isActive;
+    }
 
     delete (safeUpdateData as any).session;
 

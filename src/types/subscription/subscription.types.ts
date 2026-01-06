@@ -62,6 +62,7 @@ export interface ISubscriptionPlanResponse {
     features: string[];
     isActive: boolean;
     isPopular: boolean;
+    isPublic: boolean;
     trialDays?: number;
     sortOrder: number;
     discountPercentage?: number;
@@ -77,8 +78,9 @@ export interface IGetSubscriptionPlansQuery {
     page?: number;
     limit?: number;
     planType?: string;
-    isActive?: boolean;
+    isActive?: boolean | 'all';
     isPopular?: boolean;
+    isPublic?: boolean | 'all';
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
 }

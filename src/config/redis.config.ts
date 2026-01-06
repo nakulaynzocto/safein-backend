@@ -14,15 +14,19 @@ const redisClient = new Redis(redisUrl, {
 });
 
 redisClient.on('connect', () => {
-  console.log('Redis client connected');
+  if (CONSTANTS.NODE_ENV === 'development') {
+    console.log('✓ Redis client connected');
+  }
 });
 
 redisClient.on('error', (error) => {
-  console.error('Redis connection error:', error);
+  console.error('✗ Redis connection error:', error);
 });
 
 redisClient.on('close', () => {
-  console.log('Redis connection closed');
+  if (CONSTANTS.NODE_ENV === 'development') {
+    console.log('⊗ Redis connection closed');
+  }
 });
 
 export const connectRedis = async (): Promise<Redis> => {

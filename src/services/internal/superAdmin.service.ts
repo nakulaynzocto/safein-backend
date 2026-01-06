@@ -295,7 +295,8 @@ export class SuperAdminService {
     static async getSubscriptionPlans() {
         const result = await SubscriptionPlanService.getAllSubscriptionPlans({
             limit: 100, // Fetch all reasonable
-            // isActive: true, // Fetch ALL for admin
+            isPublic: 'all', // Fetch ALL public and private plans
+            isActive: 'all', // Fetch ALL active and inactive plans
             sortBy: 'sortOrder',
             sortOrder: 'asc'
         });
@@ -303,6 +304,7 @@ export class SuperAdminService {
     }
 
     static async createSubscriptionPlan(payload: any) {
+        // Direct storage in Rupees as per request
         const plan = await SubscriptionPlan.create(payload);
 
         return plan;

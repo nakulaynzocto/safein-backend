@@ -9,11 +9,12 @@ export interface ISubscriptionPlan extends Document {
     name: string;
     description?: string;
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-    amount: number; // in cents
+    amount: number; // in rupees (INR)
     currency: string;
     features: string[];
     isActive: boolean;
     isPopular: boolean;
+    isPublic: boolean; // true = public, false = super admin only
     trialDays?: number;
     sortOrder: number;
     discountPercentage?: number;
@@ -59,7 +60,7 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
         currency: {
             type: String,
             required: [true, 'Currency is required'],
-            default: 'usd',
+            default: 'inr',
             lowercase: true,
             length: [3, 'Currency must be a 3-letter code'],
         },
@@ -77,6 +78,10 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
         isPopular: {
             type: Boolean,
             default: false,
+        },
+        isPublic: {
+            type: Boolean,
+            default: true, // true = visible to all, false = super admin only
         },
         trialDays: {
             type: Number,
@@ -140,8 +145,8 @@ subscriptionPlanSchema.index({ createdAt: -1 });
 subscriptionPlanSchema.index({ isPopular: 1 });
 
 subscriptionPlanSchema.virtual('formattedPrice').get(function () {
-    const price = (this.amount / 100).toFixed(2);
-    return `$${price}`;
+    const price = this.amount.toFixed(2);
+    return `₹${price}`;
 });
 
 subscriptionPlanSchema.virtual('monthlyEquivalent').get(function () {

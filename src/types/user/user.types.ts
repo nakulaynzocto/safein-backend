@@ -4,6 +4,7 @@ export interface IUser extends Document {
     _id: string;
     companyName: string;
     email: string;
+    mobileNumber?: string;
     password: string;
     profilePicture?: string;
     companyId?: mongoose.Types.ObjectId; // Reference to Company
@@ -44,6 +45,8 @@ export interface ICreateUserDTO {
 
 export interface IUpdateUserDTO {
     companyName?: string;
+    mobileNumber?: string;
+    isActive?: boolean;
     profilePicture?: string;
     companyId?: string;
     roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
@@ -74,6 +77,7 @@ export interface IUserResponse {
     _id: string;
     companyName: string;
     email: string;
+    mobileNumber?: string;
     profilePicture?: string;
     stripeCustomerId?: string; // Stripe Customer ID
     companyId?: mongoose.Types.ObjectId;

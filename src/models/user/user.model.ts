@@ -22,6 +22,11 @@ const userSchema = new Schema<IUser>(
                 'Please provide a valid email address'
             ]
         },
+        mobileNumber: {
+            type: String,
+            trim: true,
+            default: ''
+        },
         password: {
             type: String,
             required: [true, 'Password is required'],
