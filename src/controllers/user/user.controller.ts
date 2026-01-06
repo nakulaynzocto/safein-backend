@@ -232,4 +232,14 @@ export class UserController {
   static async logout(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     ResponseUtil.success(res, 'Logout successful');
   }
+
+  /**
+   * Exchange Impersonation Token
+   */
+  @TryCatch('Failed to exchange impersonation token')
+  static async exchangeImpersonationToken(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { code } = req.body;
+    const result = await UserService.exchangeImpersonationToken(code);
+    ResponseUtil.success(res, 'Impersonation secure exchange successful', result);
+  }
 }

@@ -32,6 +32,7 @@ router.delete('/users/:id/subscription', controller.cancelSubscription);
 router.get('/users/:id/subscription-history', controller.getSubscriptionHistory);
 router.put('/users/:id', controller.updateUser); // Status/Role update
 router.delete('/users/:id', controller.deleteUser);
+router.post('/users/:id/impersonate', controller.impersonateUser);
 
 // Subscriptions
 router.get('/subscriptions', controller.getSubscriptionPlans);

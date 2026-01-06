@@ -15,6 +15,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
 import { RedisOtpService } from '../redis/redisOtp.service';
+import { getRedisClient } from '../../config/redis.config';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
 import * as crypto from 'crypto';
@@ -460,5 +461,41 @@ export class UserService {
       // Don't fail the reset if email fails
       console.error('Failed to send password reset confirmation email:', error);
     }
+  }
+  // Exchange Impersonation Token
+  static async exchangeImpersonationToken(code: string): Promise<{ user: IUserResponse; token: string }> {
+    const redisClient = getRedisClient();
+    const redisKey = `impersonate_code:${code}`;
+
+    // 1. Get userId from Redis
+    const userId = await redisClient.get(redisKey);
+
+    if (!userId) {
+      throw new AppError('Invalid or expired impersonation code', ERROR_CODES.UNAUTHORIZED);
+    }
+
+    // 2. DELETE key immediately (Burn after reading)
+    await redisClient.del(redisKey);
+
+    // 3. Find User
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    if (!user.isActive) {
+      throw new AppError('User account is disabled', ERROR_CODES.UNAUTHORIZED);
+    }
+
+    // 4. Generate Session Token
+    const token = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email
+    });
+
+    return {
+      user: user.getPublicProfile(),
+      token
+    };
   }
 }

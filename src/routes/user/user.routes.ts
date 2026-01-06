@@ -68,6 +68,11 @@ router.post('/resend-otp',
     asyncWrapper(UserController.resendOtp)
 );
 
+router.post('/exchange-impersonation-token',
+    authLimiter,
+    asyncWrapper(UserController.exchangeImpersonationToken)
+);
+
 router.use(protect);
 router.use(userLimiter);
 

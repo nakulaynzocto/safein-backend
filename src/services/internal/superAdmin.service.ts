@@ -11,6 +11,8 @@ import { ERROR_CODES } from '../../utils/constants';
 import { UserService } from '../user/user.service';
 import { SubscriptionPlanService } from '../subscription/subscription.service';
 import { AuditLog } from '../../models/auditLog/auditLog.model';
+import * as crypto from 'crypto';
+import { getRedisClient } from '../../config/redis.config';
 
 export class SuperAdminService {
 
@@ -567,5 +569,26 @@ export class SuperAdminService {
         });
 
         return { message: 'Subscription cancelled successfully' };
+    }
+    // Impersonate User - Generate OTC
+    static async impersonateUser(userId: string) {
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        // Generate random 32-byte code
+        const code = crypto.randomBytes(32).toString('hex');
+
+        // Store in Redis with 60s expiration (Atomic operation)
+        const redisKey = `impersonate_code:${code}`;
+        const redisClient = getRedisClient();
+
+        // Store userId as value
+        await redisClient.set(redisKey, user._id.toString(), 'EX', 60);
+
+        return {
+            code // Return ONLY the code, not the token
+        };
     }
 }

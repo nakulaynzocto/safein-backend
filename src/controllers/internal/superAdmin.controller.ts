@@ -114,4 +114,9 @@ export class SuperAdminController {
         const result = await SuperAdminService.cancelSubscription(req.params.id);
         ResponseUtil.success(res, 'Subscription cancelled successfully', result);
     }
+    @TryCatch('Failed to impersonate user')
+    public async impersonateUser(req: Request, res: Response, _next: NextFunction) {
+        const result = await SuperAdminService.impersonateUser(req.params.id);
+        ResponseUtil.success(res, 'Impersonation token generated successfully', result);
+    }
 }
