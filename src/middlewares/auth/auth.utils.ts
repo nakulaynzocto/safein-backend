@@ -58,6 +58,7 @@ export const authenticateWithMasterToken = (req: Request) => {
 
         return {
             _id: decoded.sub,
+            companyName: decoded.companyName || decoded.name,
             email: decoded.email,
             roles: [decoded.role || 'superadmin'],
             isActive: true,

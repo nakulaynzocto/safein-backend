@@ -1,5 +1,5 @@
-import { Response } from 'express';
-import { ERROR_CODES } from './constants';
+import { Response } from "express";
+import { ERROR_CODES } from "./constants";
 
 export interface ApiResponse<T = any> {
     success: boolean;
@@ -17,7 +17,7 @@ export class ResponseUtil {
         res: Response,
         message: string,
         data?: T,
-        statusCode: number = ERROR_CODES.OK
+        statusCode: number = ERROR_CODES.OK,
     ): Response<ApiResponse<T>> {
         return res.status(statusCode).json({
             success: true,
@@ -34,7 +34,7 @@ export class ResponseUtil {
         res: Response,
         message: string,
         statusCode: number = ERROR_CODES.INTERNAL_SERVER_ERROR,
-        error?: string
+        error?: string,
     ): Response<ApiResponse> {
         return res.status(statusCode).json({
             success: false,
@@ -47,11 +47,7 @@ export class ResponseUtil {
     /**
      * Send created response
      */
-    static created<T>(
-        res: Response,
-        message: string,
-        data?: T
-    ): Response<ApiResponse<T>> {
+    static created<T>(res: Response, message: string, data?: T): Response<ApiResponse<T>> {
         return res.status(ERROR_CODES.CREATED).json({
             success: true,
             message,
@@ -63,10 +59,7 @@ export class ResponseUtil {
     /**
      * Send not found response
      */
-    static notFound(
-        res: Response,
-        message: string = 'Resource not found'
-    ): Response<ApiResponse> {
+    static notFound(res: Response, message: string = "Resource not found"): Response<ApiResponse> {
         return res.status(ERROR_CODES.NOT_FOUND).json({
             success: false,
             message,
@@ -77,10 +70,7 @@ export class ResponseUtil {
     /**
      * Send unauthorized response
      */
-    static unauthorized(
-        res: Response,
-        message: string = 'Unauthorized access'
-    ): Response<ApiResponse> {
+    static unauthorized(res: Response, message: string = "Unauthorized access"): Response<ApiResponse> {
         return res.status(ERROR_CODES.UNAUTHORIZED).json({
             success: false,
             message,
@@ -91,10 +81,7 @@ export class ResponseUtil {
     /**
      * Send forbidden response
      */
-    static forbidden(
-        res: Response,
-        message: string = 'Forbidden access'
-    ): Response<ApiResponse> {
+    static forbidden(res: Response, message: string = "Forbidden access"): Response<ApiResponse> {
         return res.status(ERROR_CODES.FORBIDDEN).json({
             success: false,
             message,
@@ -105,10 +92,7 @@ export class ResponseUtil {
     /**
      * Send bad request response
      */
-    static badRequest(
-        res: Response,
-        message: string = 'Bad request'
-    ): Response<ApiResponse> {
+    static badRequest(res: Response, message: string = "Bad request"): Response<ApiResponse> {
         return res.status(ERROR_CODES.BAD_REQUEST).json({
             success: false,
             message,
@@ -119,10 +103,7 @@ export class ResponseUtil {
     /**
      * Send conflict response
      */
-    static conflict(
-        res: Response,
-        message: string = 'Resource conflict'
-    ): Response<ApiResponse> {
+    static conflict(res: Response, message: string = "Resource conflict"): Response<ApiResponse> {
         return res.status(ERROR_CODES.CONFLICT).json({
             success: false,
             message,

@@ -4,6 +4,7 @@ export interface IAuditLog extends Document {
     action: string;
     actor: {
         id?: string;
+        name?: string;
         email?: string;
         role: string;
         ip?: string;
@@ -23,6 +24,7 @@ const auditLogSchema = new Schema<IAuditLog>({
     action: { type: String, required: true },
     actor: {
         id: { type: String },
+        name: { type: String },
         email: { type: String },
         role: { type: String, required: true },
         ip: { type: String },

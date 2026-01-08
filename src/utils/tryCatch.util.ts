@@ -1,9 +1,9 @@
-import { AppError } from '../middlewares/errorHandler';
-import { ERROR_CODES } from './constants';
+import { AppError } from "../middlewares/errorHandler";
+import { ERROR_CODES } from "./constants";
 
 export const tryCatch = async <T>(
     operation: () => Promise<T>,
-    errorMessage: string = 'Operation failed'
+    errorMessage: string = "Operation failed",
 ): Promise<T> => {
     try {
         return await operation();

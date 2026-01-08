@@ -19,9 +19,20 @@ export interface IVisitor extends Document {
     phone: string;
     company: string;
     designation: string;
+    gender?: 'male' | 'female' | 'other';
     address: IAddress;
     idProof: IIdProof;
     photo?: string;
+
+    // Safety & Categorization
+    blacklisted: boolean;
+    blacklistReason?: string;
+    tags?: string[];
+    emergencyContact?: {
+        name: string;
+        phone: string;
+    };
+
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the visitor
     isDeleted: boolean;
     deletedAt?: Date;
@@ -36,7 +47,7 @@ const addressSchema = new Schema<IAddress>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -74,7 +85,7 @@ const idProofSchema = new Schema<IIdProof>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -88,7 +99,7 @@ const idProofSchema = new Schema<IIdProof>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -125,6 +136,18 @@ const visitorSchema = new Schema<IVisitor>({
         trim: true,
         match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
     },
+    designation: {
+        type: String,
+        trim: true,
+        maxlength: [100, 'Designation cannot exceed 100 characters']
+    },
+    gender: {
+        type: String,
+        enum: {
+            values: ['male', 'female', 'other'],
+            message: 'Gender must be one of: male, female, other'
+        }
+    },
     address: {
         type: addressSchema,
         required: [true, 'Address is required']
@@ -137,6 +160,22 @@ const visitorSchema = new Schema<IVisitor>({
         type: String,
         trim: true,
         maxlength: [500, 'Photo URL cannot exceed 500 characters']
+    },
+    blacklisted: {
+        type: Boolean,
+        default: false
+    },
+    blacklistReason: {
+        type: String,
+        trim: true
+    },
+    tags: [{
+        type: String,
+        trim: true
+    }],
+    emergencyContact: {
+        name: { type: String, trim: true },
+        phone: { type: String, trim: true }
     },
     createdBy: {
         type: Schema.Types.ObjectId,

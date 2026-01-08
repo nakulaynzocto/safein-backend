@@ -2,6 +2,7 @@ import { AuditLog } from '../../models/auditLog/auditLog.model';
 
 export interface IAuditActor {
     id?: string;
+    name?: string;
     email?: string;
     role: string;
     ip?: string;

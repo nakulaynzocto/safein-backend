@@ -18,6 +18,8 @@ export interface IUser extends Document {
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: string;
+    createdBy?: string;
+    updatedBy?: string;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -52,6 +54,7 @@ export interface IUpdateUserDTO {
     roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
+    updatedBy?: string;
 }
 
 export interface ILoginDTO {
@@ -91,6 +94,8 @@ export interface IUserResponse {
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: string;
+    createdBy?: string;
+    updatedBy?: string;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;

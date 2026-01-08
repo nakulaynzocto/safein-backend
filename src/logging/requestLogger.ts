@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { logger } from './logger';
+import { Request, Response, NextFunction } from "express";
+import { logger } from "./logger";
 
 declare global {
     namespace Express {
@@ -19,22 +19,22 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
         query: req.query,
         params: req.params,
         headers: {
-            'user-agent': req.get('User-Agent'),
-            'content-type': req.get('Content-Type'),
-            'authorization': req.get('Authorization') ? '[REDACTED]' : undefined,
-            'x-forwarded-for': req.get('X-Forwarded-For'),
-            'x-real-ip': req.get('X-Real-IP')
-        }
+            "user-agent": req.get("User-Agent"),
+            "content-type": req.get("Content-Type"),
+            authorization: req.get("Authorization") ? "[REDACTED]" : undefined,
+            "x-forwarded-for": req.get("X-Forwarded-For"),
+            "x-real-ip": req.get("X-Real-IP"),
+        },
     };
 
     logger.logRequest({
-        type: 'REQUEST',
+        type: "REQUEST",
         method: req.method,
         url: req.originalUrl,
-        requestId: req.requestId || 'unknown',
-        userAgent: req.get('User-Agent'),
+        requestId: req.requestId || "unknown",
+        userAgent: req.get("User-Agent"),
         ip: req.ip || req.connection.remoteAddress,
-        requestPayload: logger.sanitizePayload(requestPayload)
+        requestPayload: logger.sanitizePayload(requestPayload),
     });
 
     const originalJson = res.json;
@@ -42,15 +42,15 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
         const responseTime = req.startTime ? Date.now() - req.startTime : undefined;
 
         logger.logResponse({
-            type: 'RESPONSE',
+            type: "RESPONSE",
             method: req.method,
             url: req.originalUrl,
             statusCode: res.statusCode,
-            requestId: req.requestId || 'unknown',
-            userAgent: req.get('User-Agent'),
+            requestId: req.requestId || "unknown",
+            userAgent: req.get("User-Agent"),
             ip: req.ip || req.connection.remoteAddress,
             responsePayload: logger.sanitizePayload(body),
-            responseTime: responseTime
+            responseTime: responseTime,
         });
 
         return originalJson.call(this, body);
@@ -61,15 +61,15 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
         const responseTime = req.startTime ? Date.now() - req.startTime : undefined;
 
         logger.logResponse({
-            type: 'RESPONSE',
+            type: "RESPONSE",
             method: req.method,
             url: req.originalUrl,
             statusCode: res.statusCode,
-            requestId: req.requestId || 'unknown',
-            userAgent: req.get('User-Agent'),
+            requestId: req.requestId || "unknown",
+            userAgent: req.get("User-Agent"),
             ip: req.ip || req.connection.remoteAddress,
             responsePayload: logger.sanitizePayload(body),
-            responseTime: responseTime
+            responseTime: responseTime,
         });
 
         return originalSend.call(this, body);
@@ -82,22 +82,22 @@ export const errorLogger = (error: Error, req: Request, res: Response, next: Nex
     const responseTime = req.startTime ? Date.now() - req.startTime : undefined;
 
     logger.logError({
-        type: 'ERROR',
+        type: "ERROR",
         method: req.method,
         url: req.originalUrl,
         statusCode: res.statusCode || 500,
-        requestId: req.requestId || 'unknown',
-        userAgent: req.get('User-Agent'),
+        requestId: req.requestId || "unknown",
+        userAgent: req.get("User-Agent"),
         ip: req.ip || req.connection.remoteAddress,
         requestPayload: logger.sanitizePayload({
             body: req.body,
             query: req.query,
-            params: req.params
+            params: req.params,
         }),
         error: error.message,
         message: error.message,
         stack: error.stack,
-        responseTime: responseTime
+        responseTime: responseTime,
     });
 
     next(error);

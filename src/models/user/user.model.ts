@@ -84,6 +84,16 @@ const userSchema = new Schema<IUser>(
             ref: 'User',
             default: null
         },
+        createdBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
+        updatedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        },
         lastLoginAt: {
             type: Date
         },

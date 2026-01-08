@@ -45,6 +45,12 @@ router.get('/audit-logs', controller.getAuditLogs);
 // Controls
 router.post('/feature-toggle', controller.toggleFeature);
 
+// Support Inquiries
+router.get('/inquiries', controller.getInquiries.bind(controller));
+router.patch('/inquiries/:id/status', controller.updateInquiryStatus.bind(controller));
+router.post('/inquiries/:id/mark-viewed', controller.markInquiryAsViewed.bind(controller));
+router.delete('/inquiries/:id', controller.deleteInquiry.bind(controller));
+
 // File Upload (Internal)
 router.post(
     '/upload',

@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response } from "express";
 
 export interface ErrorResponse {
     success: false;
@@ -14,12 +14,12 @@ export const sendErrorResponse = (
     res: Response,
     message: string,
     statusCode: number,
-    error?: string
+    error?: string,
 ): Response<ErrorResponse> => {
     return res.status(statusCode).json({
         success: false,
         message,
         statusCode,
-        ...(error && { error })
+        ...(error && { error }),
     });
 };

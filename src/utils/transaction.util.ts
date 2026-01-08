@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 export class TransactionUtil {
     /**
@@ -6,9 +6,7 @@ export class TransactionUtil {
      * @param operations - Array of operations to execute within the transaction
      * @returns Promise with the results of all operations
      */
-    static async executeTransaction<T>(
-        operations: (session: mongoose.ClientSession) => Promise<T>
-    ): Promise<T> {
+    static async executeTransaction<T>(operations: (session: mongoose.ClientSession) => Promise<T>): Promise<T> {
         const session = await mongoose.startSession();
 
         try {
@@ -32,7 +30,7 @@ export class TransactionUtil {
      * @returns Promise with array of results
      */
     static async executeMultipleOperations<T>(
-        operations: Array<(session: mongoose.ClientSession) => Promise<T>>
+        operations: Array<(session: mongoose.ClientSession) => Promise<T>>,
     ): Promise<T[]> {
         const session = await mongoose.startSession();
 

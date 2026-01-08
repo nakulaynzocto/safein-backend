@@ -37,6 +37,7 @@ export const auditLogger = (req: Request, res: Response, next: NextFunction) => 
             // Actor - Use req.user if populated by masterToken.middleware (or other auth middleware)
             const actor = {
                 id: (req as any).user?._id?.toString() || undefined,
+                name: (req as any).user?.companyName || (req as any).user?.name || undefined,
                 email: (req as any).user?.email || undefined,
                 role: (req as any).user?.roles?.[0] || 'super_admin_api',
                 ip: req.ip,

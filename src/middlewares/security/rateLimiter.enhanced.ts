@@ -186,3 +186,26 @@ export const createUserRateLimiter = (): RateLimitRequestHandler => {
 };
 
 export const userLimiter = createUserRateLimiter();
+
+/**
+ * Support Inquiry Rate Limiter
+ * - 2 submissions per 24 hours per IP/Email
+ * - Prevents spamming of contact form
+ */
+export const supportInquiryLimiter: RateLimitRequestHandler = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 2,
+  store: getRedisStore(),
+  keyGenerator: (req: Request): string => {
+    // Priority: Email (if in body) > IP
+    return req.body?.email || req.ip || 'unknown';
+  },
+  message: {
+    success: false,
+    message: 'You have reached the daily limit for support inquiries. Please try again tomorrow.',
+    statusCode: ERROR_CODES.TOO_MANY_REQUESTS
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isDevelopment && false, // Don't skip in dev if testing rate limit
+});

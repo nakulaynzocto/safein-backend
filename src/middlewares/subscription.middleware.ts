@@ -1,9 +1,9 @@
-import { Response, NextFunction } from 'express';
-import { UserSubscriptionService } from '../services/userSubscription/userSubscription.service';
-import { AuthenticatedRequest } from './auth.middleware';
-import { AppError } from './errorHandler';
-import { ERROR_CODES } from '../utils/constants';
-import { IUserSubscriptionResponse } from '../types/userSubscription/userSubscription.types';
+import { Response, NextFunction } from "express";
+import { UserSubscriptionService } from "../services/userSubscription/userSubscription.service";
+import { AuthenticatedRequest } from "./auth.middleware";
+import { AppError } from "./errorHandler";
+import { ERROR_CODES } from "../utils/constants";
+import { IUserSubscriptionResponse } from "../types/userSubscription/userSubscription.types";
 
 /**
  * Middleware to check if user has premium subscription
@@ -12,21 +12,18 @@ import { IUserSubscriptionResponse } from '../types/userSubscription/userSubscri
 export const checkPremiumSubscription = async (
     req: AuthenticatedRequest,
     _res: Response,
-    next: NextFunction
+    next: NextFunction,
 ): Promise<void> => {
     try {
         if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+            throw new AppError("User not authenticated", ERROR_CODES.UNAUTHORIZED);
         }
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
-        const hasPremium = activeSubscription && activeSubscription.planType !== 'free';
+        const hasPremium = activeSubscription && activeSubscription.planType !== "free";
 
         if (!hasPremium) {
-            throw new AppError(
-                'Premium subscription required to access this feature',
-                ERROR_CODES.FORBIDDEN
-            );
+            throw new AppError("Premium subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 
         req.isPremiumUser = true;
@@ -43,24 +40,21 @@ export const checkPremiumSubscription = async (
 export const checkActiveSubscription = async (
     req: AuthenticatedRequest,
     _res: Response,
-    next: NextFunction
+    next: NextFunction,
 ): Promise<void> => {
     try {
         if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+            throw new AppError("User not authenticated", ERROR_CODES.UNAUTHORIZED);
         }
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
-            throw new AppError(
-                'Active subscription required to access this feature',
-                ERROR_CODES.FORBIDDEN
-            );
+            throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 
         req.activeSubscription = activeSubscription;
-        req.isPremiumUser = activeSubscription.planType !== 'free';
+        req.isPremiumUser = activeSubscription.planType !== "free";
         next();
     } catch (error) {
         next(error);
@@ -68,34 +62,24 @@ export const checkActiveSubscription = async (
 };
 
 export const checkSpecificPlan = (requiredPlanType: string) => {
-    return async (
-        req: AuthenticatedRequest,
-        _res: Response,
-        next: NextFunction
-    ): Promise<void> => {
+    return async (req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> => {
         try {
             if (!req.user) {
-                throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+                throw new AppError("User not authenticated", ERROR_CODES.UNAUTHORIZED);
             }
 
             const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
             if (!activeSubscription) {
-                throw new AppError(
-                    'Active subscription required to access this feature',
-                    ERROR_CODES.FORBIDDEN
-                );
+                throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
             }
 
             if (activeSubscription.planType !== requiredPlanType) {
-                throw new AppError(
-                    'Specific subscription plan required to access this feature',
-                    ERROR_CODES.FORBIDDEN
-                );
+                throw new AppError("Specific subscription plan required to access this feature", ERROR_CODES.FORBIDDEN);
             }
 
             req.activeSubscription = activeSubscription;
-            req.isPremiumUser = activeSubscription.planType !== 'free';
+            req.isPremiumUser = activeSubscription.planType !== "free";
             next();
         } catch (error) {
             next(error);
@@ -106,31 +90,25 @@ export const checkSpecificPlan = (requiredPlanType: string) => {
 export const checkTrialSubscription = async (
     req: AuthenticatedRequest,
     _res: Response,
-    next: NextFunction
+    next: NextFunction,
 ): Promise<void> => {
     try {
         if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+            throw new AppError("User not authenticated", ERROR_CODES.UNAUTHORIZED);
         }
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
         if (!activeSubscription) {
-            throw new AppError(
-                'Active subscription required to access this feature',
-                ERROR_CODES.FORBIDDEN
-            );
+            throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 
         if (!activeSubscription.isTrialing) {
-            throw new AppError(
-                'Trial subscription required to access this feature',
-                ERROR_CODES.FORBIDDEN
-            );
+            throw new AppError("Trial subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 
         req.activeSubscription = activeSubscription;
-        req.isPremiumUser = activeSubscription.planType !== 'free';
+        req.isPremiumUser = activeSubscription.planType !== "free";
         next();
     } catch (error) {
         next(error);
@@ -140,7 +118,7 @@ export const checkTrialSubscription = async (
 export const addSubscriptionInfo = async (
     req: AuthenticatedRequest,
     _res: Response,
-    next: NextFunction
+    next: NextFunction,
 ): Promise<void> => {
     try {
         if (!req.user) {
@@ -151,7 +129,7 @@ export const addSubscriptionInfo = async (
 
         if (activeSubscription) {
             req.activeSubscription = activeSubscription;
-            req.isPremiumUser = activeSubscription.planType !== 'free';
+            req.isPremiumUser = activeSubscription.planType !== "free";
         } else {
             req.isPremiumUser = false;
         }
