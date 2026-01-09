@@ -1,7 +1,7 @@
 import { AppError } from '../../middlewares/errorHandler';
 import { uploadToCloudinary, UPLOAD_CONFIG } from '../../utils/cloudinary';
 import { validateUploadRequest } from '../../utils/upload-helpers';
-import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
+import { ERROR_CODES } from '../../utils/constants';
 import sharp from 'sharp';
 
 /**
@@ -87,18 +87,13 @@ export class UploadService {
         }
       }
 
-      const originalSizeKB = (file.size / 1024).toFixed(2);
-      const compressedSizeKB = (compressedBuffer.length / 1024).toFixed(2);
 
-      if (CONSTANTS.NODE_ENV === 'development') {
-        console.log(`✓ Image compressed: ${file.originalname} from ${originalSizeKB}KB to ${compressedSizeKB}KB`);
-      }
+
+
 
       return compressedBuffer;
     } catch (error: any) {
-      if (CONSTANTS.NODE_ENV === 'development') {
-        console.warn(`⚠ Compression failed for ${file.originalname}, using original:`, error.message);
-      }
+
       // Return original buffer if compression fails
       return file.buffer;
     }
@@ -180,10 +175,8 @@ export class UploadService {
       )
       .map(result => result.value);
 
-    const failures = results.filter(result => result.status === 'rejected');
-    if (failures.length > 0 && CONSTANTS.NODE_ENV === 'development') {
-      console.error(`✗ ${failures.length} file(s) failed to upload`);
-    }
+
+
 
     return successful;
   }

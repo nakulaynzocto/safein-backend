@@ -14,9 +14,7 @@ const redisClient = new Redis(redisUrl, {
 });
 
 redisClient.on("connect", () => {
-    if (CONSTANTS.NODE_ENV === "development") {
-        console.log("✓ Redis client connected");
-    }
+
 });
 
 redisClient.on("error", (error) => {
@@ -24,9 +22,7 @@ redisClient.on("error", (error) => {
 });
 
 redisClient.on("close", () => {
-    if (CONSTANTS.NODE_ENV === "development") {
-        console.log("⊗ Redis connection closed");
-    }
+
 });
 
 export const connectRedis = async (): Promise<Redis> => {

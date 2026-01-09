@@ -265,6 +265,15 @@ export class UserService {
     if (updateData.isActive !== undefined) {
       safeUpdateData.isActive = updateData.isActive;
     }
+    if (updateData.bio !== undefined) {
+      safeUpdateData.bio = updateData.bio;
+    }
+    if (updateData.address !== undefined) {
+      safeUpdateData.address = updateData.address;
+    }
+    if (updateData.socialLinks !== undefined) {
+      safeUpdateData.socialLinks = updateData.socialLinks;
+    }
 
     delete (safeUpdateData as any).session;
 
@@ -317,9 +326,6 @@ export class UserService {
   }> {
     const skip = (page - 1) * limit;
     const matchStage: any = includeDeleted ? {} : { isDeleted: false };
-
-    // Calculate Today's Date Range (Start to End of Day in UTC or Local? stored as Date usually UTC)
-    // To match "Today" precisely, we usually take start of day 00:00:00 to 23:59:59
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
@@ -379,11 +385,6 @@ export class UserService {
       User.countDocuments(matchStage) // Total count for pagination remains same
     ]);
 
-    // Format output (removing passwords, etc.) - Although aggregation usually doesn't select password if field select not used, but User model has select: false for password.
-    // However, aggregation returns POJOs, not Mongoose Documents, so virtuals might not apply automatically unless we hydrate or map manually.
-    // The `getPublicProfile` method is on the Mongoose Document instance. 
-    // Since we need to append `appointmentsTodayCount`, we can map carefully.
-
     const usersFormatted = users.map(u => {
       // Reconstruct minimal expected public profile + count
       return {
@@ -393,10 +394,6 @@ export class UserService {
         profilePicture: u.profilePicture || "",
         isActive: u.isActive,
         isEmailVerified: u.isEmailVerified,
-        // ... include other necessary fields manually or logic
-        // Safer way: hydrate to use getPublicProfile if needed, but aggregation result might differ slightly directly
-        // Better:
-        // Use the raw data but clean sensitive fields
 
         ...u,
         password: undefined,
@@ -404,24 +401,8 @@ export class UserService {
         resetPasswordExpires: undefined,
         todayAppointments: undefined, // cleanup temp field
         activeSubscriptionId: u.activeSubscriptionId ? { endDate: u.activeSubscriptionId.endDate /* we need to lookup subscription too if needed */ } : undefined
-        // Wait, User table uses `activeSubscriptionId` for "Days Remaining".
-        // The original `getAllUsers` didn't populate `activeSubscriptionId`. 
-        // Let me check frontend `UserTable` again. `activeSubscriptionId` in interface has `endDate`.
-        // The previous `getAllUsers` did NOT populate `activeSubscriptionId`.
-        // So where did `activeSubscriptionId.endDate` come from? 
-        // Ah, `User` model defines `activeSubscriptionId` as ObjectId.
-        // Frontend uses it. If backend didn't populate it, frontend would crash or show "No Plan".
-        // BUT the screenshot SHOWS "Days Remaining".
-        // So `activeSubscriptionId` MUST have been populated or the `User` object had it embedded?
-        // Let's check `User` model in Gatekeeper.
       };
     });
-
-    // RE-CHECK: Does `getAllUsers` populate `activeSubscriptionId`?
-    // Original code: .populate('deletedBy', ...)
-    // It did NOT populate `activeSubscriptionId`.
-    // Maybe `activeSubscriptionId` is an object in `User`?
-    // Let's check `User.model.ts` quickly before applying changes to avoid breaking "Days Remaining".
 
     return {
       users: usersFormatted, // returning as-is with cleanup

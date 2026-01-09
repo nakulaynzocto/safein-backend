@@ -59,6 +59,22 @@ const userSchema = new Schema<IUser>(
             type: String,
             trim: true
         },
+        bio: {
+            type: String,
+            trim: true
+        },
+        address: {
+            street: { type: String, trim: true },
+            city: { type: String, trim: true },
+            state: { type: String, trim: true },
+            country: { type: String, trim: true },
+            pincode: { type: String, trim: true }
+        },
+        socialLinks: {
+            linkedin: { type: String, trim: true },
+            twitter: { type: String, trim: true },
+            website: { type: String, trim: true }
+        },
         isEmailVerified: {
             type: Boolean,
             default: false

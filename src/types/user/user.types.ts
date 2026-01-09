@@ -16,15 +16,30 @@ export interface IUser extends Document {
     isPhoneVerified: boolean;
     isActive: boolean;
     isDeleted: boolean;
-    deletedAt?: Date;
-    deletedBy?: string;
-    createdBy?: string;
-    updatedBy?: string;
+    deletedAt: Date | null;
+    deletedBy: mongoose.Types.ObjectId | null;
+    createdBy: mongoose.Types.ObjectId | null;
+    updatedBy: mongoose.Types.ObjectId | null;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
-    activeSubscriptionId?: mongoose.Types.ObjectId;
-    stripeCustomerId?: string;
+    activeSubscriptionId?: mongoose.Types.ObjectId | { endDate: Date } | null;
+    stripeCustomerId?: string | null;
+
+    // Profile Fields
+    bio?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        pincode: string;
+    };
+    socialLinks?: {
+        linkedin?: string;
+        twitter?: string;
+        website?: string;
+    };
     passwordResetToken?: string;
     resetPasswordExpires?: Date;
 
@@ -50,6 +65,19 @@ export interface IUpdateUserDTO {
     mobileNumber?: string;
     isActive?: boolean;
     profilePicture?: string;
+    bio?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        pincode: string;
+    };
+    socialLinks?: {
+        linkedin?: string;
+        twitter?: string;
+        website?: string;
+    };
     companyId?: string;
     roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;

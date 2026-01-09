@@ -361,13 +361,16 @@ export class SuperAdminService {
     }
 
     static async updateUserProfile(id: string, payload: any, updatedBy?: string) {
-        const { companyName, designation, department, notifications } = payload;
+        const { companyName, designation, department, notifications, bio, address, socialLinks } = payload;
 
-        if (companyName || designation || department || payload.profilePicture) {
+        if (companyName || designation || department || payload.profilePicture || bio || address || socialLinks) {
             await UserService.updateUser(id, {
                 companyName,
                 designation,
                 department,
+                bio,
+                address,
+                socialLinks,
                 profilePicture: payload.profilePicture,
                 updatedBy: updatedBy || undefined
             });
