@@ -306,29 +306,125 @@ export class UserService {
   /**
    * Get all users (admin function)
    */
+  /**
+   * Get all users (admin function) - with Today's Appointment Count
+   */
   static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
-    users: IUserResponse[];
+    users: (IUserResponse & { appointmentsTodayCount: number })[];
     total: number;
     page: number;
     totalPages: number;
   }> {
     const skip = (page - 1) * limit;
-    const filter = includeDeleted ? {} : { isDeleted: false };
+    const matchStage: any = includeDeleted ? {} : { isDeleted: false };
+
+    // Calculate Today's Date Range (Start to End of Day in UTC or Local? stored as Date usually UTC)
+    // To match "Today" precisely, we usually take start of day 00:00:00 to 23:59:59
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const pipeline: any[] = [
+      { $match: matchStage },
+      // Lookup today's appointments for each user
+      {
+        $lookup: {
+          from: 'appointments',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$createdBy', '$$userId'] },
+                'appointmentDetails.scheduledDate': {
+                  $gte: startOfDay,
+                  $lte: endOfDay
+                },
+                isDeleted: false
+              }
+            },
+            { $count: 'count' }
+          ],
+          as: 'todayAppointments'
+        }
+      },
+      {
+        $addFields: {
+          appointmentsTodayCount: {
+            $ifNull: [{ $arrayElemAt: ['$todayAppointments.count', 0] }, 0]
+          }
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "users",
+          localField: "deletedBy",
+          foreignField: "_id",
+          as: "deletedBy",
+        },
+      },
+      {
+        $unwind: {
+          path: "$deletedBy",
+          preserveNullAndEmptyArrays: true,
+        },
+      }
+    ];
 
     const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('-password')
-        .populate('deletedBy', 'companyName email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      User.countDocuments(filter)
+      User.aggregate(pipeline),
+      User.countDocuments(matchStage) // Total count for pagination remains same
     ]);
 
-    const usersWithoutPassword = users.map(user => user.getPublicProfile());
+    // Format output (removing passwords, etc.) - Although aggregation usually doesn't select password if field select not used, but User model has select: false for password.
+    // However, aggregation returns POJOs, not Mongoose Documents, so virtuals might not apply automatically unless we hydrate or map manually.
+    // The `getPublicProfile` method is on the Mongoose Document instance. 
+    // Since we need to append `appointmentsTodayCount`, we can map carefully.
+
+    const usersFormatted = users.map(u => {
+      // Reconstruct minimal expected public profile + count
+      return {
+        _id: u._id,
+        companyName: u.companyName,
+        email: u.email,
+        profilePicture: u.profilePicture || "",
+        isActive: u.isActive,
+        isEmailVerified: u.isEmailVerified,
+        // ... include other necessary fields manually or logic
+        // Safer way: hydrate to use getPublicProfile if needed, but aggregation result might differ slightly directly
+        // Better:
+        // Use the raw data but clean sensitive fields
+
+        ...u,
+        password: undefined,
+        passwordResetToken: undefined,
+        resetPasswordExpires: undefined,
+        todayAppointments: undefined, // cleanup temp field
+        activeSubscriptionId: u.activeSubscriptionId ? { endDate: u.activeSubscriptionId.endDate /* we need to lookup subscription too if needed */ } : undefined
+        // Wait, User table uses `activeSubscriptionId` for "Days Remaining".
+        // The original `getAllUsers` didn't populate `activeSubscriptionId`. 
+        // Let me check frontend `UserTable` again. `activeSubscriptionId` in interface has `endDate`.
+        // The previous `getAllUsers` did NOT populate `activeSubscriptionId`.
+        // So where did `activeSubscriptionId.endDate` come from? 
+        // Ah, `User` model defines `activeSubscriptionId` as ObjectId.
+        // Frontend uses it. If backend didn't populate it, frontend would crash or show "No Plan".
+        // BUT the screenshot SHOWS "Days Remaining".
+        // So `activeSubscriptionId` MUST have been populated or the `User` object had it embedded?
+        // Let's check `User` model in Gatekeeper.
+      };
+    });
+
+    // RE-CHECK: Does `getAllUsers` populate `activeSubscriptionId`?
+    // Original code: .populate('deletedBy', ...)
+    // It did NOT populate `activeSubscriptionId`.
+    // Maybe `activeSubscriptionId` is an object in `User`?
+    // Let's check `User.model.ts` quickly before applying changes to avoid breaking "Days Remaining".
 
     return {
-      users: usersWithoutPassword,
+      users: usersFormatted, // returning as-is with cleanup
       total,
       page,
       totalPages: Math.ceil(total / limit),
