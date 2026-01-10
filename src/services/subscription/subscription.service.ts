@@ -323,6 +323,25 @@ export class SubscriptionPlanService {
     }
 
     /**
+     * Calculate duration in days based on plan type
+     */
+    private static calculateDuration(planType: string): number {
+        switch (planType) {
+            case 'weekly':
+                return 7;
+            case 'monthly':
+                return 30;
+            case 'quarterly':
+                return 90;
+            case 'yearly':
+                return 365;
+            case 'free':
+            default:
+                return 30; // default to 30 days
+        }
+    }
+
+    /**
      * Format subscription plan response
      */
     private static formatSubscriptionPlanResponse(plan: any): ISubscriptionPlanResponse {
@@ -343,7 +362,7 @@ export class SubscriptionPlanService {
             discountPercentage: plan.discountPercentage,
             metadata: plan.metadata,
             formattedPrice: plan.formattedPrice,
-            duration: plan.duration,
+            duration: plan.duration || SubscriptionPlanService.calculateDuration(plan.planType),
             taxAmount: Math.round(((plan.amount || 0) * (plan.taxPercentage || 0)) / 100),
             totalAmount: plan.totalAmount || Math.round((plan.amount || 0) + ((plan.amount || 0) * (plan.taxPercentage || 0)) / 100), // Calculate if virtual missing (lean)
             monthlyEquivalent: plan.monthlyEquivalent,
