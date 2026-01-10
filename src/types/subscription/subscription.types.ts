@@ -10,6 +10,7 @@ export interface ISubscriptionPlan extends Document {
     description?: string;
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     amount: number; // in cents
+    taxPercentage: number;
     currency: string;
     features: string[];
     isActive: boolean;
@@ -29,6 +30,7 @@ export interface ICreateSubscriptionPlanDTO {
     description?: string;
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     amount: number;
+    taxPercentage?: number;
     currency?: string;
     features: string[];
     isActive?: boolean;
@@ -43,6 +45,7 @@ export interface IUpdateSubscriptionPlanDTO {
     description?: string;
     planType?: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     amount?: number;
+    taxPercentage?: number;
     currency?: string;
     features?: string[];
     isActive?: boolean;
@@ -58,6 +61,8 @@ export interface ISubscriptionPlanResponse {
     description?: string;
     planType: string;
     amount: number;
+    taxPercentage: number;
+    taxAmount: number;
     currency: string;
     features: string[];
     isActive: boolean;
@@ -68,6 +73,8 @@ export interface ISubscriptionPlanResponse {
     discountPercentage?: number;
     metadata?: IMetadata;
     formattedPrice: string;
+    duration: number;
+    totalAmount: number;
     monthlyEquivalent: number;
     savingsPercentage: number;
     createdAt: Date;

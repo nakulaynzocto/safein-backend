@@ -36,6 +36,7 @@ export class SubscriptionPlanService {
         const subscriptionPlan = new SubscriptionPlan({
             ...planData,
             currency: planData.currency || 'usd',
+            taxPercentage: planData.taxPercentage || 0,
             isActive: planData.isActive ?? true,
             isPopular: planData.isPopular ?? false,
             trialDays: planData.trialDays || 0,
@@ -331,6 +332,7 @@ export class SubscriptionPlanService {
             description: plan.description,
             planType: plan.planType,
             amount: plan.amount, // Return as stored (Rupees)
+            taxPercentage: plan.taxPercentage || 0,
             currency: plan.currency,
             features: plan.features,
             isActive: plan.isActive,
@@ -341,6 +343,9 @@ export class SubscriptionPlanService {
             discountPercentage: plan.discountPercentage,
             metadata: plan.metadata,
             formattedPrice: plan.formattedPrice,
+            duration: plan.duration,
+            taxAmount: Math.round(((plan.amount || 0) * (plan.taxPercentage || 0)) / 100),
+            totalAmount: plan.totalAmount || Math.round((plan.amount || 0) + ((plan.amount || 0) * (plan.taxPercentage || 0)) / 100), // Calculate if virtual missing (lean)
             monthlyEquivalent: plan.monthlyEquivalent,
             savingsPercentage: plan.savingsPercentage,
             createdAt: plan.createdAt,

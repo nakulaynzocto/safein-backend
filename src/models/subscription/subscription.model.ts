@@ -10,6 +10,7 @@ export interface ISubscriptionPlan extends Document {
     description?: string;
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     amount: number; // in rupees (INR)
+    taxPercentage: number; // GST/Tax in percentage
     currency: string;
     features: string[];
     isActive: boolean;
@@ -56,6 +57,12 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
             type: Number,
             required: [true, 'Amount is required'],
             min: [0, 'Amount cannot be negative'],
+        },
+        taxPercentage: {
+            type: Number,
+            default: 0,
+            min: [0, 'Tax percentage cannot be negative'],
+            max: [100, 'Tax percentage cannot exceed 100'],
         },
         currency: {
             type: String,
@@ -167,6 +174,28 @@ subscriptionPlanSchema.virtual('savingsPercentage').get(function () {
         return 10;
     }
     return 0;
+});
+
+subscriptionPlanSchema.virtual('totalAmount').get(function () {
+    const tax = this.taxPercentage || 0;
+    const total = this.amount + (this.amount * tax) / 100;
+    return Math.round(total);
+});
+
+subscriptionPlanSchema.virtual('duration').get(function () {
+    switch (this.planType) {
+        case 'weekly':
+            return 7;
+        case 'monthly':
+            return 30;
+        case 'quarterly':
+            return 90;
+        case 'yearly':
+            return 365;
+        case 'free':
+        default:
+            return 30; // default to 30 days
+    }
 });
 
 subscriptionPlanSchema.methods.hasTrial = function (): boolean {
