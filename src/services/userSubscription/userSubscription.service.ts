@@ -136,6 +136,9 @@ export class UserSubscriptionService {
             }
 
             // Store purchase history
+            const taxPercentage = plan.taxPercentage || 0;
+            const taxAmount = (plan.amount * taxPercentage) / 100;
+
             const subscriptionHistory = new SubscriptionHistory({
                 userId: new mongoose.Types.ObjectId(userId),
                 subscriptionId: subscription._id as mongoose.Types.ObjectId,
@@ -151,7 +154,9 @@ export class UserSubscriptionService {
                 razorpayPaymentId: razorpayPaymentId || undefined,
                 // previousSubscriptionId: previousSubscriptionId,
                 // remainingDaysFromPrevious: remainingDaysFromPrevious,
-                source: 'user'
+                source: 'user',
+                taxAmount,
+                taxPercentage
             });
 
             await subscriptionHistory.save({ session });
@@ -532,6 +537,8 @@ export class UserSubscriptionService {
                 razorpayOrderId: item.razorpayOrderId,
                 razorpayPaymentId: item.razorpayPaymentId,
                 remainingDaysFromPrevious: item.remainingDaysFromPrevious || 0,
+                taxAmount: item.taxAmount || 0,
+                taxPercentage: item.taxPercentage || 0,
                 createdAt: item.createdAt,
             }));
         } catch (error) {

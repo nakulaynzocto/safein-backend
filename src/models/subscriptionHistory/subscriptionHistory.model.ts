@@ -16,6 +16,9 @@ export interface ISubscriptionHistory extends Document {
     previousSubscriptionId?: mongoose.Types.ObjectId; // Reference to previous subscription (if upgraded)
     remainingDaysFromPrevious?: number; // Days carried forward from previous subscription
     source?: 'user' | 'admin' | 'system'; // Who initiated the subscription
+    taxAmount?: number; // Tax amount included in the total
+    taxPercentage?: number; // Tax percentage applied
+    billingDetails?: Record<string, any>;
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     createdAt: Date;
@@ -94,6 +97,18 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
             type: String,
             enum: ['user', 'admin', 'system'],
             default: 'user', // Default to user for backward compatibility
+        },
+        taxAmount: {
+            type: Number,
+            default: 0,
+        },
+        taxPercentage: {
+            type: Number,
+            default: 0,
+        },
+        billingDetails: {
+            type: Object,
+            default: null,
         },
         isDeleted: {
             type: Boolean,

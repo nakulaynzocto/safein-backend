@@ -396,7 +396,6 @@ export class SuperAdminService {
 
     // Assign Subscription
     static async assignSubscription(id: string, payload: any) {
-        // Specific Super Admin Logic
         const { planId, startDate } = payload;
 
         const user = await User.findById(id);
@@ -479,8 +478,11 @@ export class SuperAdminService {
         }
 
         // Add history record for the specific purchased segment
+        const taxPercentage = plan.taxPercentage || 0;
+        const taxAmount = (plan.amount * taxPercentage) / 100;
+
         await SubscriptionHistory.create({
-            userId: id,
+            userId: user._id,
             subscriptionId: resultSubscriptionId,
             planType: plan.planType,
             planId: plan._id,
@@ -489,8 +491,12 @@ export class SuperAdminService {
             endDate: segmentEnd,
             amount: plan.amount || 0,
             currency: 'INR',
-            paymentStatus: 'succeeded',
-            source: 'admin',
+            // @ts-ignore
+            billingDetails: payload.billingDetails,
+            taxAmount,
+            taxPercentage,
+            paymentStatus: "succeeded", // Admin assigned is considered paid/free
+            source: "admin",
             isDeleted: false
         });
 
