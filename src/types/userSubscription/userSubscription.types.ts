@@ -23,6 +23,7 @@ export interface ICreateUserSubscriptionDTO {
     isActive?: boolean;
     paymentStatus?: 'pending' | 'succeeded' | 'failed' | 'cancelled';
     trialDays?: number;
+    planId?: string;
 }
 
 export interface IUpdateUserSubscriptionDTO {

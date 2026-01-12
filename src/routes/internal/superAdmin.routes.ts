@@ -60,4 +60,9 @@ router.post(
     asyncWrapper(UploadController.uploadFile)
 );
 
+// SafeIn Profile (Internal)
+import { SafeinProfileController } from '../../controllers/safeinProfile/safeinProfile.controller';
+router.get('/safein-profile', SafeinProfileController.getSafeinProfile);
+router.put('/safein-profile', SafeinProfileController.updateSafeinProfile);
+
 export default router;

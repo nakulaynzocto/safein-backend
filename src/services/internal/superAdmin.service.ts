@@ -14,6 +14,7 @@ import { SubscriptionPlanService } from '../subscription/subscription.service';
 import { AuditLog } from '../../models/auditLog/auditLog.model';
 import * as crypto from 'crypto';
 import { getRedisClient } from '../../config/redis.config';
+import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 
 export class SuperAdminService {
 
@@ -539,12 +540,13 @@ export class SuperAdminService {
                 .skip(skip)
                 .limit(limit)
                 .populate('planId', 'name')
+                .select('+billingDetails') // Explicitly include billingDetails
                 .lean(),
             SubscriptionHistory.countDocuments({ userId })
         ]);
 
         return {
-            docs: history,
+            docs: history.map(mapSubscriptionHistoryItem),
             total,
             page,
             limit,

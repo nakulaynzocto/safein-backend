@@ -10,6 +10,7 @@ import approvalLinkRoutes from "./approvalLink/approvalLink.routes";
 import appointmentBookingLinkRoutes from "./appointmentBookingLink/appointmentBookingLink.routes";
 import settingsRoutes from "./settings/settings.routes";
 import inquiryRoutes from "./inquiry/inquiry.routes";
+import safeinProfileRoutes from "./safeinProfile/safeinProfile.routes";
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use("/subscription-plans", subscriptionRoutes);
 router.use("/user-subscriptions", userSubscriptionRoutes);
 router.use("/upload", uploadRoutes);
 router.use("/settings", settingsRoutes);
+router.use("/safein-profile", safeinProfileRoutes);
 
 export default router;

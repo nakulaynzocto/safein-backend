@@ -18,7 +18,7 @@ export interface ISubscriptionHistory extends Document {
     source?: 'user' | 'admin' | 'system'; // Who initiated the subscription
     taxAmount?: number; // Tax amount included in the total
     taxPercentage?: number; // Tax percentage applied
-    billingDetails?: Record<string, any>;
+    billingDetails?: any; // Flexible structure
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     createdAt: Date;
@@ -107,8 +107,8 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
             default: 0,
         },
         billingDetails: {
-            type: Object,
-            default: null,
+            type: Schema.Types.Mixed, // Allow flexible structure to avoid validation errors
+            default: {}
         },
         isDeleted: {
             type: Boolean,

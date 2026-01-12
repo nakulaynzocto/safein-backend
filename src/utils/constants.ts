@@ -26,6 +26,22 @@ const CONSTANTS = {
     SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || "no-reply@safein.app",
     SKIP_SMTP_VERIFY: process.env.SKIP_SMTP_VERIFY === "true",
 
+    // Company Invoice Details
+    COMPANY_BILLING_DETAILS: {
+        name: "Aynzo Global Private Limited",
+        cin: "U62099PB2025PTC066099",
+        gstin: "29AANCA4679D1ZA",
+        address: {
+            street: "Registered Office Address",
+            city: "City",
+            state: "State",
+            country: "Country",
+            pincode: "000000"
+        },
+        email: "support@aynzo.com",
+        phone: "+91-XXXXXXXXXX"
+    },
+
     // Cloudinary Configuration
     ...getCloudinaryConfig(),
 };

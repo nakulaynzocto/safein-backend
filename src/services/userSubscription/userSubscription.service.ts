@@ -5,10 +5,12 @@ import { Employee } from '../../models/employee/employee.model';
 import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
 import { AppError } from '../../middlewares/errorHandler';
-import { ERROR_CODES } from '../../utils/constants';
+import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
 import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats, ITrialLimitsStatus } from '../../types/userSubscription/userSubscription.types';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
+import { SafeinProfileService } from '../safeinProfile/safeinProfile.service';
+import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 
 
 export class UserSubscriptionService {
@@ -156,7 +158,8 @@ export class UserSubscriptionService {
                 // remainingDaysFromPrevious: remainingDaysFromPrevious,
                 source: 'user',
                 taxAmount,
-                taxPercentage
+                taxPercentage,
+                billingDetails: await UserSubscriptionService.getBillingDetailsFromSafeinProfile()
             });
 
             await subscriptionHistory.save({ session });
@@ -274,6 +277,51 @@ export class UserSubscriptionService {
     }
 
     /**
+     * Helper to fetch billing details from SafeIn Profile
+     */
+    private static async getBillingDetailsFromSafeinProfile() {
+        try {
+            const profile = await SafeinProfileService.getSafeinProfile();
+
+            // Map SafeIn Profile (connected to BusinessProfiles) to Billing Details structure
+            const company = profile.companyDetails;
+
+            const billingDetails = {
+                companyDetails: {
+                    name: company?.name || CONSTANTS.COMPANY_BILLING_DETAILS.name,
+                    email: company?.email || CONSTANTS.COMPANY_BILLING_DETAILS.email,
+                    phone: company?.phone || CONSTANTS.COMPANY_BILLING_DETAILS.phone,
+                    cin: company?.cin,
+                    gstin: company?.gstin,
+                    pan: company?.pan,
+                    tan: company?.tan,
+                    address: company?.address || (CONSTANTS.COMPANY_BILLING_DETAILS.address as any).street,
+                    city: company?.city,
+                    state: company?.state,
+                    country: company?.country,
+                    postalCode: company?.postalCode,
+                    logo: company?.logo,
+                    signature: company?.signature,
+                },
+                bankDetails: profile.bankDetails,
+                invoiceConfig: {
+                    invoicePrefix: profile.documentSettings?.invoicePrefix,
+                    termsAndConditions: profile.defaults?.defaultTerms?.invoice
+                }
+            };
+            return billingDetails;
+        } catch (error) {
+            console.error('Error fetching SafeIn profile for billing details:', error);
+            // Return correctly structured fallback
+            return {
+                companyDetails: CONSTANTS.COMPANY_BILLING_DETAILS,
+                bankDetails: {},
+                invoiceConfig: {}
+            };
+        }
+    }
+
+    /**
      * Create a new user subscription.
      */
     static async createUserSubscription(
@@ -286,6 +334,33 @@ export class UserSubscriptionService {
             };
 
             const newSubscription = await UserSubscription.create(newSubscriptionData);
+
+            // If subscription is active and has a planId, create history (Invoice)
+            if (newSubscription.isActive && subscriptionData.planId) {
+                try {
+                    const plan = await SubscriptionPlan.findById(subscriptionData.planId);
+                    if (plan) {
+                        const subscriptionHistory = new SubscriptionHistory({
+                            userId: new mongoose.Types.ObjectId(subscriptionData.userId),
+                            subscriptionId: newSubscription._id as mongoose.Types.ObjectId,
+                            planType: plan.planType,
+                            planId: new mongoose.Types.ObjectId(subscriptionData.planId),
+                            purchaseDate: new Date(),
+                            startDate: newSubscription.startDate,
+                            endDate: newSubscription.endDate,
+                            amount: plan.amount,
+                            currency: plan.currency || 'INR',
+                            paymentStatus: 'succeeded', // Admin assigned is considered paid/succeeded
+                            source: 'admin',
+                            billingDetails: await UserSubscriptionService.getBillingDetailsFromSafeinProfile()
+                        });
+                        await subscriptionHistory.save();
+                    }
+                } catch (historyError) {
+                    console.error('Error creating subscription history for admin assignment:', historyError);
+                    // Don't fail the main request, but log error
+                }
+            }
 
             return this.formatUserSubscriptionResponse(newSubscription);
         } catch (error) {
@@ -521,26 +596,10 @@ export class UserSubscriptionService {
             })
                 .sort({ purchaseDate: -1 }) // Most recent first
                 .populate('planId', 'name amount currency')
+                .select('+billingDetails') // Explicitly include billingDetails
                 .exec();
 
-            return history.map((item) => ({
-                _id: (item._id as mongoose.Types.ObjectId).toString(),
-                subscriptionId: item.subscriptionId.toString(),
-                planType: item.planType,
-                planName: (item.planId as any)?.name || `${item.planType} Plan`,
-                purchaseDate: item.purchaseDate,
-                startDate: item.startDate,
-                endDate: item.endDate,
-                amount: item.amount || 0,
-                currency: item.currency || 'INR',
-                paymentStatus: item.paymentStatus,
-                razorpayOrderId: item.razorpayOrderId,
-                razorpayPaymentId: item.razorpayPaymentId,
-                remainingDaysFromPrevious: item.remainingDaysFromPrevious || 0,
-                taxAmount: item.taxAmount || 0,
-                taxPercentage: item.taxPercentage || 0,
-                createdAt: item.createdAt,
-            }));
+            return history.map(mapSubscriptionHistoryItem);
         } catch (error) {
             throw error;
         }
