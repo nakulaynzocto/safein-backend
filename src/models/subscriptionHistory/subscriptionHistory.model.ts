@@ -5,6 +5,7 @@ export interface ISubscriptionHistory extends Document {
     subscriptionId: mongoose.Types.ObjectId; // Reference to the UserSubscription model
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     planId?: mongoose.Types.ObjectId; // Reference to SubscriptionPlan (if available)
+    invoiceNumber?: string; // Generated invoice number with dynamic date formatting
     purchaseDate: Date; // When the plan was purchased
     startDate: Date; // When the subscription started
     endDate: Date; // When the subscription ends/ended
@@ -47,6 +48,10 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         planId: {
             type: Schema.Types.ObjectId,
             ref: 'SubscriptionPlan',
+            default: null,
+        },
+        invoiceNumber: {
+            type: String,
             default: null,
         },
         purchaseDate: {

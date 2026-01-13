@@ -11,6 +11,8 @@ import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
 import { SafeinProfileService } from '../safeinProfile/safeinProfile.service';
 import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
+import { generateInvoiceNumber } from '../../utils/invoiceNumber.util';
+import { toObjectId } from '../../utils/idExtractor.util';
 
 
 export class UserSubscriptionService {
@@ -21,7 +23,7 @@ export class UserSubscriptionService {
     static async getUserActiveSubscription(userId: string): Promise<IUserSubscriptionResponse | null> {
         try {
             const subscription = await UserSubscription.findOne({
-                userId: new mongoose.Types.ObjectId(userId),
+                userId: toObjectId(userId),
                 isActive: true,
                 isDeleted: false,
                 endDate: { $gt: new Date() }, // Ensure not expired
@@ -33,6 +35,71 @@ export class UserSubscriptionService {
 
             return this.formatUserSubscriptionResponse(subscription);
         } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Common helper to create subscription history with invoice number
+     * Used by both user payment flow and admin assignment
+     * Made public so SuperAdminService can also use it
+     */
+    public static async createSubscriptionHistoryWithInvoice(params: {
+        userId: string | mongoose.Types.ObjectId;
+        subscriptionId: mongoose.Types.ObjectId;
+        planType: string;
+        planId: string | mongoose.Types.ObjectId;
+        startDate: Date;
+        endDate: Date;
+        amount: number;
+        currency?: string;
+        taxAmount?: number;
+        taxPercentage?: number;
+        paymentStatus: string;
+        razorpayOrderId?: string;
+        razorpayPaymentId?: string;
+        source: 'user' | 'admin';
+        billingDetails?: any;
+        session?: mongoose.ClientSession;
+    }) {
+        try {
+            // Use provided billing details or fetch from SafeinProfile
+            let billingDetails = params.billingDetails;
+            if (!billingDetails) {
+                billingDetails = await this.getBillingDetailsFromSafeinProfile();
+            }
+
+            // Generate invoice number from billing details
+            const invoicePrefix = billingDetails?.invoiceConfig?.invoicePrefix || 'INV';
+            const invoiceSequence = (billingDetails?.invoiceConfig?.nextInvoiceNumber || 0) + 1;
+            const invoiceNumber = generateInvoiceNumber(invoicePrefix, invoiceSequence, new Date());
+
+            const subscriptionHistory = new SubscriptionHistory({
+                userId: toObjectId(String(params.userId)),
+                subscriptionId: params.subscriptionId,
+                planType: params.planType,
+                planId: toObjectId(String(params.planId)),
+                invoiceNumber,
+                purchaseDate: new Date(),
+                startDate: params.startDate,
+                endDate: params.endDate,
+                amount: params.amount,
+                currency: params.currency || 'INR',
+                paymentStatus: params.paymentStatus,
+                razorpayOrderId: params.razorpayOrderId,
+                razorpayPaymentId: params.razorpayPaymentId,
+                source: params.source,
+                taxAmount: params.taxAmount || 0,
+                taxPercentage: params.taxPercentage || 0,
+                billingDetails,
+                isDeleted: false
+            });
+
+            await subscriptionHistory.save(params.session ? { session: params.session } : undefined);
+
+            return subscriptionHistory;
+        } catch (error) {
+            console.error('Error creating subscription history with invoice:', error);
             throw error;
         }
     }
@@ -65,7 +132,7 @@ export class UserSubscriptionService {
             }
 
             const plan = await SubscriptionPlan.findOne({
-                _id: new mongoose.Types.ObjectId(planId),
+                _id: toObjectId(planId),
                 isDeleted: false,
                 isActive: true,
             }).session(session);
@@ -76,7 +143,7 @@ export class UserSubscriptionService {
 
             // Find existing subscription and update it instead of creating new
             const existingSubscription = await UserSubscription.findOne({
-                userId: new mongoose.Types.ObjectId(userId),
+                userId: toObjectId(userId),
                 isDeleted: false,
             }).sort({ createdAt: -1 }).session(session);
 
@@ -123,7 +190,7 @@ export class UserSubscriptionService {
             } else {
                 // Create new only if no existing subscription found
                 subscription = new UserSubscription({
-                    userId: new mongoose.Types.ObjectId(userId),
+                    userId: toObjectId(userId),
                     planType: plan.planType,
                     startDate: segmentStart,
                     endDate,
@@ -141,28 +208,24 @@ export class UserSubscriptionService {
             const taxPercentage = plan.taxPercentage || 0;
             const taxAmount = (plan.amount * taxPercentage) / 100;
 
-            const subscriptionHistory = new SubscriptionHistory({
-                userId: new mongoose.Types.ObjectId(userId),
+            await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
+                userId,
                 subscriptionId: subscription._id as mongoose.Types.ObjectId,
                 planType: plan.planType,
-                planId: new mongoose.Types.ObjectId(planId),
-                purchaseDate: new Date(),
+                planId,
                 startDate: segmentStart,
                 endDate: endDate,
                 amount: plan.amount,
-                currency: plan.currency || 'INR',
-                paymentStatus: 'succeeded',
-                razorpayOrderId: razorpayOrderId || undefined,
-                razorpayPaymentId: razorpayPaymentId || undefined,
-                // previousSubscriptionId: previousSubscriptionId,
-                // remainingDaysFromPrevious: remainingDaysFromPrevious,
-                source: 'user',
+                currency: plan.currency,
                 taxAmount,
                 taxPercentage,
-                billingDetails: await UserSubscriptionService.getBillingDetailsFromSafeinProfile()
+                paymentStatus: 'succeeded',
+                razorpayOrderId,
+                razorpayPaymentId,
+                source: 'user',
+                billingDetails: undefined,
+                session
             });
-
-            await subscriptionHistory.save({ session });
 
             // Update user's activeSubscriptionId
             const user = await User.findById(userId).session(session);
@@ -217,7 +280,7 @@ export class UserSubscriptionService {
 
             const filter: any = { isDeleted: false };
             if (userId) {
-                filter.userId = new mongoose.Types.ObjectId(userId);
+                filter.userId = toObjectId(userId);
             }
             if (planType) {
                 filter.planType = planType;
@@ -306,6 +369,7 @@ export class UserSubscriptionService {
                 bankDetails: profile.bankDetails,
                 invoiceConfig: {
                     invoicePrefix: profile.documentSettings?.invoicePrefix,
+                    nextInvoiceNumber: profile.documentSettings?.nextInvoiceNumber,
                     termsAndConditions: profile.defaults?.defaultTerms?.invoice
                 }
             };
@@ -316,7 +380,11 @@ export class UserSubscriptionService {
             return {
                 companyDetails: CONSTANTS.COMPANY_BILLING_DETAILS,
                 bankDetails: {},
-                invoiceConfig: {}
+                invoiceConfig: {
+                    invoicePrefix: 'INV',
+                    nextInvoiceNumber: 0,
+                    termsAndConditions: ''
+                }
             };
         }
     }
@@ -330,7 +398,7 @@ export class UserSubscriptionService {
         try {
             const newSubscriptionData = {
                 ...subscriptionData,
-                userId: new mongoose.Types.ObjectId(subscriptionData.userId),
+                userId: toObjectId(subscriptionData.userId),
             };
 
             const newSubscription = await UserSubscription.create(newSubscriptionData);
@@ -340,21 +408,19 @@ export class UserSubscriptionService {
                 try {
                     const plan = await SubscriptionPlan.findById(subscriptionData.planId);
                     if (plan) {
-                        const subscriptionHistory = new SubscriptionHistory({
-                            userId: new mongoose.Types.ObjectId(subscriptionData.userId),
+                        await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
+                            userId: subscriptionData.userId,
                             subscriptionId: newSubscription._id as mongoose.Types.ObjectId,
                             planType: plan.planType,
-                            planId: new mongoose.Types.ObjectId(subscriptionData.planId),
-                            purchaseDate: new Date(),
+                            planId: subscriptionData.planId,
                             startDate: newSubscription.startDate,
                             endDate: newSubscription.endDate,
                             amount: plan.amount,
-                            currency: plan.currency || 'INR',
-                            paymentStatus: 'succeeded', // Admin assigned is considered paid/succeeded
+                            currency: plan.currency,
+                            paymentStatus: 'succeeded',
                             source: 'admin',
-                            billingDetails: await UserSubscriptionService.getBillingDetailsFromSafeinProfile()
+                            billingDetails: undefined
                         });
-                        await subscriptionHistory.save();
                     }
                 } catch (historyError) {
                     console.error('Error creating subscription history for admin assignment:', historyError);
@@ -379,10 +445,10 @@ export class UserSubscriptionService {
             const updatedSubscriptionData: any = { ...updateData };
 
             if (updatedSubscriptionData.userId) {
-                updatedSubscriptionData.userId = new mongoose.Types.ObjectId(updatedSubscriptionData.userId);
+                updatedSubscriptionData.userId = toObjectId(updatedSubscriptionData.userId);
             }
             if (updatedSubscriptionData.deletedBy) {
-                updatedSubscriptionData.deletedBy = new mongoose.Types.ObjectId(updatedSubscriptionData.deletedBy);
+                updatedSubscriptionData.deletedBy = toObjectId(updatedSubscriptionData.deletedBy);
             }
 
             const updatedSubscription = await UserSubscription.findByIdAndUpdate(
@@ -465,7 +531,7 @@ export class UserSubscriptionService {
         visitors: number;
         appointments: number;
     }> {
-        const userObjectId = new mongoose.Types.ObjectId(userId);
+        const userObjectId = toObjectId(userId);
         const [employeeCount, visitorCount, appointmentCount] = await Promise.all([
             Employee.countDocuments({ createdBy: userObjectId, isDeleted: false }),
             Visitor.countDocuments({ createdBy: userObjectId, isDeleted: false }),
@@ -485,7 +551,7 @@ export class UserSubscriptionService {
     static async getSubscriptionStatus(userId: string): Promise<ITrialLimitsStatus> {
         // Fetch necessary data in parallel
         const subDocPromise = UserSubscription.findOne({
-            userId: new mongoose.Types.ObjectId(userId),
+            userId: toObjectId(userId),
             isDeleted: false
         }).sort({ createdAt: -1 });
 
@@ -590,7 +656,7 @@ export class UserSubscriptionService {
     static async getUserSubscriptionHistory(userId: string): Promise<any[]> {
         try {
             const history = await SubscriptionHistory.find({
-                userId: new mongoose.Types.ObjectId(userId),
+                userId: toObjectId(userId),
                 isDeleted: false,
                 paymentStatus: 'succeeded', // Only successful payments
             })

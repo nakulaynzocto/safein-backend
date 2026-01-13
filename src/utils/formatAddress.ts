@@ -1,7 +1,4 @@
-/**
- * Format company address from billing details
- * Handles both old (nested) and new (flat) address structures
- */
+
 export const formatAddress = (companyDetails: any): string => {
     return [
         companyDetails.address?.street || companyDetails.address,

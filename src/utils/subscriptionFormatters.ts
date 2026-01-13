@@ -10,6 +10,7 @@ export const mapSubscriptionHistoryItem = (item: any) => {
         subscriptionId: item.subscriptionId.toString(),
         planType: item.planType,
         planName: (item.planId as any)?.name || `${item.planType} Plan`,
+        invoiceNumber: item.invoiceNumber,
         purchaseDate: item.purchaseDate,
         startDate: item.startDate,
         endDate: item.endDate,
@@ -26,3 +27,4 @@ export const mapSubscriptionHistoryItem = (item: any) => {
         createdAt: item.createdAt,
     };
 };
+

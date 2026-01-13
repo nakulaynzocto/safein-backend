@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { User } from '../../models/user/user.model';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { Settings } from '../../models/settings/settings.model';
@@ -11,6 +12,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
 import { UserService } from '../user/user.service';
 import { SubscriptionPlanService } from '../subscription/subscription.service';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 import { AuditLog } from '../../models/auditLog/auditLog.model';
 import * as crypto from 'crypto';
 import { getRedisClient } from '../../config/redis.config';
@@ -482,23 +484,20 @@ export class SuperAdminService {
         const taxPercentage = plan.taxPercentage || 0;
         const taxAmount = (plan.amount * taxPercentage) / 100;
 
-        await SubscriptionHistory.create({
+        await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
             userId: user._id,
-            subscriptionId: resultSubscriptionId,
+            subscriptionId: resultSubscriptionId as mongoose.Types.ObjectId,
             planType: plan.planType,
-            planId: plan._id,
-            purchaseDate: new Date(),
+            planId: plan._id as mongoose.Types.ObjectId,
             startDate: segmentStart,
             endDate: segmentEnd,
             amount: plan.amount || 0,
             currency: 'INR',
-            // @ts-ignore
-            billingDetails: payload.billingDetails,
             taxAmount,
             taxPercentage,
-            paymentStatus: "succeeded", // Admin assigned is considered paid/free
-            source: "admin",
-            isDeleted: false
+            paymentStatus: 'succeeded',
+            source: 'admin',
+            billingDetails: payload.billingDetails
         });
 
         user.activeSubscriptionId = resultSubscriptionId as any;
