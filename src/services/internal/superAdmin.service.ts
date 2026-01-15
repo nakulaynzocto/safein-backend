@@ -6,7 +6,7 @@ import { UserSubscription } from '../../models/userSubscription/userSubscription
 import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
 import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
-import { Inquiry } from '../../models/inquiry/inquiry.model';
+
 import { EmailService } from '../../services/email/email.service';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
@@ -607,80 +607,5 @@ export class SuperAdminService {
         };
     }
 
-    // Get Support Inquiries
-    static async getInquiries(page: number = 1, limit: number = 10) {
-        const skip = (page - 1) * limit;
-        const [inquiries, total] = await Promise.all([
-            Inquiry.find({ isDeleted: false })
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit),
-            Inquiry.countDocuments({ isDeleted: false })
-        ]);
 
-        return {
-            inquiries,
-            pagination: {
-                total,
-                page,
-                limit,
-                totalPages: Math.ceil(total / limit)
-            }
-        };
-    }
-
-    // Update Inquiry Status
-    static async updateInquiryStatus(id: string, status: string, viewedBy?: { userId?: string; userName?: string }) {
-        const updateData: any = { status };
-        if (viewedBy && status === 'read') {
-            updateData.viewedBy = viewedBy;
-            updateData.viewedAt = new Date();
-        }
-
-        const inquiry = await Inquiry.findByIdAndUpdate(
-            id,
-            updateData,
-            { new: true, runValidators: true }
-        );
-
-        if (!inquiry) {
-            throw new AppError('Inquiry not found', ERROR_CODES.NOT_FOUND);
-        }
-
-        return inquiry;
-    }
-
-    // Mark Inquiry as Viewed
-    static async markInquiryAsViewed(id: string, userId: string, userName: string) {
-        const inquiry = await Inquiry.findByIdAndUpdate(
-            id,
-            {
-                status: 'read',
-                viewedBy: { userId, userName },
-                viewedAt: new Date()
-            },
-            { new: true, runValidators: true }
-        );
-
-        if (!inquiry) {
-            throw new AppError('Inquiry not found', ERROR_CODES.NOT_FOUND);
-        }
-
-        return inquiry;
-    }
-
-    // Delete (Archive) Inquiry
-    static async deleteInquiry(id: string) {
-        const inquiry = await Inquiry.findByIdAndUpdate(
-            id,
-            { isDeleted: true },
-            { new: true }
-        );
-
-        if (!inquiry) {
-            throw new AppError('Inquiry not found', ERROR_CODES.NOT_FOUND);
-        }
-
-        return inquiry;
-    }
 }

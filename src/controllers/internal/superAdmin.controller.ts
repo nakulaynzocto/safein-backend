@@ -123,38 +123,4 @@ export class SuperAdminController {
     }
 
     // Support Inquiries
-    @TryCatch('Failed to fetch inquiries')
-    public async getInquiries(req: Request, res: Response, _next: NextFunction) {
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
-        const result = await SuperAdminService.getInquiries(page, limit);
-        ResponseUtil.success(res, 'Support inquiries fetched successfully', result);
-    }
-
-    @TryCatch('Failed to update inquiry status')
-    public async updateInquiryStatus(req: Request, res: Response, _next: NextFunction) {
-        const { status } = req.body;
-        const { id } = req.params;
-        const user = (req as any).user;
-        const viewedBy = user ? { userId: user._id, userName: user.companyName || user.name } : undefined;
-        const result = await SuperAdminService.updateInquiryStatus(id, status, viewedBy);
-        ResponseUtil.success(res, 'Inquiry status updated successfully', result);
-    }
-
-    @TryCatch('Failed to mark inquiry as viewed')
-    public async markInquiryAsViewed(req: Request, res: Response, _next: NextFunction) {
-        const { id } = req.params;
-        const user = (req as any).user;
-        const userId = user?._id;
-        const userName = user?.companyName || user?.name || 'Unknown';
-        const result = await SuperAdminService.markInquiryAsViewed(id, userId, userName);
-        ResponseUtil.success(res, 'Inquiry marked as viewed', result);
-    }
-
-    @TryCatch('Failed to delete inquiry')
-    public async deleteInquiry(req: Request, res: Response, _next: NextFunction) {
-        const { id } = req.params;
-        const result = await SuperAdminService.deleteInquiry(id);
-        ResponseUtil.success(res, 'Inquiry archived successfully', result);
-    }
 }

@@ -9,7 +9,6 @@ import uploadRoutes from "./upload/upload.routes";
 import approvalLinkRoutes from "./approvalLink/approvalLink.routes";
 import appointmentBookingLinkRoutes from "./appointmentBookingLink/appointmentBookingLink.routes";
 import settingsRoutes from "./settings/settings.routes";
-import inquiryRoutes from "./inquiry/inquiry.routes";
 import safeinProfileRoutes from "./safeinProfile/safeinProfile.routes";
 
 const router = Router();
@@ -24,7 +23,7 @@ router.get("/health", (_req, res) => {
 });
 
 // Public routes (no authentication required)
-router.use("/inquiries", inquiryRoutes);
+// router.use("/inquiries", inquiryRoutes); // Removed
 router.use("/", approvalLinkRoutes);
 router.use("/appointment-links", appointmentBookingLinkRoutes);
 

@@ -4,4 +4,4 @@ export * from "./appointment/appointment.types";
 export * from "./visitor/visitor.types";
 export * from "./subscription/subscription.types";
 export * from "./userSubscription/userSubscription.types";
-export * from "./inquiry/inquiry.types";
+
