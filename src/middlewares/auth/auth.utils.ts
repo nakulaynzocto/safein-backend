@@ -8,18 +8,31 @@ import fs from 'fs';
 import path from 'path';
 
 // Load Public Key
-// Ensure certs directory exists in root
-const PUBLIC_KEY_PATH = path.join(process.cwd(), 'certs', 'public.pem');
-let PUBLIC_KEY = '';
+// Priority: Environment Variable -> File System
+let PUBLIC_KEY = process.env.SUPER_ADMIN_PUBLIC_KEY || '';
 
-try {
-    if (fs.existsSync(PUBLIC_KEY_PATH)) {
-        PUBLIC_KEY = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
-    } else {
-        console.error('CRITICAL: Public Key not found at ' + PUBLIC_KEY_PATH);
+if (!PUBLIC_KEY) {
+    const PUBLIC_KEY_PATH = path.join(process.cwd(), 'certs', 'public.pem');
+    try {
+        if (fs.existsSync(PUBLIC_KEY_PATH)) {
+            PUBLIC_KEY = fs.readFileSync(PUBLIC_KEY_PATH, 'utf8');
+        } else {
+            // Only log error if neither Env Var nor File is found
+            // console.error('Warning: Public Key not found at ' + PUBLIC_KEY_PATH); 
+        }
+    } catch (e) {
+        console.error('CRITICAL: Failed to load Public Key from file', e);
     }
-} catch (e) {
-    console.error('CRITICAL: Failed to load Public Key', e);
+}
+if (PUBLIC_KEY) {
+    // If key is base64 encoded (common in env vars to avoid newlines issues), decode it
+    if (!PUBLIC_KEY.includes("BEGIN PUBLIC KEY")) {
+        try {
+            PUBLIC_KEY = Buffer.from(PUBLIC_KEY, 'base64').toString('utf-8');
+        } catch (e) {
+            // keep original if fail
+        }
+    }
 }
 
 /**
