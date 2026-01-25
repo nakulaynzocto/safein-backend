@@ -4,7 +4,6 @@ import { ResponseUtil, ERROR_CODES } from '../../utils';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { TryCatch } from '../../decorators';
 import { AppError } from '../../middlewares/errorHandler';
-
 export class UserController {
   /**
    * Register a new user (sends OTP)
@@ -41,8 +40,16 @@ export class UserController {
    */
   @TryCatch('Failed to login user')
   static async login(req: Request, res: Response, _next: NextFunction): Promise<void> {
-    const loginData = req.body;
+    // const loginData = req.body;
+    let { email, password } = req.body;
 
+    // create login object
+    const loginData = {
+      email: email,
+      password: password,
+    };
+    console.log("login function call")
+    console.log("login details",loginData)
     try {
       const result = await UserService.loginUser(loginData);
       // Login attempt tracking is handled by loginAttemptTracker middleware
