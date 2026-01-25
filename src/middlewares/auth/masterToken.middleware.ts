@@ -10,7 +10,6 @@ export const verifyMasterToken = async (req: Request, res: Response, next: NextF
         res.status(403).json({ error: 'Forsaken: Master Token Required' });
         return;
     }
-
     try {
         const user = authenticateWithMasterToken(req);
         if (user) {

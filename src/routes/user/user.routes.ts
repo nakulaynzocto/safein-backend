@@ -12,6 +12,7 @@ import {
     checkAccountLock,
     loginAttemptTracker
 } from '../../middlewares/security';
+import { decryptLoginPayload,decryptRegisterPayload} from '../../middlewares/auth/decrypt';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createUserValidation,
@@ -30,6 +31,7 @@ const router = Router();
 
 router.post('/register',
     authLimiter,
+    decryptRegisterPayload,
     validateRequest(createUserValidation),
     asyncWrapper(UserController.register)
 );
@@ -38,6 +40,7 @@ router.post('/login',
     authLimiter,
     bruteForceProtection,
     checkAccountLock,
+    decryptLoginPayload,  
     validateRequest(loginValidation),
     loginAttemptTracker,
     asyncWrapper(UserController.login)
