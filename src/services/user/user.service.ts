@@ -18,6 +18,7 @@ import { RedisOtpService } from '../redis/redisOtp.service';
 import { getRedisClient } from '../../config/redis.config';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
+import { toObjectId } from '../../utils/idExtractor.util';
 import * as crypto from 'crypto';
 
 export class UserService {
@@ -234,10 +235,28 @@ export class UserService {
 
   /**
    * Update user profile
+   * If admin updates company details, also update all employee accounts
    */
   @Transaction('Failed to update user')
   static async updateUser(userId: string, updateData: IUpdateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
+
+    // Check if user is an employee
+    const { EmployeeUtil } = await import('../../utils/employee.util');
+    const currentUser = await User.findOne({ _id: userId, isDeleted: false }).session(session);
+    if (!currentUser) {
+      throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    const isEmployee = await EmployeeUtil.isEmployee(currentUser);
+
+    // Employees cannot update company-related fields
+    if (isEmployee && (updateData.companyName !== undefined || updateData.profilePicture !== undefined || updateData.companyId !== undefined)) {
+      throw new AppError(
+        "Employees cannot update company settings. Please contact your administrator.",
+        ERROR_CODES.FORBIDDEN
+      );
+    }
 
     const safeUpdateData: Partial<IUpdateUserDTO> = {};
 
@@ -277,6 +296,7 @@ export class UserService {
 
     delete (safeUpdateData as any).session;
 
+    // Update user
     const user = await User.findOneAndUpdate(
       { _id: userId, isDeleted: false },
       safeUpdateData,
@@ -285,6 +305,48 @@ export class UserService {
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    // If admin updates company details (companyName, profilePicture, companyId),
+    // also update all employee accounts created by this admin
+    const isAdmin = user.roles && user.roles.includes('admin');
+    const hasCompanyUpdate = updateData.companyName !== undefined || 
+                            updateData.profilePicture !== undefined || 
+                            updateData.companyId !== undefined;
+
+    if (isAdmin && hasCompanyUpdate) {
+      // Prepare employee update data (only company-related fields)
+      const employeeUpdateData: any = {};
+      if (updateData.companyName !== undefined) {
+        employeeUpdateData.companyName = updateData.companyName;
+      }
+      if (updateData.profilePicture !== undefined) {
+        employeeUpdateData.profilePicture = updateData.profilePicture;
+      }
+      if (updateData.companyId !== undefined) {
+        employeeUpdateData.companyId = updateData.companyId;
+      }
+
+      // Update all employee user accounts created by this admin
+      try {
+        await User.updateMany(
+          { 
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false
+          },
+          { $set: employeeUpdateData },
+          { session }
+        );
+
+      } catch (employeeUpdateError: any) {
+        // Log error but don't fail the main update
+        console.error('[User Service] Failed to sync company details to employee accounts:', {
+          adminUserId: userId,
+          error: employeeUpdateError.message,
+          stack: employeeUpdateError.stack
+        });
+      }
     }
 
     return user.getPublicProfile();
@@ -414,6 +476,7 @@ export class UserService {
 
   /**
    * Soft delete user (admin function)
+   * If admin is deleted, also disable all employee accounts created by this admin
    */
   @Transaction('Failed to delete user')
   static async deleteUser(userId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
@@ -424,11 +487,50 @@ export class UserService {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
 
+    const isAdmin = user.roles && user.roles.includes('admin');
+
+    // Soft delete the user
     await (user as any).softDelete(deletedBy);
+
+    // If admin is deleted, disable all employee accounts created by this admin
+    if (isAdmin) {
+      try {
+        const { Employee } = await import('../../models/employee/employee.model');
+        
+        // Disable all employee user accounts created by this admin
+        await User.updateMany(
+          {
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false
+          },
+          {
+            $set: { isActive: false }
+          },
+          { session }
+        );
+
+        // Also soft delete all employees created by this admin
+        await Employee.updateMany(
+          {
+            createdBy: user._id,
+            isDeleted: false
+          },
+          {
+            $set: { isDeleted: true, deletedAt: new Date(), deletedBy: toObjectId(deletedBy) }
+          },
+          { session }
+        );
+      } catch (employeeCleanupError: any) {
+        // Log error but don't fail admin deletion
+        console.error(`[User Service] Failed to cleanup employee accounts after admin deletion:`, employeeCleanupError);
+      }
+    }
   }
 
   /**
    * Restore user from trash (admin function)
+   * If admin is restored, also restore all employee accounts and employees created by this admin
    */
   @Transaction('Failed to restore user')
   static async restoreUser(userId: string, options: { session?: any } = {}): Promise<IUserResponse> {
@@ -439,7 +541,47 @@ export class UserService {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
 
+    const isAdmin = user.roles && user.roles.includes('admin');
+
+    // Restore the user
     await (user as any).restore();
+
+    // If admin is restored, also restore all employee accounts and employees
+    if (isAdmin) {
+      try {
+        const { Employee } = await import('../../models/employee/employee.model');
+        
+        // Restore all employee user accounts created by this admin
+        await User.updateMany(
+          {
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false,
+            isActive: false
+          },
+          {
+            $set: { isActive: true }
+          },
+          { session }
+        );
+
+        // Also restore all employees created by this admin
+        await Employee.updateMany(
+          {
+            createdBy: user._id,
+            isDeleted: true
+          },
+          {
+            $set: { isDeleted: false, deletedAt: null, deletedBy: null }
+          },
+          { session }
+        );
+      } catch (employeeRestoreError: any) {
+        // Log error but don't fail admin restoration
+        console.error(`[User Service] Failed to restore employee accounts after admin restoration:`, employeeRestoreError);
+      }
+    }
+
     return user.getPublicProfile();
   }
 
@@ -536,14 +678,53 @@ export class UserService {
     user.passwordResetToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save({ session });
+  }
 
-    // Optionally send confirmation email
-    try {
-      await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
-    } catch (error) {
-      // Don't fail the reset if email fails
-      console.error('Failed to send password reset confirmation email:', error);
+  /**
+   * Setup employee password using token (activates account and returns login credentials)
+   */
+  @Transaction('Failed to setup employee password')
+  static async setupEmployeePassword(setupPasswordData: IResetPasswordDTO, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+    const { token, newPassword } = setupPasswordData;
+    const { session } = options;
+
+    // Hash the token to compare with stored token
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token and not expired
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() },
+      isDeleted: false
+    }).select('+passwordResetToken +resetPasswordExpires +password').session(session);
+
+    if (!user) {
+      throw new AppError('Setup token is invalid or has expired', ERROR_CODES.BAD_REQUEST);
     }
+
+    // Check if user is an employee
+    if (!user.roles || !user.roles.includes('employee')) {
+      throw new AppError('This setup link is only for employees', ERROR_CODES.FORBIDDEN);
+    }
+
+    // Update password, activate account, and clear reset token
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.isActive = true; // Activate the account
+    user.isEmailVerified = true; // Mark email as verified since they clicked the link
+    await user.save({ session });
+
+    // Generate login token
+    const loginToken = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email
+    });
+
+    return {
+      user: user.getPublicProfile(),
+      token: loginToken
+    };
   }
   // Exchange Impersonation Token
   static async exchangeImpersonationToken(code: string): Promise<{ user: IUserResponse; token: string }> {

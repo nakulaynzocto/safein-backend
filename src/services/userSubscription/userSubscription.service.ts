@@ -526,16 +526,94 @@ export class UserSubscriptionService {
         }
     }
 
-    static async getTrialLimitsCounts(userId: string): Promise<{
+    static async getTrialLimitsCounts(userId: string, subscriptionStartDate?: Date): Promise<{
         employees: number;
         visitors: number;
         appointments: number;
     }> {
         const userObjectId = toObjectId(userId);
+        
+        // Get all employees created by this user
+        const employees = await Employee.find({ 
+            createdBy: userObjectId, 
+            isDeleted: false 
+        }).select('_id').lean();
+        
+        const employeeIds = employees.map((emp: any) => emp._id);
+        
+        // Calculate current month's date range based on subscription start date
+        // Monthly limits reset every month from subscription start date
+        // Example: If subscription started on Jan 15, then:
+        // - Month 1: Jan 15 - Feb 14
+        // - Month 2: Feb 15 - Mar 14
+        // - Month 3: Mar 15 - Apr 14
+        let monthStart: Date;
+        let monthEnd: Date;
+        
+        if (subscriptionStartDate) {
+            const now = new Date();
+            const startDate = new Date(subscriptionStartDate);
+            startDate.setHours(0, 0, 0, 0);
+            
+            // Calculate which subscription month we're currently in
+            // Monthly cycle is based on subscription start date's day
+            // Example: If subscription started on Jan 15:
+            // - Month 1: Jan 15 - Feb 14
+            // - Month 2: Feb 15 - Mar 14
+            // - Month 3: Mar 15 - Apr 14
+            
+            const startDay = startDate.getDate();
+            const nowDay = now.getDate();
+            
+            // Calculate months difference
+            let monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + 
+                            (now.getMonth() - startDate.getMonth());
+            
+            // Adjust if current day is before subscription start day in the month
+            // Example: Start on Jan 15, today is Feb 10 → still in Month 1
+            if (nowDay < startDay) {
+                monthsDiff -= 1;
+            }
+            
+            // Calculate current subscription month start
+            // Start from subscription start date + monthsDiff months
+            monthStart = new Date(startDate);
+            monthStart.setMonth(startDate.getMonth() + monthsDiff);
+            monthStart.setHours(0, 0, 0, 0);
+            
+            // Calculate current subscription month end (start + 1 month - 1 day)
+            monthEnd = new Date(monthStart);
+            monthEnd.setMonth(monthEnd.getMonth() + 1);
+            monthEnd.setDate(monthEnd.getDate() - 1); // Last day of current subscription month
+            monthEnd.setHours(23, 59, 59, 999);
+        } else {
+            // For free/trial users without subscription, use current calendar month
+            const now = new Date();
+            monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            monthStart.setHours(0, 0, 0, 0);
+            monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            monthEnd.setHours(23, 59, 59, 999);
+        }
+        
+        // Count appointments for current month only:
+        // 1. Directly created by user (createdBy = userId)
+        // 2. Created by employees of this user (employeeId in employeeIds)
+        // 3. Created within current month (based on subscription cycle)
+        // This ensures all appointments (admin + employees) count towards admin's monthly subscription limit
         const [employeeCount, visitorCount, appointmentCount] = await Promise.all([
             Employee.countDocuments({ createdBy: userObjectId, isDeleted: false }),
             Visitor.countDocuments({ createdBy: userObjectId, isDeleted: false }),
-            Appointment.countDocuments({ createdBy: userObjectId, isDeleted: false }),
+            Appointment.countDocuments({
+                isDeleted: false,
+                createdAt: {
+                    $gte: monthStart,
+                    $lte: monthEnd
+                },
+                $or: [
+                    { createdBy: userObjectId }, // Directly created by admin
+                    ...(employeeIds.length > 0 ? [{ employeeId: { $in: employeeIds } }] : []) // Created for admin's employees
+                ]
+            }),
         ]);
 
         return {
@@ -555,9 +633,13 @@ export class UserSubscriptionService {
             isDeleted: false
         }).sort({ createdAt: -1 });
 
-        const countsPromise = this.getTrialLimitsCounts(userId);
+        const [subDoc] = await Promise.all([subDocPromise]);
+        
+        // Get counts with subscription start date for monthly limit calculation
+        const subscriptionStartDate = subDoc?.startDate;
+        const countsPromise = this.getTrialLimitsCounts(userId, subscriptionStartDate);
 
-        const [subDoc, counts] = await Promise.all([subDocPromise, countsPromise]);
+        const counts = await countsPromise;
 
         const formattedSub = subDoc ? this.formatUserSubscriptionResponse(subDoc) : null;
 
@@ -605,23 +687,57 @@ export class UserSubscriptionService {
 
     /**
      * Check if a user can create another resource based on their plan limits
+     * This applies to both trial and paid subscriptions
+     * 
+     * Key points:
+     * - Employee creation counts against the subscription owner's (createdBy) employee limit
+     * - Employee's user account does NOT count as a separate subscription
+     * - Employees share the subscription of the user who created them
      */
-    static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments'): Promise<void> {
+    /**
+     * Check if a user can create another resource based on their plan limits
+     * This applies to both trial and paid subscriptions
+     * 
+     * @param userId - User ID (for employees, this should be admin's userId)
+     * @param type - Resource type to check
+     * @param isEmployeeContext - Optional: true if called from employee context (for better error messages)
+     */
+    static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments', isEmployeeContext: boolean = false): Promise<void> {
         const status = await this.getSubscriptionStatus(userId);
 
+        // Check if subscription is expired
         if (status.isExpired) {
-            throw new AppError(
-                'Your subscription has expired. Please upgrade or recharge to create new items.',
-                ERROR_CODES.PAYMENT_REQUIRED
-            );
+            const message = isEmployeeContext
+                ? "Your admin's subscription has expired. Please contact your administrator to renew the subscription."
+                : 'Your subscription has expired. Please upgrade or recharge to create new items.';
+            throw new AppError(message, ERROR_CODES.PAYMENT_REQUIRED);
         }
 
         const limitInfo = status.limits[type];
-        if (status.isTrial && limitInfo.reached) {
-            throw new AppError(
-                `Your free ${type} limit (${limitInfo.limit}) has been reached. Please upgrade to continue.`,
-                ERROR_CODES.PAYMENT_REQUIRED
-            );
+
+        // Check if limit is reached (applies to both trial and paid plans)
+        // Unlimited plans have limit = -1, so they will never reach the limit
+        // The limitInfo.reached already accounts for both expired and limit reached scenarios
+        if (limitInfo.reached) {
+            const limitText = limitInfo.limit === -1 ? 'unlimited' : limitInfo.limit.toString();
+            const currentText = limitInfo.current.toString();
+            
+            let message: string;
+            if (isEmployeeContext) {
+                if (status.isTrial) {
+                    message = `Your admin's free ${type} limit (${limitText}) has been reached. Currently ${currentText} ${type} exist. Please contact your administrator to upgrade.`;
+                } else {
+                    message = `Your admin's ${type} limit (${limitText}) has been reached. Currently ${currentText} ${type} exist. Please contact your administrator to upgrade the plan.`;
+                }
+            } else {
+                if (status.isTrial) {
+                    message = `Your free ${type} limit (${limitText}) has been reached. You currently have ${currentText} ${type}. Please upgrade to continue.`;
+                } else {
+                    message = `You have reached your plan's ${type} limit (${limitText}). You currently have ${currentText} ${type}. Please upgrade to a higher plan to create more ${type}.`;
+                }
+            }
+            
+            throw new AppError(message, ERROR_CODES.PAYMENT_REQUIRED);
         }
     }
 

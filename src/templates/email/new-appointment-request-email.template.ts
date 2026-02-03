@@ -12,6 +12,7 @@ function getEmailActionBaseUrl(): string {
 /**
  * New Appointment Request Email Template
  * Sent to employee when a new appointment is requested
+ * Modern, Professional, and User-Friendly Design
  */
 export function getNewAppointmentRequestEmailTemplate(
   employeeName: string,
@@ -44,22 +45,75 @@ export function getNewAppointmentRequestEmailTemplate(
             
             <div class="highlight-box">
                 <h3>Appointment Details</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>📋 Purpose:</strong> ${purpose}</p>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">📋</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Purpose</div>
+                        <div class="detail-value">${purpose}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="highlight-box" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%); border-left: 4px solid #6c757d;">
-                <h3 style="color: #4a4a4a;">Visitor Information</h3>
-                <p><strong>👤 Name:</strong> ${visitorDetails.name}</p>
-                <p><strong>📧 Email:</strong> <a href="mailto:${visitorDetails.email}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.email}</a></p>
-                <p><strong>📞 Phone:</strong> <a href="tel:${visitorDetails.phone}" style="color: #1A73E8; text-decoration: none;">${visitorDetails.phone}</a></p>
-                ${visitorDetails._id ? `<p><strong>🆔 Visitor ID:</strong> ${visitorDetails._id}</p>` : ''}
+            <div class="info-card">
+                <h3>Visitor Information</h3>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Name</div>
+                        <div class="detail-value">${visitorDetails.name}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">📧</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Email</div>
+                        <div class="detail-value"><a href="mailto:${visitorDetails.email}">${visitorDetails.email}</a></div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">📞</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Phone</div>
+                        <div class="detail-value"><a href="tel:${visitorDetails.phone}">${visitorDetails.phone}</a></div>
+                    </div>
+                </div>
+                ${visitorDetails._id ? `
+                <div class="detail-row">
+                    <div class="detail-icon">🆔</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Visitor ID</div>
+                        <div class="detail-value">${visitorDetails._id}</div>
+                    </div>
+                </div>
+                ` : ''}
+                ${visitorDetails.company ? `
+                <div class="detail-row">
+                    <div class="detail-icon">🏢</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Company</div>
+                        <div class="detail-value">${visitorDetails.company}</div>
+                    </div>
+                </div>
+                ` : ''}
             </div>
             
-            <div class="button-group" style="text-align: center; margin: 30px 0;">
-                <a href="${verifyUrl}" class="action-button action-button-primary" style="display: inline-block; padding: 14px 32px; background-color: #3882a5; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                    📋 View Details & Take Action
+            <div class="button-group">
+                <a href="${verifyUrl}" class="action-button action-button-primary">
+                    View Details & Take Action
                 </a>
             </div>
             
@@ -67,8 +121,8 @@ export function getNewAppointmentRequestEmailTemplate(
                 <strong>⏰ Action Required:</strong> Click the button above to view full visitor details, ID proof, and approve or reject this appointment. The link is secure and will expire after use.
             </div>
             
-            <div class="message" style="text-align: center; margin-top: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
-                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/appointment/list" style="color: #1A73E8; text-decoration: none; font-weight: 600;">SafeIn Dashboard</a> for more detailed options.
+            <div class="info-box">
+                <strong>💡 Alternative:</strong> You can also manage this appointment through your <a href="${baseUrl}/appointment/list">SafeIn Dashboard</a> for more detailed options.
             </div>
   `;
   
@@ -109,8 +163,8 @@ Visitor Information:
 - Name: ${visitorDetails.name}
 - Email: ${visitorDetails.email}
 - Phone: ${visitorDetails.phone}
-- Company: ${visitorDetails.company || 'Not provided'}
-- Visitor ID: ${visitorDetails._id || 'Not assigned'}
+${visitorDetails.company ? `- Company: ${visitorDetails.company}` : ''}
+${visitorDetails._id ? `- Visitor ID: ${visitorDetails._id}` : ''}
 
 To view full details and approve/reject this appointment, click:
 ${verifyUrl}
@@ -125,4 +179,3 @@ SafeIn Security Team
 Need help? Contact us at support@safein.com
   `;
 }
-

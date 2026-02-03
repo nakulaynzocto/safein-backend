@@ -301,8 +301,8 @@ export const getAppointmentsValidation = Joi.object({
     limit: Joi.number()
         .integer()
         .min(1)
-        .max(5000)
-        .default(10),
+        .max(200) // Reduced from 5000 to 200 for better performance with large datasets
+        .default(50), // Increased default from 10 to 50 for better UX
     search: Joi.string()
         .optional()
         .allow('', null)

@@ -31,6 +31,12 @@ router.get(
     asyncWrapper(AppointmentController.getAllAppointments)
 );
 
+// Dashboard stats (unified for admin and employee)
+router.get(
+    '/dashboard/stats',
+    asyncWrapper(AppointmentController.getDashboardStats)
+);
+
 
 
 

@@ -1,0 +1,115 @@
+import { getBaseEmailTemplate } from './base-email.template';
+
+/**
+ * Employee Setup Email Template
+ * Sent to employee when admin creates their account
+ */
+export function getEmployeeSetupEmailTemplate(
+  employeeName: string,
+  setupUrl: string,
+  tempPassword: string
+): string {
+  const content = `
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
+      <h2 style="color: #1A73E8; text-align: center; margin-bottom: 30px;">
+        Welcome to SafeIn! 👋
+      </h2>
+      
+      <p style="font-size: 16px; line-height: 1.6; color: #333;">
+        Hello <strong>${employeeName}</strong>,
+      </p>
+      
+      <p style="font-size: 16px; line-height: 1.6; color: #333;">
+        Your employee account has been created on SafeIn Visitor Management System. 
+        To get started, you need to set up your password.
+      </p>
+      
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 30px 0;">
+        <p style="margin: 0; font-size: 14px; color: #666;">
+          <strong>Temporary Password:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${tempPassword}</code>
+        </p>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #999;">
+          ⚠️ Please change this password after first login
+        </p>
+      </div>
+      
+      <div style="text-align: center; margin: 40px 0;">
+        <a href="${setupUrl}" 
+           style="display: inline-block; background-color: #1A73E8; color: white; 
+                  padding: 14px 32px; text-decoration: none; border-radius: 6px; 
+                  font-weight: bold; font-size: 16px;">
+          Set Up Your Password
+        </a>
+      </div>
+      
+      <p style="font-size: 14px; line-height: 1.6; color: #666; margin-top: 30px;">
+        Or copy and paste this link into your browser:
+      </p>
+      <p style="font-size: 12px; color: #999; word-break: break-all;">
+        ${setupUrl}
+      </p>
+      
+      <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 30px 0; border-radius: 4px;">
+        <p style="margin: 0; font-size: 14px; color: #856404;">
+          <strong>⏰ Important:</strong> This link will expire in 7 days. Please set up your password as soon as possible.
+        </p>
+      </div>
+      
+      <p style="font-size: 14px; line-height: 1.6; color: #666; margin-top: 30px;">
+        Once you've set up your password, you'll be able to:
+      </p>
+      <ul style="font-size: 14px; line-height: 1.8; color: #666;">
+        <li>Access your Employee Dashboard</li>
+        <li>View and manage your appointments</li>
+        <li>Approve or reject visitor appointments</li>
+        <li>Send appointment booking links to visitors</li>
+      </ul>
+      
+      <p style="font-size: 14px; line-height: 1.6; color: #666; margin-top: 30px;">
+        If you have any questions, please contact your administrator.
+      </p>
+      
+      <p style="font-size: 14px; line-height: 1.6; color: #666; margin-top: 30px;">
+        Best regards,<br>
+        <strong>SafeIn Team</strong>
+      </p>
+    </div>
+  `;
+
+  return getBaseEmailTemplate(content, 'Welcome to SafeIn - Set Up Your Account');
+}
+
+export function getEmployeeSetupEmailText(
+  employeeName: string,
+  setupUrl: string,
+  tempPassword: string
+): string {
+  return `
+Welcome to SafeIn!
+
+Hello ${employeeName},
+
+Your employee account has been created on SafeIn Visitor Management System. 
+To get started, you need to set up your password.
+
+Temporary Password: ${tempPassword}
+⚠️ Please change this password after first login
+
+Set up your password by clicking this link:
+${setupUrl}
+
+⏰ Important: This link will expire in 7 days. Please set up your password as soon as possible.
+
+Once you've set up your password, you'll be able to:
+- Access your Employee Dashboard
+- View and manage your appointments
+- Approve or reject visitor appointments
+- Send appointment booking links to visitors
+
+If you have any questions, please contact your administrator.
+
+Best regards,
+SafeIn Team
+  `.trim();
+}
+

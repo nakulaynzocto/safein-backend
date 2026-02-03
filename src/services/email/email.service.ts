@@ -27,6 +27,10 @@ import {
   getAppointmentConfirmationEmailTemplate,
   getAppointmentConfirmationEmailText
 } from '../../templates/email/appointment-confirmation-email.template';
+import {
+  getEmployeeSetupEmailTemplate,
+  getEmployeeSetupEmailText
+} from '../../templates/email/employee-setup-email.template';
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
@@ -260,16 +264,15 @@ export class EmailService {
         return;
       }
 
-      // Try to verify connection if not available
       const isConnected = await this.verifyConnection();
       if (isConnected) {
         await this.transporter.sendMail(mailOptions);
         return;
       }
 
-      throw new Error('SMTP connection not available');
+      throw new Error('SMTP connection not available. Please check SMTP configuration.');
     } catch (smtpError: any) {
-      console.error(`Failed to send email via SMTP:`, smtpError.message);
+      console.error(`[EmailService] Failed to send email via SMTP to ${to}:`, smtpError.message);
       throw smtpError;
     }
   }
@@ -278,6 +281,7 @@ export class EmailService {
 
   /**
    * Send OTP email
+   * Note: Uses "SafeIn Security Management" as fromName (only for registration)
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
     try {
@@ -286,6 +290,7 @@ export class EmailService {
         subject: 'SafeIn Registration - Verify Your Email',
         html: getOtpEmailTemplate(otp, companyName),
         text: getOtpEmailText(otp, companyName),
+        fromName: 'SafeIn Security Management', // Explicitly use "SafeIn Security Management" for registration
         logMessage: 'OTP email',
       });
     } catch (error: any) {
@@ -302,6 +307,7 @@ export class EmailService {
 
   /**
    * Send welcome email after successful registration
+   * Note: Uses "SafeIn Security Management" as fromName (only for registration)
    */
   static async sendWelcomeEmail(email: string, companyName: string): Promise<void> {
     try {
@@ -310,6 +316,7 @@ export class EmailService {
         subject: 'Welcome to SafeIn - Your Account is Ready!',
         html: getWelcomeEmailTemplate(companyName),
         text: getWelcomeEmailText(companyName),
+        fromName: 'SafeIn Security Management', // Explicitly use "SafeIn Security Management" for registration
         logMessage: 'Welcome email',
       });
     } catch (error: any) {
@@ -325,15 +332,18 @@ export class EmailService {
     visitorName: string,
     employeeName: string,
     scheduledDate: Date,
-    scheduledTime: string
+    scheduledTime: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
         subject: 'Appointment Approved - SafeIn',
         html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
         text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
-        fromName: process.env.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Appointment approval email',
       });
     } catch (error: any) {
@@ -349,15 +359,18 @@ export class EmailService {
     visitorName: string,
     employeeName: string,
     scheduledDate: Date,
-    scheduledTime: string
+    scheduledTime: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
         subject: 'Appointment Update - SafeIn',
         html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
         text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Appointment rejection email',
       });
     } catch (error: any) {
@@ -373,15 +386,18 @@ export class EmailService {
     employeeName: string,
     visitorName: string,
     scheduledDate: Date,
-    scheduledTime: string
+    scheduledTime: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
         subject: 'Appointment Approved - SafeIn',
         html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
         text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Employee appointment approval email',
       });
     } catch (error: any) {
@@ -398,15 +414,18 @@ export class EmailService {
     employeeName: string,
     visitorName: string,
     scheduledDate: Date,
-    scheduledTime: string
+    scheduledTime: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
         subject: 'Appointment Rejected - SafeIn',
         html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
         text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Employee appointment rejection email',
       });
     } catch (error: any) {
@@ -425,15 +444,18 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
-    approvalToken: string
+    approvalToken: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
         subject: 'New Appointment Request - SafeIn',
         html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
         text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'New appointment request email',
       });
     } catch (error: any) {
@@ -472,15 +494,18 @@ export class EmailService {
     visitorEmail: string,
     employeeName: string,
     bookingUrl: string,
-    expiresAt: Date
+    expiresAt: Date,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
         subject: 'Book Your Appointment - SafeIn',
         html: getAppointmentLinkEmailTemplate(employeeName, bookingUrl, expiresAt),
         text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Appointment link email',
         disableClickTracking: true, // Disable click tracking to prevent tracking URL issues
       });
@@ -499,15 +524,18 @@ export class EmailService {
     employeeName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    purpose: string
+    purpose: string,
+    companyName?: string
   ): Promise<void> {
     try {
+      // Use company name if provided, otherwise fallback to default
+      const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
         subject: 'Appointment Request Submitted - SafeIn',
         html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
         text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
-        fromName: CONSTANTS.SMTP_FROM_NAME || 'SafeIn',
+        fromName,
         logMessage: 'Appointment confirmation email to visitor',
       });
     } catch (error: any) {
@@ -583,6 +611,43 @@ export class EmailService {
     } catch (error: any) {
       console.error('Failed to send credentials email:', error.message);
       // Don't throw to avoid blocking user creation response, but log it
+    }
+  }
+
+  /**
+   * Send Employee Setup Email
+   */
+  static async sendEmployeeSetupEmail(
+    email: string,
+    employeeName: string,
+    setupUrl: string,
+    tempPassword: string
+  ): Promise<void> {
+    try {
+      console.log(`[EmailService] Preparing to send employee setup email to: ${email}`);
+      console.log(`[EmailService] Email service available: ${this.isEmailServiceAvailable}`);
+      console.log(`[EmailService] SMTP Host: ${CONSTANTS.SMTP_HOST || 'Not configured'}`);
+      console.log(`[EmailService] Brevo API Key: ${CONSTANTS.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
+      
+      const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, tempPassword);
+      const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, tempPassword);
+
+      console.log(`[EmailService] Email content generated, sending email...`);
+      
+      await this.sendEmail({
+        to: email,
+        subject: 'Welcome to SafeIn - Set Up Your Account',
+        html: htmlContent,
+        text: textContent,
+        logMessage: 'Employee setup email',
+      });
+      
+      console.log(`[EmailService] Employee setup email sent successfully to: ${email}`);
+    } catch (error: any) {
+      console.error(`[EmailService] Failed to send employee setup email to ${email}:`, error.message);
+      console.error(`[EmailService] Error stack:`, error.stack);
+      console.error(`[EmailService] Error code:`, error.code);
+      // Don't throw to avoid blocking employee creation response, but log it
     }
   }
 }

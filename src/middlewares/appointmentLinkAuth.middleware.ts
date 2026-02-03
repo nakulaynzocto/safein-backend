@@ -33,10 +33,6 @@ export const verifyAppointmentLinkToken = async (req: Request, _res: any, next: 
             throw new AppError("Appointment link has expired", ERROR_CODES.UNAUTHORIZED);
         }
 
-        // Check if link is already booked (optional - you might want to allow re-uploads)
-        // if (appointmentLink.isBooked) {
-        //   throw new AppError('Appointment link has already been used', ERROR_CODES.BAD_REQUEST);
-        // }
 
         // Attach appointment link info to request for use in controllers
         (req as any).appointmentLink = appointmentLink;

@@ -59,6 +59,12 @@ router.post('/reset-password',
     asyncWrapper(UserController.resetPassword)
 );
 
+router.post('/setup-employee-password',
+    passwordResetLimiter,
+    validateRequest(resetPasswordValidation),
+    asyncWrapper(UserController.setupEmployeePassword)
+);
+
 router.post('/verify-otp',
     authLimiter,
     validateRequest(verifyOtpValidation),

@@ -1,5 +1,6 @@
 import { Employee } from '../../models/employee/employee.model';
 import { Appointment } from '../../models/appointment/appointment.model';
+import { User } from '../../models/user/user.model';
 import {
     ICreateEmployeeDTO,
     IUpdateEmployeeDTO,
@@ -9,11 +10,13 @@ import {
     IBulkCreateEmployeeDTO,
     IBulkCreateEmployeeResponse
 } from '../../types/employee/employee.types';
-import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
+import { ERROR_MESSAGES, ERROR_CODES, CONSTANTS } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import * as crypto from 'crypto';
+import { EmailService } from '../email/email.service';
 
 export class EmployeeService {
     /**
@@ -52,7 +55,119 @@ export class EmployeeService {
         const employee = new Employee({ ...employeeData, createdBy: createdByObjectId });
         await employee.save({ session });
 
+        // Automatically create user account and send setup email
+        try {
+            // Check if user already exists with this email
+            const existingUser = await User.findOne({
+                email: employeeData.email.toLowerCase().trim(),
+                isDeleted: false,
+            }).session(session);
+
+            if (!existingUser) {
+                // Get admin user to get company name
+                let companyName = employeeData.name; // Fallback
+                const adminUser = await User.findById(createdByObjectId).select('companyName').session(session);
+                if (adminUser) {
+                    companyName = adminUser.companyName;
+                }
+
+                // Generate temp password and setup token
+                const tempPassword = this.generateTempPassword();
+                const setupToken = this.generateSetupToken();
+                const hashedToken = crypto.createHash('sha256').update(setupToken).digest('hex');
+
+                // Create user account
+                const user = new User({
+                    companyName: companyName,
+                    email: employeeData.email.toLowerCase().trim(),
+                    password: tempPassword,
+                    roles: ['employee'],
+                    isActive: false, // Will be activated after password setup
+                    isEmailVerified: false,
+                    passwordResetToken: hashedToken,
+                    resetPasswordExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+                    employeeId: (employee._id as any).toString(),
+                    createdBy: createdByObjectId,
+                    department: employeeData.department,
+                    designation: employeeData.designation || '',
+                });
+
+                await user.save({ session });
+
+                // Send setup email
+                try {
+                    const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
+                    const setupUrl = `${baseUrl.replace(/\/$/, '')}/employee-setup?token=${setupToken}`;
+                    
+                    await EmailService.sendEmployeeSetupEmail(
+                        employeeData.email,
+                        employeeData.name,
+                        setupUrl,
+                        tempPassword
+                    );
+                } catch (emailError: any) {
+                    console.error(`[Employee Service] Failed to send setup email to ${employeeData.email}:`, emailError.message);
+                    // Continue even if email fails - employee is still created
+                }
+            } else {
+                // User exists - validate that it's not an admin account
+                if (existingUser.roles && existingUser.roles.includes('admin')) {
+                    throw new AppError(
+                        `Cannot create employee. A user account with email ${employeeData.email} already exists as an admin. Please use a different email.`,
+                        ERROR_CODES.CONFLICT
+                    );
+                }
+
+                // Link employee to user if not already linked
+                if (!existingUser.employeeId) {
+                    existingUser.employeeId = (employee._id as any).toString();
+                }
+                if (!existingUser.roles.includes('employee')) {
+                    existingUser.roles.push('employee');
+                }
+                // Update company details from admin
+                const adminUser = await User.findById(createdByObjectId).select('companyName profilePicture companyId').session(session);
+                if (adminUser) {
+                    existingUser.companyName = adminUser.companyName;
+                    if (adminUser.profilePicture) {
+                        existingUser.profilePicture = adminUser.profilePicture;
+                    }
+                    if (adminUser.companyId) {
+                        existingUser.companyId = adminUser.companyId;
+                    }
+                }
+                await existingUser.save({ session });
+            }
+        } catch (userCreationError: any) {
+            // If user creation fails, throw error to rollback employee creation
+            // This ensures data consistency - employee should not exist without user account
+            console.error(`[Employee Service] Failed to create/link user account for employee ${employeeData.email}:`, userCreationError);
+            throw new AppError(
+                `Failed to create user account for employee: ${userCreationError.message || 'Unknown error'}`,
+                ERROR_CODES.INTERNAL_SERVER_ERROR
+            );
+        }
+
         return employee.toObject() as unknown as IEmployeeResponse;
+    }
+
+    /**
+     * Generate a secure random password
+     */
+    private static generateTempPassword(): string {
+        const buffer = crypto.randomBytes(8);
+        const base64 = buffer.toString('base64');
+        return base64
+            .replace(/[^A-Za-z0-9]/g, '')
+            .slice(0, 12)
+            .padEnd(12, '0');
+    }
+
+    /**
+     * Generate password setup token
+     */
+    private static generateSetupToken(): string {
+        return crypto.randomBytes(32).toString('hex');
     }
 
     /**
@@ -73,8 +188,9 @@ export class EmployeeService {
 
     /**
      * Get all employees with pagination and filtering (user-specific)
+     * For employees: Also includes their own record even if created by admin
      */
-    static async getAllEmployees(query: IGetEmployeesQuery = {}, userId?: string): Promise<IEmployeeListResponse> {
+    static async getAllEmployees(query: IGetEmployeesQuery = {}, userId?: string, userEmail?: string, userEmployeeId?: string): Promise<IEmployeeListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -87,20 +203,50 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        const filter: any = { isDeleted: false };
+        const filter: any = { isDeleted: false, status: 'Active' };
 
+        // Build access filter (who can see which employees)
+        const accessConditions: any[] = [];
         if (userId) {
-            filter.createdBy = userId;
+            // For employees: Include their own record even if created by admin
+            if (userEmployeeId || (userEmail && userEmail.trim())) {
+                accessConditions.push({ createdBy: userId }); // Employees created by this user (admin case)
+                
+                // Add employee's own record if they have employeeId or matching email
+                if (userEmployeeId) {
+                    accessConditions.push({ _id: userEmployeeId });
+                }
+                if (userEmail && userEmail.trim()) {
+                    accessConditions.push({ email: userEmail.toLowerCase().trim() });
+                }
+            } else {
+                // Admin case: only show employees they created
+                accessConditions.push({ createdBy: userId });
+            }
         }
 
+        // Build search filter
+        const searchConditions: any[] = [];
         if (search) {
             const escapedSearch = escapeRegex(search);
-            filter.$or = [
+            searchConditions.push(
                 { name: { $regex: escapedSearch, $options: 'i' } },
                 { email: { $regex: escapedSearch, $options: 'i' } },
                 { department: { $regex: escapedSearch, $options: 'i' } },
                 { designation: { $regex: escapedSearch, $options: 'i' } }
+            );
+        }
+
+        // Combine filters: both access AND search must match
+        if (accessConditions.length > 0 && searchConditions.length > 0) {
+            filter.$and = [
+                { $or: accessConditions },
+                { $or: searchConditions }
             ];
+        } else if (accessConditions.length > 0) {
+            filter.$or = accessConditions;
+        } else if (searchConditions.length > 0) {
+            filter.$or = searchConditions;
         }
 
         if (startDate || endDate) {
@@ -122,6 +268,8 @@ export class EmployeeService {
             filter.department = { $regex: escapeRegex(department), $options: 'i' };
         }
 
+        // Allow status override if explicitly provided in query
+        // Default is 'Active' (set above), but can be overridden to get all statuses
         if (status) {
             filter.status = status;
         }
@@ -242,7 +390,28 @@ export class EmployeeService {
             );
         }
 
+        // Soft delete the employee
         await (employee as any).softDelete(deletedByObjectId);
+
+        // Handle associated user account
+        // Disable user account and remove employeeId reference
+        try {
+            await User.updateMany(
+                { 
+                    employeeId: (employee._id as any).toString(),
+                    isDeleted: false
+                },
+                { 
+                    $unset: { employeeId: "" },
+                    $set: { isActive: false }
+                },
+                { session }
+            );
+        } catch (userUpdateError: any) {
+            // Log error but don't fail employee deletion
+            console.error(`Failed to update user account for deleted employee ${employeeId}:`, userUpdateError);
+            // Continue - employee is still deleted
+        }
     }
 
 

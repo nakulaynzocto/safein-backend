@@ -3,6 +3,7 @@ import { getBaseEmailTemplate } from './base-email.template';
 /**
  * Appointment Approval Email Template
  * Sent to visitor when appointment is approved
+ * Modern, Professional, and User-Friendly Design
  */
 export function getAppointmentApprovalEmailTemplate(
   visitorName: string,
@@ -19,7 +20,7 @@ export function getAppointmentApprovalEmailTemplate(
 
   const content = `
             <div class="greeting">
-                Appointment Confirmed!
+                Appointment Confirmed! ✅
             </div>
             
             <div class="message">
@@ -29,13 +30,31 @@ export function getAppointmentApprovalEmailTemplate(
             
             <div class="highlight-box">
                 <h3>Appointment Details</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>👤 Meeting With:</strong> ${employeeName}</p>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Meeting With</div>
+                        <div class="detail-value">${employeeName}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="message">
-                <strong>Important Reminders:</strong><br><br>
+            <div class="info-box">
+                <strong>📌 Important Reminders:</strong><br><br>
                 • Please arrive <strong>10 minutes early</strong> to allow time for security check-in<br>
                 • Bring a <strong>valid government-issued photo ID</strong> (driver's license, passport, etc.)<br>
                 • Check in at the reception desk upon arrival<br>
@@ -85,4 +104,3 @@ SafeIn Security Team
 Need help? Contact us at support@safein.com
   `;
 }
-

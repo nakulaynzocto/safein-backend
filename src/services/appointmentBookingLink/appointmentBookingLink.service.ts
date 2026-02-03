@@ -1,8 +1,10 @@
 import { AppointmentBookingLink } from '../../models/appointmentBookingLink/appointmentBookingLink.model';
 import { Employee } from '../../models/employee/employee.model';
 import { Visitor } from '../../models/visitor/visitor.model';
+import { User } from '../../models/user/user.model';
 import { EmailService } from '../email/email.service';
 import { AppointmentService } from '../appointment/appointment.service';
+import { EmployeeUtil } from '../../utils/employee.util';
 import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
@@ -93,13 +95,24 @@ export class AppointmentBookingLinkService {
     const baseUrl = this.getBaseUrl();
     const link = `${baseUrl}/book-appointment/${token}`;
 
+    // Get company name from user (createdBy) for email fromName
+    let companyName: string | undefined;
+    try {
+      const user = await User.findById(createdBy).select('companyName').lean();
+      companyName = user?.companyName;
+    } catch (error) {
+      // If user not found or error, companyName will remain undefined
+      console.warn('Failed to fetch company name for email fromName:', error);
+    }
+
     // Send email to visitor
     try {
       await EmailService.sendAppointmentLinkEmail(
         visitorEmail,
         (employee as any).name || 'Employee',
         link,
-        expiresAt
+        expiresAt,
+        companyName
       );
     } catch (error: any) {
       // Continue even if email fails
@@ -304,6 +317,34 @@ export class AppointmentBookingLinkService {
   }
 
   /**
+   * Get admin user ID for creator
+   * If creator is an employee, returns their admin's ID
+   * If creator is an admin, returns creator's ID
+   */
+  static async getAdminUserIdForCreator(createdBy: string): Promise<string> {
+    // Get the user who created the link
+    const user = await User.findById(createdBy).select('_id roles employeeId email').lean();
+    if (!user) {
+      throw new AppError('Link creator not found', ERROR_CODES.NOT_FOUND);
+    }
+
+    // Check if user is an employee
+    const isEmployee = user.roles?.includes('employee') || false;
+    
+    if (isEmployee) {
+      // If employee, get their admin's user ID (the one who created the employee)
+      const adminUserId = await EmployeeUtil.getAdminUserIdForEmployee(user as any);
+      if (!adminUserId) {
+        throw new AppError('Unable to find admin for employee', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      }
+      return adminUserId;
+    }
+    
+    // If not employee (admin), return the creator's own ID
+    return createdBy;
+  }
+
+  /**
    * Update visitor ID in appointment link
    */
   static async updateVisitorId(token: string, visitorId: string): Promise<void> {
@@ -411,11 +452,29 @@ export class AppointmentBookingLinkService {
       throw new AppError('Invalid appointment link creator', ERROR_CODES.BAD_REQUEST);
     }
 
-    // Create appointment
-    // Check creator subscription limits before final creation
-    await UserSubscriptionService.checkPlanLimits(createdBy, 'appointments');
+    // Check if link was created by an employee
+    const user = await User.findById(createdBy).select('_id roles employeeId email').lean();
+    const isLinkCreatedByEmployee = user?.roles?.includes('employee') || false;
 
-    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { sendNotifications: true });
+    // Create appointment
+    // Get admin user ID (if createdBy is employee, use their admin's ID)
+    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    
+    // Check admin's subscription limits (not employee's)
+    await UserSubscriptionService.checkPlanLimits(adminUserId, 'appointments');
+
+    // If link was created by employee, set status to 'approved' automatically
+    // Otherwise, status will be 'pending' (default)
+    if (isLinkCreatedByEmployee) {
+      appointmentPayload.status = 'approved';
+    }
+
+    // Visitor is creating appointment via link, so both admin and employee should be notified
+    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { 
+      sendNotifications: true,
+      createdByVisitor: true, // Flag to indicate visitor created via link
+      adminUserId: adminUserId // Pass admin user ID for notifications
+    });
 
     // Mark link as booked
     await this.markAsBooked(token);

@@ -12,6 +12,7 @@ import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
 import { RazorpayService } from '../../services/razorpay/razorpay.service';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class UserSubscriptionController {
 
@@ -38,6 +39,7 @@ export class UserSubscriptionController {
     /**
      * Get trial limits status
      * GET /api/v1/user-subscriptions/trial-limits
+     * For employees, returns admin's subscription status
      */
     @TryCatch('Failed to get trial limits status')
     static async getTrialLimitsStatus(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
@@ -45,7 +47,26 @@ export class UserSubscriptionController {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
-        const userId = req.user._id.toString();
+        // Check if user is an employee
+        // If employee, use admin's subscription (employee's createdBy)
+        // If admin, use their own subscription
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        let userId = req.user._id.toString();
+
+        if (isEmployee) {
+            // Employee uses admin's subscription
+            const adminUserId = await EmployeeUtil.getAdminUserIdForEmployee(req.user);
+            if (adminUserId) {
+                userId = adminUserId;
+            } else {
+                // If admin not found, return default/empty status
+                throw new AppError(
+                    'Employee account is not properly linked to an admin. Please contact your administrator.',
+                    ERROR_CODES.FORBIDDEN
+                );
+            }
+        }
+
         const status = await UserSubscriptionService.getSubscriptionStatus(userId);
 
         ResponseUtil.success(res, 'Trial limits status retrieved successfully', status);
@@ -54,11 +75,21 @@ export class UserSubscriptionController {
     /**
      * Create Razorpay order for subscription
      * POST /api/v1/user-subscriptions/razorpay/checkout
+     * Employees cannot purchase subscriptions - they use admin's subscription
      */
     @TryCatch('Failed to create checkout session')
     static async createRazorpayCheckout(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        // Check if user is an employee - employees cannot purchase subscriptions
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        if (isEmployee) {
+            throw new AppError(
+                "Employees cannot purchase subscriptions. Your access is managed by your administrator. Please contact your administrator to upgrade the subscription.",
+                ERROR_CODES.FORBIDDEN
+            );
         }
 
         const request = {
@@ -75,11 +106,21 @@ export class UserSubscriptionController {
     /**
      * Verify Razorpay payment and activate subscription
      * POST /api/v1/user-subscriptions/razorpay/verify
+     * Employees cannot purchase subscriptions - they use admin's subscription
      */
     @TryCatch('Failed to verify Razorpay payment')
     static async verifyRazorpayPayment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        // Check if user is an employee - employees cannot purchase subscriptions
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        if (isEmployee) {
+            throw new AppError(
+                "Employees cannot purchase subscriptions. Your access is managed by your administrator. Please contact your administrator to upgrade the subscription.",
+                ERROR_CODES.FORBIDDEN
+            );
         }
 
         const { orderId, paymentId, signature, planId } = req.body;

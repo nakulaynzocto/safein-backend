@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { CONSTANTS } from '../../utils/constants';
+import { NotificationService } from '../notification/notification.service';
 
 export enum SocketEvents {
   CONNECTION = 'connection',
@@ -101,12 +102,12 @@ class SocketService {
     };
   }
 
-  emitAppointmentStatusChange(userId: string, appointmentData: {
+  async emitAppointmentStatusChange(userId: string, appointmentData: {
     appointmentId: string;
     status: string;
     updatedAt?: Date;
     appointment?: any;
-  }, showNotification: boolean = true): void {
+  }, showNotification: boolean = true): Promise<void> {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
 
     const payload = {
@@ -116,6 +117,47 @@ class SocketService {
     };
 
     if (showNotification) {
+      // Save notification to database
+      try {
+        const statusMessages: { [key: string]: { title: string; message: string } } = {
+          approved: {
+            title: 'Appointment Approved',
+            message: `${visitorName} has approved the appointment with ${employeeName}`,
+          },
+          rejected: {
+            title: 'Appointment Rejected',
+            message: `${visitorName} has rejected the appointment with ${employeeName}`,
+          },
+          completed: {
+            title: 'Appointment Completed',
+            message: `Appointment with ${visitorName} has been completed`,
+          },
+        };
+
+        const statusInfo = statusMessages[appointmentData.status] || {
+          title: 'Appointment Status Changed',
+          message: `Appointment status has been changed to ${appointmentData.status}`,
+        };
+
+        await NotificationService.createNotification({
+          userId,
+          type: appointmentData.status === 'approved' ? 'appointment_approved' : 
+                appointmentData.status === 'rejected' ? 'appointment_rejected' : 
+                'appointment_status_changed',
+          title: statusInfo.title,
+          message: statusInfo.message,
+          appointmentId: appointmentData.appointmentId,
+          metadata: {
+            status: appointmentData.status,
+            employeeName,
+            visitorName,
+          },
+        });
+      } catch (error: any) {
+        // Log error but don't fail the socket emission
+        console.error('Failed to save notification to database:', error?.message || error);
+      }
+
       this.emitToUser(userId, SocketEvents.APPOINTMENT_STATUS_CHANGED, {
         type: 'APPOINTMENT_STATUS_CHANGED',
         payload,
@@ -123,6 +165,7 @@ class SocketService {
       });
     }
 
+    // Always emit update event for dashboard refresh
     this.emitToAll(SocketEvents.APPOINTMENT_UPDATED, {
       type: 'APPOINTMENT_UPDATED',
       payload: appointmentData,
@@ -130,7 +173,7 @@ class SocketService {
     });
   }
 
-  emitAppointmentCreated(userId: string, appointmentData: any, showNotification: boolean = true): void {
+  async emitAppointmentCreated(userId: string, appointmentData: any, showNotification: boolean = true): Promise<void> {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
 
     const payload = {
@@ -140,6 +183,26 @@ class SocketService {
     };
 
     if (showNotification) {
+      // Save notification to database
+      try {
+        await NotificationService.createNotification({
+          userId,
+          type: 'appointment_created',
+          title: 'New Appointment Request',
+          message: `${visitorName} has requested an appointment with ${employeeName}`,
+          appointmentId: appointmentData.appointmentId || appointmentData.appointment?._id?.toString(),
+          metadata: {
+            employeeName,
+            visitorName,
+            scheduledDate: appointmentData.appointment?.appointmentDetails?.scheduledDate,
+            scheduledTime: appointmentData.appointment?.appointmentDetails?.scheduledTime,
+          },
+        });
+      } catch (error: any) {
+        // Log error but don't fail the socket emission
+        console.error('Failed to save notification to database:', error?.message || error);
+      }
+
       this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
         type: 'APPOINTMENT_CREATED',
         payload,

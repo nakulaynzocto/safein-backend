@@ -67,6 +67,7 @@ export interface ICreateAppointmentDTO {
     appointmentDetails: IAppointmentDetails;
     securityDetails?: ISecurityDetails;
     notifications?: INotifications;
+    status?: AppointmentStatus; // Optional: if not provided, defaults to 'pending'
 }
 
 export interface IUpdateAppointmentDTO {

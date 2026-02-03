@@ -3,6 +3,7 @@ import { getBaseEmailTemplate } from './base-email.template';
 /**
  * Employee Appointment Approval Email Template
  * Sent to employee when they approve an appointment
+ * Modern, Professional, and User-Friendly Design
  */
 export function getEmployeeAppointmentApprovalEmailTemplate(
   employeeName: string,
@@ -19,7 +20,7 @@ export function getEmployeeAppointmentApprovalEmailTemplate(
 
   const content = `
             <div class="greeting">
-                Appointment Confirmation
+                Appointment Confirmation ✅
             </div>
             
             <div class="message">
@@ -29,18 +30,36 @@ export function getEmployeeAppointmentApprovalEmailTemplate(
             
             <div class="highlight-box">
                 <h3>Confirmed Appointment Details</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>👤 Visitor:</strong> ${visitorName}</p>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Visitor</div>
+                        <div class="detail-value">${visitorName}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="message">
-                <strong>Meeting Preparation Checklist:</strong><br><br>
-                ✓ Visitor has been notified of approval<br>
-                ✓ Appointment is confirmed in the system<br>
-                ✓ Please ensure you're available at the scheduled time<br>
-                ✓ Prepare any necessary materials or documents<br>
-                ✓ Review visitor information if needed
+            <div class="info-box">
+                <strong>✓ Meeting Preparation Checklist:</strong><br><br>
+                • Visitor has been notified of approval<br>
+                • Appointment is confirmed in the system<br>
+                • Please ensure you're available at the scheduled time<br>
+                • Prepare any necessary materials or documents<br>
+                • Review visitor information if needed
             </div>
             
             <div class="security-note security-success">
@@ -90,6 +109,7 @@ Need help? Contact us at support@safein.com
 /**
  * Employee Appointment Rejection Email Template
  * Sent to employee when they reject an appointment
+ * Modern, Professional, and User-Friendly Design
  */
 export function getEmployeeAppointmentRejectionEmailTemplate(
   employeeName: string,
@@ -114,15 +134,33 @@ export function getEmployeeAppointmentRejectionEmailTemplate(
                 This is a confirmation that you have declined the appointment request from ${visitorName}. The visitor has been notified of this decision.
             </div>
             
-            <div class="highlight-box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 4px solid #ffc107;">
-                <h3>Declined Appointment Details</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>👤 Visitor:</strong> ${visitorName}</p>
+            <div class="info-card" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-left: 5px solid #f59e0b;">
+                <h3 style="color: #92400e;">Declined Appointment Details</h3>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Visitor</div>
+                        <div class="detail-value">${visitorName}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="message">
-                <strong>What Happens Next:</strong><br><br>
+            <div class="info-box">
+                <strong>📋 What Happens Next:</strong><br><br>
                 • The visitor has been automatically notified of the rejection<br>
                 • They may contact you directly to discuss alternative options<br>
                 • You can view this and other appointment requests in your dashboard<br>
@@ -172,4 +210,3 @@ SafeIn Security Team
 Need help? Contact us at support@safein.com
   `;
 }
-

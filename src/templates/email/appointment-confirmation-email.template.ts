@@ -3,6 +3,7 @@ import { getBaseEmailTemplate } from './base-email.template';
 /**
  * Appointment Confirmation Email Template
  * Sent to visitor when appointment is created (pending approval)
+ * Modern, Professional, and User-Friendly Design
  */
 export function getAppointmentConfirmationEmailTemplate(
   visitorName: string,
@@ -30,14 +31,38 @@ export function getAppointmentConfirmationEmailTemplate(
             
             <div class="highlight-box">
                 <h3>Appointment Details</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>👤 Meeting With:</strong> ${employeeName}</p>
-                <p><strong>📋 Purpose:</strong> ${purpose}</p>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Meeting With</div>
+                        <div class="detail-value">${employeeName}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">📋</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Purpose</div>
+                        <div class="detail-value">${purpose}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="message">
-                <strong>What Happens Next?</strong><br><br>
+            <div class="info-box">
+                <strong>📋 What Happens Next?</strong><br><br>
                 • Your appointment request has been sent to ${employeeName} for review<br>
                 • You will receive a confirmation email once your appointment is approved<br>
                 • If approved, please arrive 10 minutes early for security check-in<br>
@@ -67,29 +92,27 @@ export function getAppointmentConfirmationEmailText(
   });
 
   return `
-    Appointment Request Submitted
+Appointment Request Submitted
 
-    Hello ${visitorName},
+Hello ${visitorName},
 
-    Thank you for booking an appointment with us. Your appointment request has been submitted and is pending approval from ${employeeName}.
+Thank you for booking an appointment with us. Your appointment request has been submitted and is pending approval from ${employeeName}.
 
-    Appointment Details:
-    Date: ${formattedDate}
-    Time: ${scheduledTime}
-    Meeting With: ${employeeName}
-    Purpose: ${purpose}
+Appointment Details:
+Date: ${formattedDate}
+Time: ${scheduledTime}
+Meeting With: ${employeeName}
+Purpose: ${purpose}
 
-    What Happens Next?
-    - Your appointment request has been sent to ${employeeName} for review
-    - You will receive a confirmation email once your appointment is approved
-    - If approved, please arrive 10 minutes early for security check-in
-    - Bring a valid government-issued photo ID
+What Happens Next?
+- Your appointment request has been sent to ${employeeName} for review
+- You will receive a confirmation email once your appointment is approved
+- If approved, please arrive 10 minutes early for security check-in
+- Bring a valid government-issued photo ID
 
-    Status: Your appointment is currently pending approval. You will be notified via email once ${employeeName} reviews and approves your request.
+Status: Your appointment is currently pending approval. You will be notified via email once ${employeeName} reviews and approves your request.
 
-    Best Regards,
-    SafeIn Security Team
+Best Regards,
+SafeIn Security Team
   `;
 }
-
-

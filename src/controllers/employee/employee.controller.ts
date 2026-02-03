@@ -41,13 +41,16 @@ export class EmployeeController {
 
         const query: IGetEmployeesQuery = req.query;
         const userId = req.user._id.toString();
-        const result = await EmployeeService.getAllEmployees(query, userId);
+        const userEmail = req.user.email;
+        const userEmployeeId = req.user.employeeId;
+        const result = await EmployeeService.getAllEmployees(query, userId, userEmail, userEmployeeId);
         ResponseUtil.success(res, 'Employees retrieved successfully', result);
     }
 
     /**
      * Get employee by ID (user-specific)
      * GET /api/employees/:id
+     * Allows employees to access their own record even if created by admin
      */
     @TryCatch('Failed to get employee')
     static async getEmployeeById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
@@ -61,7 +64,18 @@ export class EmployeeController {
         const employee = await EmployeeService.getEmployeeById(id);
 
         const employeeRecord = await Employee.findById(id);
-        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+        if (!employeeRecord) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        // Allow access if:
+        // 1. User created the employee (admin case)
+        // 2. User is the employee themselves (employee accessing their own record)
+        const isCreator = employeeRecord.createdBy.toString() === userId;
+        const isEmployeeSelf = req.user.employeeId === id || 
+                               (req.user.email && employeeRecord.email?.toLowerCase().trim() === req.user.email.toLowerCase().trim());
+
+        if (!isCreator && !isEmployeeSelf) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
         }
 

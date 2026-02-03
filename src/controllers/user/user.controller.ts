@@ -235,6 +235,17 @@ export class UserController {
     ResponseUtil.success(res, 'Password reset successfully');
   }
 
+  /**
+   * Setup employee password (activates account and returns login credentials)
+   * POST /api/v1/users/setup-employee-password
+   */
+  @TryCatch('Failed to setup employee password')
+  static async setupEmployeePassword(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const setupPasswordData = req.body;
+    const result = await UserService.setupEmployeePassword(setupPasswordData);
+    ResponseUtil.success(res, 'Employee password setup successful. Account activated.', result);
+  }
+
   @TryCatch('Failed to logout')
   static async logout(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     ResponseUtil.success(res, 'Logout successful');

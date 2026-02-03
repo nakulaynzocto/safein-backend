@@ -3,6 +3,7 @@ import { getBaseEmailTemplate } from './base-email.template';
 /**
  * Appointment Rejection Email Template
  * Sent to visitor when appointment is rejected
+ * Modern, Professional, and User-Friendly Design
  */
 export function getAppointmentRejectionEmailTemplate(
   visitorName: string,
@@ -27,20 +28,34 @@ export function getAppointmentRejectionEmailTemplate(
                 We regret to inform you that your appointment request with ${employeeName} has been declined. We understand this may be disappointing, and we sincerely apologize for any inconvenience this may cause.
             </div>
             
-            <div class="highlight-box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 4px solid #ffc107;">
-                <h3>Original Appointment Request:</h3>
-                <p><strong>📅 Date:</strong> ${formattedDate}</p>
-                <p><strong>🕐 Time:</strong> ${scheduledTime}</p>
-                <p><strong>👤 Employee:</strong> ${employeeName}</p>
+            <div class="info-card" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-left: 5px solid #f59e0b;">
+                <h3 style="color: #92400e;">Original Appointment Request</h3>
+                <div class="detail-row">
+                    <div class="detail-icon">📅</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Date</div>
+                        <div class="detail-value">${formattedDate}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🕐</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Time</div>
+                        <div class="detail-value">${scheduledTime}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Employee</div>
+                        <div class="detail-value">${employeeName}</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="message">
-                <strong>What's Next?</strong><br><br>
+            <div class="info-box">
+                <strong>📋 What's Next?</strong><br><br>
                 We encourage you to schedule a new appointment at a time that works better for both parties. Our scheduling system is available 24/7, and you can book a new appointment at your convenience.
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="#" class="action-button">Schedule New Appointment</a>
             </div>
             
             <div class="security-note">
@@ -86,4 +101,3 @@ SafeIn Security Team
 Need help? Contact us at support@safein.com
   `;
 }
-

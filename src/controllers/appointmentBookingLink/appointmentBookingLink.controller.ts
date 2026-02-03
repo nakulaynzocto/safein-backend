@@ -120,8 +120,12 @@ export class AppointmentBookingLinkController {
       const createdBy = await AppointmentBookingLinkService.getLinkCreatorId(token);
       if (!createdBy) throw new AppError('Failed to get appointment link creator', ERROR_CODES.INTERNAL_SERVER_ERROR);
 
-      // Check creator subscription limits
-      await UserSubscriptionService.checkPlanLimits(createdBy, 'visitors');
+      // Get the admin's userId (for subscription check)
+      // If createdBy is an employee, get their admin's ID; otherwise use createdBy (admin)
+      const adminUserId = await AppointmentBookingLinkService.getAdminUserIdForCreator(createdBy);
+      
+      // Check admin's subscription limits (not employee's)
+      await UserSubscriptionService.checkPlanLimits(adminUserId, 'visitors');
 
       const visitor = await VisitorService.createVisitor(visitorData, createdBy);
       if (!visitor?._id) throw new AppError('Failed to create visitor', ERROR_CODES.INTERNAL_SERVER_ERROR);
