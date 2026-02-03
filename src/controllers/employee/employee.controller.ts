@@ -11,6 +11,7 @@ import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { EmployeeUtil } from '../../utils/employee.util';
 import * as XLSX from 'xlsx';
 
 export class EmployeeController {
@@ -32,6 +33,8 @@ export class EmployeeController {
     /**
      * Get all employees with pagination and filtering (user-specific)
      * GET /api/employees
+     * - Admin: sees ALL employees
+     * - Employee: sees only their own record
      */
     @TryCatch('Failed to get employees')
     static async getAllEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
@@ -43,7 +46,18 @@ export class EmployeeController {
         const userId = req.user._id.toString();
         const userEmail = req.user.email;
         const userEmployeeId = req.user.employeeId;
-        const result = await EmployeeService.getAllEmployees(query, userId, userEmail, userEmployeeId);
+        
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        
+        // For admin: pass undefined userId to show all employees
+        // For employee: pass userId, userEmail, userEmployeeId to show only their own record
+        const result = await EmployeeService.getAllEmployees(
+            query, 
+            isEmployee ? userId : undefined, 
+            isEmployee ? userEmail : undefined, 
+            isEmployee ? userEmployeeId : undefined
+        );
         ResponseUtil.success(res, 'Employees retrieved successfully', result);
     }
 
