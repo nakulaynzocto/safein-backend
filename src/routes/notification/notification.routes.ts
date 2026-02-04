@@ -17,3 +17,5 @@ router.delete('/', asyncWrapper(NotificationController.deleteAllNotifications));
 
 export default router;
 
+
+

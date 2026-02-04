@@ -49,7 +49,7 @@ export class UserController {
       password: password,
     };
     console.log("login function call")
-    console.log("login details",loginData)
+    console.log("login details", loginData)
     try {
       const result = await UserService.loginUser(loginData);
       // Login attempt tracking is handled by loginAttemptTracker middleware
@@ -140,7 +140,8 @@ export class UserController {
     const result = await UserService.getAllUsers(
       parseInt(page as string),
       parseInt(limit as string),
-      includeDeleted === 'true'
+      includeDeleted === 'true',
+      req.user._id.toString()
     );
     ResponseUtil.success(res, 'Users retrieved successfully', result);
   }

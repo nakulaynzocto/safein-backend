@@ -310,9 +310,9 @@ export class UserService {
     // If admin updates company details (companyName, profilePicture, companyId),
     // also update all employee accounts created by this admin
     const isAdmin = user.roles && user.roles.includes('admin');
-    const hasCompanyUpdate = updateData.companyName !== undefined || 
-                            updateData.profilePicture !== undefined || 
-                            updateData.companyId !== undefined;
+    const hasCompanyUpdate = updateData.companyName !== undefined ||
+      updateData.profilePicture !== undefined ||
+      updateData.companyId !== undefined;
 
     if (isAdmin && hasCompanyUpdate) {
       // Prepare employee update data (only company-related fields)
@@ -330,7 +330,7 @@ export class UserService {
       // Update all employee user accounts created by this admin
       try {
         await User.updateMany(
-          { 
+          {
             createdBy: user._id,
             roles: { $in: ['employee'] },
             isDeleted: false
@@ -380,7 +380,7 @@ export class UserService {
   /**
    * Get all users (admin function) - with Today's Appointment Count
    */
-  static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
+  static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false, createdBy?: string): Promise<{
     users: (IUserResponse & { appointmentsTodayCount: number })[];
     total: number;
     page: number;
@@ -388,6 +388,18 @@ export class UserService {
   }> {
     const skip = (page - 1) * limit;
     const matchStage: any = includeDeleted ? {} : { isDeleted: false };
+
+    // Multi-tenancy: Filter by createdBy if provided
+    if (createdBy) {
+      const createdByObjectId = toObjectId(createdBy);
+      if (createdByObjectId) {
+        matchStage.$or = [
+          { _id: createdByObjectId }, // Include themselves
+          { createdBy: createdByObjectId } // Include users they created (sub-admins/employees)
+        ];
+      }
+    }
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
@@ -496,7 +508,7 @@ export class UserService {
     if (isAdmin) {
       try {
         const { Employee } = await import('../../models/employee/employee.model');
-        
+
         // Disable all employee user accounts created by this admin
         await User.updateMany(
           {
@@ -550,7 +562,7 @@ export class UserService {
     if (isAdmin) {
       try {
         const { Employee } = await import('../../models/employee/employee.model');
-        
+
         // Restore all employee user accounts created by this admin
         await User.updateMany(
           {

@@ -11,7 +11,6 @@ import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
-import { EmployeeUtil } from '../../utils/employee.util';
 
 export class VisitorController {
     /**
@@ -32,7 +31,7 @@ export class VisitorController {
     /**
      * Get all visitors with pagination and filtering (user-specific)
      * GET /api/visitors
-     * - Admin: sees ALL visitors
+     * - Admin: sees only THEIR OWN visitors (created by them or their employees)
      * - Employee: sees only visitors they created (if any)
      */
     @TryCatch('Failed to get visitors')
@@ -44,12 +43,10 @@ export class VisitorController {
         const query: IGetVisitorsQuery = req.query;
         const userId = req.user._id.toString();
         
-        // Check if user is an employee
-        const isEmployee = await EmployeeUtil.isEmployee(req.user);
-        
-        // For admin: pass undefined userId to show all visitors
-        // For employee: pass userId to show only visitors they created
-        const result = await VisitorService.getAllVisitors(query, isEmployee ? userId : undefined);
+        // SECURITY FIX: Always pass userId to filter by admin's createdBy
+        // - For admin: shows visitors created by this admin (their own data)
+        // - For employee: shows visitors created by this employee (if any)
+        const result = await VisitorService.getAllVisitors(query, userId);
         ResponseUtil.success(res, 'Visitors retrieved successfully', result);
     }
 

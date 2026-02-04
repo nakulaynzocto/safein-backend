@@ -54,10 +54,10 @@ export class AppointmentService {
     ): Promise<void> {
         try {
             // Normalize adminUserId to string for consistent comparison and socket room naming
-            const adminUserIdString = adminUserId 
+            const adminUserIdString = adminUserId
                 ? (typeof adminUserId === 'string' ? adminUserId : (adminUserId as any)?.toString() || String(adminUserId))
                 : null;
-            
+
             // Send to admin only if:
             // - Employee performed the action (admin needs to know employee approved/rejected/completed)
             // - Visitor created appointment via link (admin should know about new appointments from visitors)
@@ -178,7 +178,7 @@ export class AppointmentService {
             if (populatedAppointment && emailEnabled) {
                 const employeeEmail = (populatedAppointment.employeeId as any)?.email;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
-                
+
                 // If appointment is already approved (e.g., via employee's link), send confirmation email instead of approval request
                 if (appointment.status === 'approved') {
                     // Send appointment confirmation email to employee (appointment already approved)
@@ -308,7 +308,7 @@ export class AppointmentService {
             if (sendNotifications && populatedAppointment) {
                 const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
                 const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
-                
+
                 // Use adminUserId if provided (for link-created appointments), otherwise use createdBy
                 const userIdForNotification = adminUserId || ((createdBy as any)?.toString() || createdBy);
 
@@ -383,11 +383,12 @@ export class AppointmentService {
     /**
      * Get all appointments with pagination and filtering (user-specific)
      * @param query - Query parameters including filters
+     * @param adminUserId - Optional admin user ID for filtering admin's appointments
      * Filter logic:
      * - If employeeId is in query → filter by employeeId only (employee sees only their appointments)
-     * - If employeeId is NOT in query → show ALL appointments (admin sees all appointments)
+     * - If adminUserId is provided → filter by admin's employees (admin sees only appointments with their employees)
      */
-    static async getAllAppointments(query: IGetAppointmentsQuery = {}): Promise<IAppointmentListResponse> {
+    static async getAllAppointments(query: IGetAppointmentsQuery = {}, adminUserId?: string): Promise<IAppointmentListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -403,10 +404,41 @@ export class AppointmentService {
 
         const filter: any = { isDeleted: false };
 
-        // Filter logic:
-        // 1. If employeeId is in query → filter by employeeId only (employee sees only their appointments)
-        // 2. If employeeId is NOT in query → show ALL appointments (admin sees all appointments, no filter by createdBy)
-        // Note: We don't filter by createdBy because admin should see ALL appointments regardless of who created them
+        // SECURITY FIX: Filter appointments by admin's employees
+        // - Admin sees only appointments where employees belong to them (createdBy = adminUserId)
+        if (adminUserId) {
+            // Get all employees created by this admin
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id.toString());
+
+            if (adminEmployeeIds.length > 0) {
+                if (employeeId) {
+                    // If a specific employeeId is requested, verify they belong to this admin
+                    if (adminEmployeeIds.includes(employeeId.toString())) {
+                        filter.employeeId = toObjectId(employeeId);
+                    } else {
+                        // Employee doesn't belong to this admin, return empty result
+                        filter._id = null;
+                    }
+                } else {
+                    // No specific employee requested, show all admin's employees
+                    filter.employeeId = { $in: adminEmployeeIds.map(id => toObjectId(id)) };
+                }
+            } else {
+                // Admin has no employees, return empty result
+                filter._id = null;
+            }
+        } else if (employeeId) {
+            // Employee case: they only see their own appointments (id already filtered in controller)
+            const employeeIdObjectId = toObjectId(employeeId);
+            if (employeeIdObjectId) {
+                filter.employeeId = employeeIdObjectId;
+            }
+        }
 
         if (search) {
             const escapedSearch = escapeRegex(search);
@@ -452,18 +484,6 @@ export class AppointmentService {
             if (employeeIds.length > 0) {
                 filter.$or.push({ employeeId: { $in: employeeIds } });
             }
-        }
-
-        if (employeeId) {
-            const employeeIdObjectId = toObjectId(employeeId);
-            if (employeeIdObjectId) {
-                filter.employeeId = employeeIdObjectId;
-            } else {
-                // Log warning if employeeId is not a valid ObjectId
-                console.warn('Invalid employeeId format in query:', employeeId);
-            }
-            // If employeeId is not a valid ObjectId, skip adding it to filter
-            // This prevents invalid queries and will return no matches
         }
 
         if (status) {
@@ -1087,10 +1107,11 @@ export class AppointmentService {
 
     /**
      * Get dashboard statistics (unified for admin and employee)
-     * @param employeeId - Optional. If provided, filters by employee (for employees). If not provided, shows all (for admin)
+     * @param employeeId - Optional. If provided, filters by employee (for employees)
+     * @param adminUserId - Optional. If provided, filters by admin's employees (for admin)
      * @returns Dashboard statistics
      */
-    static async getDashboardStats(employeeId?: string): Promise<IDashboardStats> {
+    static async getDashboardStats(employeeId?: string, adminUserId?: string): Promise<IDashboardStats> {
         // Get today's date range
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
@@ -1102,15 +1123,30 @@ export class AppointmentService {
 
         // Build match filter
         const matchFilter: any = { isDeleted: false };
-        
+
         // If employeeId is provided, filter by employee (for employees)
-        // If employeeId is NOT provided, show all appointments (for admin)
+        // If adminUserId is provided, filter by admin's employees (for admin)
         if (employeeId) {
             const employeeIdObjectId = toObjectId(employeeId);
             if (!employeeIdObjectId) {
                 throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
             }
             matchFilter.employeeId = employeeIdObjectId;
+        } else if (adminUserId) {
+            // SECURITY FIX: Filter stats by admin's employees
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id);
+
+            if (adminEmployeeIds.length > 0) {
+                matchFilter.employeeId = { $in: adminEmployeeIds };
+            } else {
+                // Admin has no employees, return zero stats
+                matchFilter._id = null; // This will return no results
+            }
         }
 
         // OPTIMIZED: Use single aggregation pipeline instead of 7 separate countDocuments

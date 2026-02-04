@@ -33,7 +33,7 @@ export class EmployeeController {
     /**
      * Get all employees with pagination and filtering (user-specific)
      * GET /api/employees
-     * - Admin: sees ALL employees
+     * - Admin: sees only THEIR OWN employees (created by them)
      * - Employee: sees only their own record
      */
     @TryCatch('Failed to get employees')
@@ -50,11 +50,12 @@ export class EmployeeController {
         // Check if user is an employee
         const isEmployee = await EmployeeUtil.isEmployee(req.user);
         
-        // For admin: pass undefined userId to show all employees
-        // For employee: pass userId, userEmail, userEmployeeId to show only their own record
+        // SECURITY FIX: Always pass userId to filter by admin's createdBy
+        // - For admin: shows employees created by this admin (their own data)
+        // - For employee: shows only their own employee record
         const result = await EmployeeService.getAllEmployees(
             query, 
-            isEmployee ? userId : undefined, 
+            userId, 
             isEmployee ? userEmail : undefined, 
             isEmployee ? userEmployeeId : undefined
         );

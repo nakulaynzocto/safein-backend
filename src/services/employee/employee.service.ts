@@ -57,13 +57,28 @@ export class EmployeeService {
 
         // Automatically create user account and send setup email
         try {
-            // Check if user already exists with this email
+            // Check if user already exists with this email under the SAME admin
             const existingUser = await User.findOne({
                 email: employeeData.email.toLowerCase().trim(),
                 isDeleted: false,
+                createdBy: createdByObjectId // Only check for users created by the same admin
             }).session(session);
 
             if (!existingUser) {
+                // Also check if this email belongs to an admin account (global check)
+                const adminWithEmail = await User.findOne({
+                    email: employeeData.email.toLowerCase().trim(),
+                    isDeleted: false,
+                    roles: 'admin'
+                }).session(session);
+
+                if (adminWithEmail) {
+                    throw new AppError(
+                        `Cannot create employee. A user account with email ${employeeData.email} already exists as an admin. Please use a different email.`,
+                        ERROR_CODES.CONFLICT
+                    );
+                }
+
                 // Get admin user to get company name
                 let companyName = employeeData.name; // Fallback
                 const adminUser = await User.findById(createdByObjectId).select('companyName').session(session);
@@ -98,7 +113,7 @@ export class EmployeeService {
                 try {
                     const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
                     const setupUrl = `${baseUrl.replace(/\/$/, '')}/employee-setup?token=${setupToken}`;
-                    
+
                     await EmailService.sendEmployeeSetupEmail(
                         employeeData.email,
                         employeeData.name,
@@ -110,33 +125,11 @@ export class EmployeeService {
                     // Continue even if email fails - employee is still created
                 }
             } else {
-                // User exists - validate that it's not an admin account
-                if (existingUser.roles && existingUser.roles.includes('admin')) {
-                    throw new AppError(
-                        `Cannot create employee. A user account with email ${employeeData.email} already exists as an admin. Please use a different email.`,
-                        ERROR_CODES.CONFLICT
-                    );
-                }
-
-                // Link employee to user if not already linked
-                if (!existingUser.employeeId) {
-                    existingUser.employeeId = (employee._id as any).toString();
-                }
-                if (!existingUser.roles.includes('employee')) {
-                    existingUser.roles.push('employee');
-                }
-                // Update company details from admin
-                const adminUser = await User.findById(createdByObjectId).select('companyName profilePicture companyId').session(session);
-                if (adminUser) {
-                    existingUser.companyName = adminUser.companyName;
-                    if (adminUser.profilePicture) {
-                        existingUser.profilePicture = adminUser.profilePicture;
-                    }
-                    if (adminUser.companyId) {
-                        existingUser.companyId = adminUser.companyId;
-                    }
-                }
-                await existingUser.save({ session });
+                // User exists under the same admin - this means the employee email is already registered for this admin
+                throw new AppError(
+                    ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS,
+                    ERROR_CODES.CONFLICT
+                );
             }
         } catch (userCreationError: any) {
             // If user creation fails, throw error to rollback employee creation
@@ -211,7 +204,7 @@ export class EmployeeService {
             // For employees: Include their own record even if created by admin
             if (userEmployeeId || (userEmail && userEmail.trim())) {
                 accessConditions.push({ createdBy: userId }); // Employees created by this user (admin case)
-                
+
                 // Add employee's own record if they have employeeId or matching email
                 if (userEmployeeId) {
                     accessConditions.push({ _id: userEmployeeId });
@@ -397,11 +390,11 @@ export class EmployeeService {
         // Disable user account and remove employeeId reference
         try {
             await User.updateMany(
-                { 
+                {
                     employeeId: (employee._id as any).toString(),
                     isDeleted: false
                 },
-                { 
+                {
                     $unset: { employeeId: "" },
                     $set: { isActive: false }
                 },

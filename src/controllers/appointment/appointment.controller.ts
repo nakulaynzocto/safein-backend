@@ -35,7 +35,7 @@ export class AppointmentController {
     /**
      * Get all appointments with pagination and filtering (user-specific)
      * GET /api/appointments
-     * - Admin: sees ALL appointments
+     * - Admin: sees only THEIR OWN appointments (with their employees)
      * - Employee: sees only their own appointments
      */
     @TryCatch('Failed to get appointments')
@@ -45,10 +45,11 @@ export class AppointmentController {
         }
 
         const query: IGetAppointmentsQuery = req.query;
-        
+        const userId = req.user._id.toString();
+
         // Check if user is an employee
         const isEmployee = await EmployeeUtil.isEmployee(req.user);
-        
+
         // If employee, automatically filter by their employeeId (so they only see their own appointments)
         if (isEmployee) {
             const employeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
@@ -70,10 +71,11 @@ export class AppointmentController {
                 return;
             }
         }
-        
-        // For admin: don't pass userId (so it shows ALL appointments - no filter by createdBy)
-        // For employee: employeeId is already in query, so it will filter by employeeId only
-        const result = await AppointmentService.getAllAppointments(query);
+
+        // SECURITY FIX: Pass adminUserId to filter appointments by admin's employees
+        // - For admin: shows appointments with employees created by this admin (their own data)
+        // - For employee: employeeId is already in query, adminUserId won't be used
+        const result = await AppointmentService.getAllAppointments(query, isEmployee ? undefined : userId);
         ResponseUtil.success(res, 'Appointments retrieved successfully', result);
     }
 
@@ -93,10 +95,24 @@ export class AppointmentController {
         // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentById(id);
 
-        // Additional check: verify the appointment was created by the current user
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        const employeeId = isEmployee ? await EmployeeUtil.getEmployeeIdFromUser(req.user) : null;
+
+        // Additional check: verify access
+        // - Admin: must have created the appointment (or belongs to their employee)
+        // - Employee: must be the assigned employee for this appointment
         const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
+
+        if (!appointmentRecord) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        const isCreator = appointmentRecord.createdBy.toString() === userId;
+        const isAssignedEmployee = employeeId && appointmentRecord.employeeId.toString() === employeeId;
+
+        if (!isCreator && !isAssignedEmployee) {
+            throw new AppError('Access denied', ERROR_CODES.FORBIDDEN);
         }
 
         ResponseUtil.success(res, 'Appointment retrieved successfully', appointment);
@@ -125,10 +141,10 @@ export class AppointmentController {
 
         const { id } = req.params;
         const updateData: IUpdateAppointmentDTO = req.body;
-        
+
         // Check if status is being changed to approved/rejected
         const isStatusChange = updateData.status === 'approved' || updateData.status === 'rejected';
-        
+
         // Determine if user is an employee
         let actionBy: 'admin' | 'employee' = 'admin';
         if (isStatusChange) {
@@ -138,8 +154,8 @@ export class AppointmentController {
                     // Check if appointment belongs to this employee
                     const appointment = await AppointmentService.getAppointmentById(id);
                     if (appointment) {
-                        const appointmentEmployeeId = (appointment as any).employeeId?._id?.toString() || 
-                                                       (appointment as any).employeeId?.toString();
+                        const appointmentEmployeeId = (appointment as any).employeeId?._id?.toString() ||
+                            (appointment as any).employeeId?.toString();
                         if (appointmentEmployeeId === employeeId) {
                             actionBy = 'employee';
                         }
@@ -236,7 +252,7 @@ export class AppointmentController {
     /**
      * Get dashboard statistics (unified for admin and employee)
      * GET /api/appointments/dashboard/stats
-     * - Admin: sees ALL appointments stats
+     * - Admin: sees only THEIR OWN appointments stats (with their employees)
      * - Employee: sees only their own appointments stats
      */
     @TryCatch('Failed to get dashboard stats')
@@ -245,11 +261,14 @@ export class AppointmentController {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
 
+        const userId = req.user._id.toString();
+
         // Check if user is an employee
         const isEmployee = await EmployeeUtil.isEmployee(req.user);
-        
+
         let employeeId: string | undefined;
-        
+        let adminUserId: string | undefined;
+
         // If employee, get their employeeId to filter stats
         if (isEmployee) {
             const fetchedEmployeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
@@ -260,11 +279,15 @@ export class AppointmentController {
                 );
             }
             employeeId = fetchedEmployeeId;
+        } else {
+            // For admin, pass adminUserId to filter by their employees
+            adminUserId = userId;
         }
-        
-        // For admin: employeeId is undefined, so it shows all appointments
-        // For employee: employeeId is set, so it shows only their appointments
-        const stats = await AppointmentService.getDashboardStats(employeeId);
+
+        // SECURITY FIX: Pass adminUserId to filter stats by admin's employees
+        // - For admin: shows stats for appointments with employees created by this admin
+        // - For employee: shows stats for only their own appointments
+        const stats = await AppointmentService.getDashboardStats(employeeId, adminUserId);
         ResponseUtil.success(res, 'Dashboard stats retrieved successfully', stats);
     }
 }
