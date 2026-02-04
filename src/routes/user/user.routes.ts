@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { UserController } from '../../controllers/user/user.controller';
 import {
     protect,
+    verifyTokenOptional,
     validateRequest,
     passwordResetLimiter,
     userLimiter
@@ -82,6 +83,10 @@ router.post('/exchange-impersonation-token',
     asyncWrapper(UserController.exchangeImpersonationToken)
 );
 
+// Logout should be idempotent: allow calling without Authorization header
+// This prevents noisy 401s during auth transitions (e.g., registration/login flows)
+router.post('/logout', verifyTokenOptional, asyncWrapper(UserController.logout));
+
 router.use(protect);
 router.use(userLimiter);
 
@@ -95,7 +100,6 @@ router.post('/change-password',
     validateRequest(changePasswordValidation),
     asyncWrapper(UserController.changePassword)
 );
-router.post('/logout', asyncWrapper(UserController.logout));
 
 router.get('/:id',
     validateRequest(getUserByIdValidation),

@@ -45,14 +45,18 @@ export class AppointmentBookingLinkService {
     }
 
     // Check if visitor exists by email
+    // Visitors belong to admin, so check by admin's userId, not employee's userId
     const normalizedEmail = visitorEmail.toLowerCase().trim();
-    const createdByObjectId = toObjectId(createdBy);
     let visitorId: any = null;
 
-    if (createdByObjectId) {
+    // Get admin's userId (if createdBy is employee, get their admin's ID)
+    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    const adminUserIdObjectId = toObjectId(adminUserId);
+
+    if (adminUserIdObjectId) {
       const existingVisitor = await Visitor.findOne({
         email: normalizedEmail,
-        createdBy: createdByObjectId,
+        createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
         isDeleted: false,
       })
         .select('_id')
@@ -80,6 +84,9 @@ export class AppointmentBookingLinkService {
     expiresAt.setTime(expiresAt.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
 
     // Create appointment booking link
+    // Note: createdBy can be employee's userId or admin's userId
+    // We store it as-is for tracking who created the link
+    const createdByObjectId = toObjectId(createdBy);
     const appointmentLink = new AppointmentBookingLink({
       visitorEmail: normalizedEmail,
       employeeId: toObjectId(employeeId),
@@ -363,14 +370,24 @@ export class AppointmentBookingLinkService {
 
   /**
    * Check if visitor exists
+   * Checks by admin's userId (not employee's userId)
+   * Visitors belong to admin, so we check across all employees of that admin
    */
   static async checkVisitorExists(
     email: string,
     createdBy: string
   ): Promise<{ exists: boolean; visitor?: any }> {
+    // Get admin's userId (if createdBy is employee, get their admin's ID)
+    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    const adminUserIdObjectId = toObjectId(adminUserId);
+
+    if (!adminUserIdObjectId) {
+      return { exists: false, visitor: undefined };
+    }
+
     const visitor = await Visitor.findOne({
       email: email.toLowerCase().trim(),
-      createdBy: toObjectId(createdBy),
+      createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
       isDeleted: false,
     })
       .select('name email phone company designation')
@@ -409,27 +426,33 @@ export class AppointmentBookingLinkService {
     let visitorIdString = this.getVisitorIdString(link.visitorId);
 
     // If visitorId is not set, try to find visitor by email and update the link
+    // Visitors belong to admin, so check by admin's userId, not employee's userId
     if (!visitorIdString && link.visitorEmail && link.createdBy) {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
-      const createdByObjectId = toObjectId(createdByIdString || undefined);
-      if (createdByObjectId) {
-        const visitor = await Visitor.findOne({
-          email: link.visitorEmail.toLowerCase().trim(),
-          createdBy: createdByObjectId,
-          isDeleted: false,
-        })
-          .select('_id')
-          .lean();
+      if (createdByIdString) {
+        // Get admin's userId (if createdBy is employee, get their admin's ID)
+        const adminUserId = await this.getAdminUserIdForCreator(createdByIdString);
+        const adminUserIdObjectId = toObjectId(adminUserId);
+        
+        if (adminUserIdObjectId) {
+          const visitor = await Visitor.findOne({
+            email: link.visitorEmail.toLowerCase().trim(),
+            createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
+            isDeleted: false,
+          })
+            .select('_id')
+            .lean();
 
-        if (visitor && visitor._id) {
-          const visitorObjectId = toObjectId(visitor._id.toString());
-          if (visitorObjectId) {
-            // Update the link document with visitorId
-            const linkDocument = await AppointmentBookingLink.findById(link._id);
-            if (linkDocument) {
-              linkDocument.visitorId = visitorObjectId;
-              await linkDocument.save();
-              visitorIdString = visitor._id.toString();
+          if (visitor && visitor._id) {
+            const visitorObjectId = toObjectId(visitor._id.toString());
+            if (visitorObjectId) {
+              // Update the link document with visitorId
+              const linkDocument = await AppointmentBookingLink.findById(link._id);
+              if (linkDocument) {
+                linkDocument.visitorId = visitorObjectId;
+                await linkDocument.save();
+                visitorIdString = visitor._id.toString();
+              }
             }
           }
         }
