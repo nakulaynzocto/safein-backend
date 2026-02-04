@@ -57,25 +57,13 @@ export class EmployeeService {
 
         // Automatically create user account and send setup email
         try {
-            // Check if user already exists with this email under the SAME admin
+            // Check if user already exists with this email (global check)
             const existingUser = await User.findOne({
                 email: employeeData.email.toLowerCase().trim(),
-                isDeleted: false,
-                createdBy: createdByObjectId // Only check for users created by the same admin
+                isDeleted: false
             }).session(session);
 
             if (!existingUser) {
-                // Check if this admin is trying to use their own email as employee
-                // (That's not allowed - admin can't be their own employee)
-                const currentAdmin = await User.findById(createdByObjectId).select('email').session(session);
-                if (currentAdmin && currentAdmin.email.toLowerCase().trim() === employeeData.email.toLowerCase().trim()) {
-                    throw new AppError(
-                        `Cannot create employee with your own admin email. Please use a different email.`,
-                        ERROR_CODES.CONFLICT
-                    );
-                }
-
-                // Get admin user to get company name
                 let companyName = employeeData.name; // Fallback
                 const adminUser = await User.findById(createdByObjectId).select('companyName').session(session);
                 if (adminUser) {
@@ -97,7 +85,6 @@ export class EmployeeService {
                     isEmailVerified: false,
                     passwordResetToken: hashedToken,
                     resetPasswordExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-                    employeeId: (employee._id as any).toString(),
                     createdBy: createdByObjectId,
                     department: employeeData.department,
                     designation: employeeData.designation || '',
