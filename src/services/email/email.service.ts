@@ -56,6 +56,14 @@ export class EmailService {
       tls: {
         rejectUnauthorized: !CONSTANTS.SKIP_SMTP_VERIFY,
       },
+      // Add timeout settings for production environments
+      connectionTimeout: 60000, // 60 seconds - time to establish connection
+      socketTimeout: 60000, // 60 seconds - time to wait for socket response
+      greetingTimeout: 30000, // 30 seconds - time to wait for SMTP greeting
+      // Retry configuration
+      pool: true, // Use connection pooling for better performance
+      maxConnections: 5, // Maximum number of connections in pool
+      maxMessages: 100, // Maximum messages per connection
     } as nodemailer.TransportOptions;
 
     this.transporter = nodemailer.createTransport(smtpConfig);
@@ -111,7 +119,17 @@ export class EmailService {
 
     for (const config of alternatives) {
       try {
-        this.transporter = nodemailer.createTransport(config);
+        // Add timeout settings to alternative configs as well
+        const configWithTimeouts = {
+          ...config,
+          connectionTimeout: 60000,
+          socketTimeout: 60000,
+          greetingTimeout: 30000,
+          pool: true,
+          maxConnections: 5,
+          maxMessages: 100,
+        };
+        this.transporter = nodemailer.createTransport(configWithTimeouts);
         await this.transporter.verify();
         this.isEmailServiceAvailable = true;
         return true;
@@ -165,22 +183,37 @@ export class EmailService {
       };
     }
 
-    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': CONSTANTS.BREVO_API_KEY,
-      },
-      body: JSON.stringify(emailPayload),
-    });
+    // Add timeout for Brevo API call (30 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Brevo API error: ${res.status} ${text}`);
+    try {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': CONSTANTS.BREVO_API_KEY,
+        },
+        body: JSON.stringify(emailPayload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Brevo API error: ${res.status} ${text}`);
+      }
+
+      const result = await res.json();
+      return result;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Brevo API request timeout after 30 seconds');
+      }
+      throw error;
     }
-
-    const result = await res.json();
-    return result;
   }
 
   /**
@@ -200,8 +233,10 @@ export class EmailService {
     const { to, subject, html, text, from, fromName, disableClickTracking } = options;
 
     // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
+    // Brevo API is preferred because it's more reliable and faster than SMTP
     if (CONSTANTS.BREVO_API_KEY && !this.brevoApiDisabled) {
       try {
+        console.log(`[EmailService] Using Brevo API to send email to ${to}`);
         await this.sendWithBrevo({
           to,
           subject,
@@ -211,6 +246,7 @@ export class EmailService {
           fromName: fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management',
           disableClickTracking,
         });
+        console.log(`[EmailService] Successfully sent email to ${to} via Brevo API`);
         return;
       } catch (brevoError: any) {
         // If it's an authentication error (401), disable Brevo for future attempts
@@ -218,10 +254,15 @@ export class EmailService {
           this.brevoApiDisabled = true;
           console.warn('⚠ Brevo API key is invalid or expired. Disabling Brevo API and using SMTP fallback.');
         } else {
-          console.error('Brevo API failed:', brevoError.message);
+          console.error(`[EmailService] Brevo API failed for ${to}:`, brevoError.message);
+          console.warn(`[EmailService] Falling back to SMTP for ${to}`);
         }
-        // Don't throw here, try fallback
+        // Don't throw here, try SMTP fallback
       }
+    } else if (CONSTANTS.BREVO_API_KEY && this.brevoApiDisabled) {
+      console.warn('[EmailService] Brevo API is disabled (invalid key). Using SMTP fallback.');
+    } else if (!CONSTANTS.BREVO_API_KEY) {
+      console.log('[EmailService] BREVO_API_KEY not set. Using SMTP.');
     }
 
     // Priority 2: Use Resend API if RESEND_API_KEY is set
@@ -260,19 +301,53 @@ export class EmailService {
 
     try {
       if (this.isEmailServiceAvailable) {
-        await this.transporter.sendMail(mailOptions);
+        // Use sendMail with timeout wrapper
+        await Promise.race([
+          this.transporter.sendMail(mailOptions),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('SMTP send timeout after 60 seconds')), 60000)
+          )
+        ]);
         return;
       }
 
       const isConnected = await this.verifyConnection();
       if (isConnected) {
-        await this.transporter.sendMail(mailOptions);
+        // Use sendMail with timeout wrapper
+        await Promise.race([
+          this.transporter.sendMail(mailOptions),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('SMTP send timeout after 60 seconds')), 60000)
+          )
+        ]);
         return;
       }
 
       throw new Error('SMTP connection not available. Please check SMTP configuration.');
     } catch (smtpError: any) {
       console.error(`[EmailService] Failed to send email via SMTP to ${to}:`, smtpError.message);
+      
+      // If SMTP fails but BREVO_API_KEY is available, try Brevo as fallback (all environments)
+      if (CONSTANTS.BREVO_API_KEY && !this.brevoApiDisabled) {
+        console.warn(`[EmailService] SMTP failed for ${to}, attempting Brevo API fallback...`);
+        try {
+          await this.sendWithBrevo({
+            to,
+            subject,
+            html,
+            text,
+            from,
+            fromName: fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management',
+            disableClickTracking,
+          });
+          console.log(`[EmailService] Successfully sent email to ${to} via Brevo API fallback`);
+          return;
+        } catch (brevoError: any) {
+          console.error(`[EmailService] Brevo API fallback also failed for ${to}:`, brevoError.message);
+          // Continue to throw original SMTP error
+        }
+      }
+      
       throw smtpError;
     }
   }
