@@ -14,7 +14,6 @@ const userSchema = new Schema<IUser>(
         email: {
             type: String,
             required: [true, 'Email is required'],
-            unique: true,
             lowercase: true,
             trim: true,
             match: [
@@ -134,6 +133,11 @@ const userSchema = new Schema<IUser>(
             type: Date,
             default: null,
             select: false
+        },
+        employeeId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Employee',
+            default: null
         }
     },
     {
@@ -142,6 +146,33 @@ const userSchema = new Schema<IUser>(
     }
 );
 
+// Multi-tenancy indexes
+// Compound unique index: email must be unique per admin (createdBy)
+// For employee accounts created by admins
+userSchema.index(
+    { email: 1, createdBy: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            createdBy: { $ne: null },
+            roles: 'employee'
+        }
+    }
+);
+
+// For admin accounts (they don't have createdBy), email must be globally unique
+userSchema.index(
+    { email: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            roles: 'admin',
+            createdBy: null
+        }
+    }
+);
+
+// Other existing indexes
 userSchema.index({ isActive: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ companyId: 1 });

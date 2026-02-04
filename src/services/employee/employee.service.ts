@@ -65,16 +65,12 @@ export class EmployeeService {
             }).session(session);
 
             if (!existingUser) {
-                // Also check if this email belongs to an admin account (global check)
-                const adminWithEmail = await User.findOne({
-                    email: employeeData.email.toLowerCase().trim(),
-                    isDeleted: false,
-                    roles: 'admin'
-                }).session(session);
-
-                if (adminWithEmail) {
+                // Check if this admin is trying to use their own email as employee
+                // (That's not allowed - admin can't be their own employee)
+                const currentAdmin = await User.findById(createdByObjectId).select('email').session(session);
+                if (currentAdmin && currentAdmin.email.toLowerCase().trim() === employeeData.email.toLowerCase().trim()) {
                     throw new AppError(
-                        `Cannot create employee. A user account with email ${employeeData.email} already exists as an admin. Please use a different email.`,
+                        `Cannot create employee with your own admin email. Please use a different email.`,
                         ERROR_CODES.CONFLICT
                     );
                 }

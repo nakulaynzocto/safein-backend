@@ -189,18 +189,48 @@ export class UserService {
     options: { session?: any } = {}
   ): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
-    const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password').session(session);
 
-    if (!user) {
+    // Multi-tenancy: Same email can exist for multiple users (employees from different admins)
+    // Priority: Employee accounts > Admin accounts
+    // For multiple employees with same email, use the most recently created one
+    const users = await User.find({
+      email: loginData.email,
+      isDeleted: false
+    })
+      .select('+password')
+      .sort({ createdAt: -1 }) // Most recent first
+      .session(session);
+
+    if (!users || users.length === 0) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (!user.isActive) {
+    // Priority 1: Find active employee account with valid password
+    let user = users.find(u =>
+      u.isActive &&
+      u.roles.includes('employee')
+    );
+
+    // Priority 2: If no active employee, try admin account
+    if (!user) {
+      user = users.find(u =>
+        u.isActive &&
+        u.roles.includes('admin')
+      );
+    }
+
+    // Priority 3: If still no active user, check any active user
+    if (!user) {
+      user = users.find(u => u.isActive);
+    }
+
+    // No active user found
+    if (!user) {
       throw new AppError(ERROR_MESSAGES.ACCOUNT_DISABLED, ERROR_CODES.UNAUTHORIZED);
     }
 
+    // Verify password
     const isPasswordValid = await user.comparePassword(loginData.password);
-
     if (!isPasswordValid) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
