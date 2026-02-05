@@ -9,7 +9,6 @@ const CONSTANTS = {
     // URLs
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
     FRONTEND_URLS: (process.env.FRONTEND_URLS ?? "http://localhost:3000,http://localhost:3001").split(","),
-    APPROVAL_LINK_BASE_URL: process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL || "http://localhost:3000",
 
     // Database
     MONGODB_URI: process.env.MONGODB_URI || "mongodb://localhost:27017/visitor-app",

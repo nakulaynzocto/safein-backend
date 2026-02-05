@@ -670,8 +670,8 @@ export class UserService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL - Use APPROVAL_LINK_BASE_URL (same as approve/reject links) or fallback to FRONTEND_URL
-    const baseUrl = CONSTANTS.APPROVAL_LINK_BASE_URL;
+    // Create reset URL - Use FRONTEND_URL for password reset links
+    const baseUrl = CONSTANTS.FRONTEND_URL;
     const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`;
 
     try {

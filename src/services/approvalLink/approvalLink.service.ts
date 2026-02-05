@@ -7,7 +7,7 @@ import { socketService } from '../socket/socket.service';
 
 export class ApprovalLinkService {
     private static getBaseUrl(): string {
-        const url = process.env.APPROVAL_LINK_BASE_URL || '';
+        const url = process.env.FRONTEND_URL || 'http://localhost:3000';
         return url.replace(/\/$/, ''); // Remove trailing slash
     }
     /**
@@ -84,6 +84,19 @@ export class ApprovalLinkService {
 
         const appointment = approvalLink.appointmentId as any;
 
+        // Check if appointment time has passed (timeout)
+        if (appointment && appointment.appointmentDetails) {
+            const scheduledDateTime = new Date(`${appointment.appointmentDetails.scheduledDate}T${appointment.appointmentDetails.scheduledTime}`);
+            const now = new Date();
+
+            if (scheduledDateTime < now) {
+                // Appointment time has passed - mark link as used and treat as expired
+                approvalLink.isUsed = true;
+                await approvalLink.save();
+                return { isValid: true, isUsed: true };
+            }
+        }
+
         return {
             isValid: true,
             isUsed: false,
@@ -133,6 +146,19 @@ export class ApprovalLinkService {
         // Check if appointment is still pending
         if (appointment.status !== 'pending') {
             throw new AppError('Appointment status cannot be changed', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Check if appointment time has passed (timeout)
+        if (appointment.appointmentDetails) {
+            const scheduledDateTime = new Date(`${appointment.appointmentDetails.scheduledDate}T${appointment.appointmentDetails.scheduledTime}`);
+            const now = new Date();
+
+            if (scheduledDateTime < now) {
+                // Appointment time has passed - cannot approve or reject
+                approvalLink.isUsed = true;
+                await approvalLink.save();
+                throw new AppError('Link expired or already used - appointment time has passed', ERROR_CODES.BAD_REQUEST);
+            }
         }
 
         // Update appointment status

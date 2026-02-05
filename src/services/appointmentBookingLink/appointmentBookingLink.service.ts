@@ -337,7 +337,7 @@ export class AppointmentBookingLinkService {
 
     // Check if user is an employee
     const isEmployee = user.roles?.includes('employee') || false;
-    
+
     if (isEmployee) {
       // If employee, get their admin's user ID (the one who created the employee)
       const adminUserId = await EmployeeUtil.getAdminUserIdForEmployee(user as any);
@@ -346,7 +346,7 @@ export class AppointmentBookingLinkService {
       }
       return adminUserId;
     }
-    
+
     // If not employee (admin), return the creator's own ID
     return createdBy;
   }
@@ -433,7 +433,7 @@ export class AppointmentBookingLinkService {
         // Get admin's userId (if createdBy is employee, get their admin's ID)
         const adminUserId = await this.getAdminUserIdForCreator(createdByIdString);
         const adminUserIdObjectId = toObjectId(adminUserId);
-        
+
         if (adminUserIdObjectId) {
           const visitor = await Visitor.findOne({
             email: link.visitorEmail.toLowerCase().trim(),
@@ -482,7 +482,7 @@ export class AppointmentBookingLinkService {
     // Create appointment
     // Get admin user ID (if createdBy is employee, use their admin's ID)
     const adminUserId = await this.getAdminUserIdForCreator(createdBy);
-    
+
     // Check admin's subscription limits (not employee's)
     await UserSubscriptionService.checkPlanLimits(adminUserId, 'appointments');
 
@@ -493,7 +493,7 @@ export class AppointmentBookingLinkService {
     }
 
     // Visitor is creating appointment via link, so both admin and employee should be notified
-    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { 
+    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, {
       sendNotifications: true,
       createdByVisitor: true, // Flag to indicate visitor created via link
       adminUserId: adminUserId // Pass admin user ID for notifications
@@ -559,7 +559,7 @@ export class AppointmentBookingLinkService {
    * Helper: Get base URL for appointment links
    */
   private static getBaseUrl(): string {
-    const url = process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const url = process.env.FRONTEND_URL || 'http://localhost:3000';
     const cleanUrl = url.replace(/\/$/, '');
 
     if (!cleanUrl || cleanUrl === '') {

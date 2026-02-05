@@ -4,8 +4,10 @@ import { Visitor } from '../../models/visitor/visitor.model';
 import { User } from '../../models/user/user.model';
 import { EmailService } from '../email/email.service';
 import { ApprovalLinkService } from '../approvalLink/approvalLink.service';
+import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SettingsService } from '../settings/settings.service';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 import { socketService } from '../socket/socket.service';
 import {
     ICreateAppointmentDTO,
@@ -112,6 +114,16 @@ export class AppointmentService {
     @Transaction('Failed to create appointment')
     static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean; createdByVisitor?: boolean; adminUserId?: string } = {}): Promise<IAppointmentResponse> {
         const { session, sendNotifications = false, createdByVisitor = false, adminUserId } = options;
+
+        // Check plan limits before creating appointment
+        // Use adminUserId if visitor is creating (from appointment link), otherwise use createdBy
+        const userIdForLimitCheck = adminUserId || createdBy;
+        try {
+            await UserSubscriptionService.checkPlanLimits(userIdForLimitCheck, 'appointments', false);
+        } catch (error: any) {
+            // Re-throw the error from checkPlanLimits
+            throw error;
+        }
 
         const employee = await Employee.findOne({ _id: appointmentData.employeeId, isDeleted: false }).session(session);
         if (!employee) {
@@ -601,6 +613,17 @@ export class AppointmentService {
 
         // If status changed to approved/rejected, send notifications
         if (isApprovalOrRejection && sendNotifications) {
+            // Mark approval link as used (expired) when status changes via dashboard
+            try {
+                await ApprovalLink.updateOne(
+                    { appointmentId: appointment._id },
+                    { isUsed: true }
+                ).session(session);
+            } catch (error) {
+                console.warn('Failed to mark approval link as used:', error);
+                // Don't throw - this is not critical
+            }
+
             // Get user ID who created the appointment
             let userId: string | null = null;
             if (appointment.createdBy) {
