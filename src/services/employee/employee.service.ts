@@ -108,11 +108,22 @@ export class EmployeeService {
                     // Continue even if email fails - employee is still created
                 }
             } else {
-                // User exists under the same admin - this means the employee email is already registered for this admin
-                throw new AppError(
-                    ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS,
-                    ERROR_CODES.CONFLICT
-                );
+                // User already exists with this email
+                // Check if they are an employee of another admin or the current admin
+                if (existingUser.createdBy && existingUser.createdBy.toString() !== createdByObjectId.toString()) {
+                    // Employee works for a different company
+                    const existingCompanyName = existingUser.companyName || 'another company';
+                    throw new AppError(
+                        `Employee already working at ${existingCompanyName}. Please use a different email address.`,
+                        ERROR_CODES.CONFLICT
+                    );
+                } else {
+                    // Employee already exists under the same admin
+                    throw new AppError(
+                        ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS,
+                        ERROR_CODES.CONFLICT
+                    );
+                }
             }
         } catch (userCreationError: any) {
             // If user creation fails, throw error to rollback employee creation
