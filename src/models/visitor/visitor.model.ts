@@ -28,10 +28,11 @@ export interface IVisitor extends Document {
     blacklisted: boolean;
     blacklistReason?: string;
     tags?: string[];
-    emergencyContact?: {
+    emergencyContacts?: Array<{
         name: string;
-        phone: string;
-    };
+        countryCode: string;
+        phone: string; // Must total exactly 15 digits with country code
+    }>;
 
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the visitor
     isDeleted: boolean;
@@ -173,10 +174,41 @@ const visitorSchema = new Schema<IVisitor>({
         type: String,
         trim: true
     }],
-    emergencyContact: {
-        name: { type: String, trim: true },
-        phone: { type: String, trim: true }
-    },
+    emergencyContacts: [{
+        name: {
+            type: String,
+            required: [true, 'Emergency contact name is required'],
+            trim: true,
+            minlength: [2, 'Emergency contact name must be at least 2 characters'],
+            maxlength: [100, 'Emergency contact name cannot exceed 100 characters']
+        },
+        countryCode: {
+            type: String,
+            required: [true, 'Country code is required'],
+            trim: true,
+            match: [/^\+\d{1,4}$/, 'Country code must start with + and contain 1-4 digits (e.g., +91, +1)']
+        },
+        phone: {
+            type: String,
+            required: [true, 'Emergency contact phone is required'],
+            trim: true,
+            validate: {
+                validator: function (value: string) {
+                    // Phone number should contain only digits
+                    if (!/^\d+$/.test(value)) return false;
+
+                    // Get the country code from the same document
+                    const countryCode = (this as any).countryCode || '';
+                    const countryCodeDigits = countryCode.replace(/^\+/, ''); // Remove + sign
+
+                    // Total digits (country code + phone) must be exactly 15
+                    const totalDigits = countryCodeDigits.length + value.length;
+                    return totalDigits === 15;
+                },
+                message: 'Total phone number (country code + phone) must be exactly 15 digits'
+            }
+        }
+    }],
     createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'User',
