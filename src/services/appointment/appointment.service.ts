@@ -945,18 +945,18 @@ export class AppointmentService {
             // Will send appointment approval notification via SMS provider
         }
 
-        try {
-            await EmailService.sendEmployeeAppointmentApprovalEmail(
-                (appointment.employeeId as any).email,
-                (appointment.employeeId as any).name,
-                (appointment.visitorId as any).name,
-                appointment.appointmentDetails.scheduledDate,
-                appointment.appointmentDetails.scheduledTime,
-                companyName
-            );
-        } catch {
-            // Email sending failed, continue
-        }
+        // try {
+        //     await EmailService.sendEmployeeAppointmentApprovalEmail(
+        //         (appointment.employeeId as any).email,
+        //         (appointment.employeeId as any).name,
+        //         (appointment.visitorId as any).name,
+        //         appointment.appointmentDetails.scheduledDate,
+        //         appointment.appointmentDetails.scheduledTime,
+        //         companyName
+        //     );
+        // } catch {
+        //     // Email sending failed, continue
+        // }
 
         // Send socket notification to both admin and employee
         if (populatedAppointment && userId) {
@@ -1079,18 +1079,18 @@ export class AppointmentService {
             // Will send appointment rejection notification via SMS provider
         }
 
-        try {
-            await EmailService.sendEmployeeAppointmentRejectionEmail(
-                (appointment.employeeId as any).email,
-                (appointment.employeeId as any).name,
-                (appointment.visitorId as any).name,
-                appointment.appointmentDetails.scheduledDate,
-                appointment.appointmentDetails.scheduledTime,
-                companyName
-            );
-        } catch {
-            // Email sending failed, continue
-        }
+        // try {
+        //     await EmailService.sendEmployeeAppointmentRejectionEmail(
+        //         (appointment.employeeId as any).email,
+        //         (appointment.employeeId as any).name,
+        //         (appointment.visitorId as any).name,
+        //         appointment.appointmentDetails.scheduledDate,
+        //         appointment.appointmentDetails.scheduledTime,
+        //         companyName
+        //     );
+        // } catch {
+        //     // Email sending failed, continue
+        // }
 
         // Send socket notification to both admin and employee
         if (populatedAppointment && userId) {
