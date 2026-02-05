@@ -228,23 +228,24 @@ export class AppointmentService {
             console.error('Failed to send appointment notification email:', error?.message || error);
         }
 
-        // 📧 Send confirmation email to visitor (if enabled in settings)
-        // Send confirmation email regardless of status - visitor should know their appointment status
-        try {
-            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
-                await EmailService.sendAppointmentConfirmationEmail(
-                    (populatedAppointment.visitorId as any).email,
-                    (populatedAppointment.visitorId as any).name,
-                    (populatedAppointment.employeeId as any).name,
-                    populatedAppointment.appointmentDetails.scheduledDate,
-                    populatedAppointment.appointmentDetails.scheduledTime,
-                    populatedAppointment.appointmentDetails.purpose,
-                    companyName
-                );
-            }
-        } catch (error) {
-            // Visitor confirmation email failed, continue
-        }
+        // 📧 Send confirmation email to visitor (DISABLED - Visitor should not receive confirmation)
+        // Visitor will only receive approval/rejection emails from employee
+        // try {
+        //     if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
+        //         await EmailService.sendAppointmentConfirmationEmail(
+        //             (populatedAppointment.visitorId as any).email,
+        //             (populatedAppointment.visitorId as any).name,
+        //             (populatedAppointment.employeeId as any).name,
+        //             populatedAppointment.appointmentDetails.scheduledDate,
+        //             populatedAppointment.appointmentDetails.scheduledTime,
+        //             populatedAppointment.appointmentDetails.purpose,
+        //             companyName
+        //         );
+        //     }
+        // } catch (error) {
+        //     // Visitor confirmation email failed, continue
+        // }
+
 
         // 📱 Send WhatsApp notification to employee (if enabled in settings)
         try {

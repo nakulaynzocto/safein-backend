@@ -122,11 +122,11 @@ class SocketService {
         const statusMessages: { [key: string]: { title: string; message: string } } = {
           approved: {
             title: 'Appointment Approved',
-            message: `${visitorName} has approved the appointment with ${employeeName}`,
+            message: `${employeeName} has approved the appointment with ${visitorName}`,
           },
           rejected: {
             title: 'Appointment Rejected',
-            message: `${visitorName} has rejected the appointment with ${employeeName}`,
+            message: `${employeeName} has rejected the appointment with ${visitorName}`,
           },
           completed: {
             title: 'Appointment Completed',
@@ -141,9 +141,9 @@ class SocketService {
 
         await NotificationService.createNotification({
           userId,
-          type: appointmentData.status === 'approved' ? 'appointment_approved' : 
-                appointmentData.status === 'rejected' ? 'appointment_rejected' : 
-                'appointment_status_changed',
+          type: appointmentData.status === 'approved' ? 'appointment_approved' :
+            appointmentData.status === 'rejected' ? 'appointment_rejected' :
+              'appointment_status_changed',
           title: statusInfo.title,
           message: statusInfo.message,
           appointmentId: appointmentData.appointmentId,

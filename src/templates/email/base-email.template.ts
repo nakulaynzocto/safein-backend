@@ -4,18 +4,18 @@
  */
 
 export interface EmailContent {
-  greeting?: string;
-  message: string;
-  actionButton?: {
-    text: string;
-    url: string;
-    color?: string;
-  };
-  additionalInfo?: string;
+    greeting?: string;
+    message: string;
+    actionButton?: {
+        text: string;
+        url: string;
+        color?: string;
+    };
+    additionalInfo?: string;
 }
 
 export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'): string {
-  return `
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -451,10 +451,6 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
     <body>
         <div class="email-wrapper">
             <div class="email-container">
-                <div class="header">
-                    <div class="logo">SafeIn</div>
-                    <div class="logo-tagline">Professional Visitor Management System</div>
-                </div>
                 
                 <div class="content-wrapper">
                     <div class="icon-container">
