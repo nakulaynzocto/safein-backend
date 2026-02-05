@@ -10,7 +10,8 @@ export function getAppointmentConfirmationEmailTemplate(
   employeeName: string,
   scheduledDate: Date,
   scheduledTime: string,
-  purpose: string
+  purpose: string,
+  companyLogo?: string
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -73,8 +74,8 @@ export function getAppointmentConfirmationEmailTemplate(
                 <strong>⏰ Status:</strong> Your appointment is currently <strong>pending approval</strong>. You will be notified via email once ${employeeName} reviews and approves your request.
             </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Appointment Request Submitted - SafeIn');
+
+  return getBaseEmailTemplate(content, 'Appointment Request Submitted - SafeIn', companyLogo);
 }
 
 export function getAppointmentConfirmationEmailText(

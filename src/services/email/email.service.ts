@@ -304,7 +304,7 @@ export class EmailService {
         // Use sendMail with timeout wrapper
         await Promise.race([
           this.transporter.sendMail(mailOptions),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('SMTP send timeout after 60 seconds')), 60000)
           )
         ]);
@@ -316,7 +316,7 @@ export class EmailService {
         // Use sendMail with timeout wrapper
         await Promise.race([
           this.transporter.sendMail(mailOptions),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('SMTP send timeout after 60 seconds')), 60000)
           )
         ]);
@@ -326,7 +326,7 @@ export class EmailService {
       throw new Error('SMTP connection not available. Please check SMTP configuration.');
     } catch (smtpError: any) {
       console.error(`[EmailService] Failed to send email via SMTP to ${to}:`, smtpError.message);
-      
+
       // If SMTP fails but BREVO_API_KEY is available, try Brevo as fallback (all environments)
       if (CONSTANTS.BREVO_API_KEY && !this.brevoApiDisabled) {
         console.warn(`[EmailService] SMTP failed for ${to}, attempting Brevo API fallback...`);
@@ -347,7 +347,7 @@ export class EmailService {
           // Continue to throw original SMTP error
         }
       }
-      
+
       throw smtpError;
     }
   }
@@ -520,7 +520,8 @@ export class EmailService {
     scheduledTime: string,
     purpose: string,
     approvalToken: string,
-    companyName?: string
+    companyName?: string,
+    companyLogo?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -528,7 +529,7 @@ export class EmailService {
       await this.sendEmail({
         to: employeeEmail,
         subject: 'New Appointment Request - SafeIn',
-        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
+        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken, companyLogo),
         text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
         fromName,
         logMessage: 'New appointment request email',
@@ -600,7 +601,8 @@ export class EmailService {
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
-    companyName?: string
+    companyName?: string,
+    companyLogo?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -608,7 +610,7 @@ export class EmailService {
       await this.sendEmail({
         to: visitorEmail,
         subject: 'Appointment Request Submitted - SafeIn',
-        html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
+        html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyLogo),
         text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
         fromName,
         logMessage: 'Appointment confirmation email to visitor',
@@ -703,12 +705,12 @@ export class EmailService {
       console.log(`[EmailService] Email service available: ${this.isEmailServiceAvailable}`);
       console.log(`[EmailService] SMTP Host: ${CONSTANTS.SMTP_HOST || 'Not configured'}`);
       console.log(`[EmailService] Brevo API Key: ${CONSTANTS.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
-      
+
       const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, tempPassword);
       const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, tempPassword);
 
       console.log(`[EmailService] Email content generated, sending email...`);
-      
+
       await this.sendEmail({
         to: email,
         subject: 'Welcome to SafeIn - Set Up Your Account',
@@ -716,7 +718,7 @@ export class EmailService {
         text: textContent,
         logMessage: 'Employee setup email',
       });
-      
+
       console.log(`[EmailService] Employee setup email sent successfully to: ${email}`);
     } catch (error: any) {
       console.error(`[EmailService] Failed to send employee setup email to ${email}:`, error.message);

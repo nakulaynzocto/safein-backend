@@ -163,14 +163,16 @@ export class AppointmentService {
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // Get company name from user (createdBy) for email fromName
+        // Get company name and profile picture (used as company logo) from user (createdBy) for email fromName and branding
         let companyName: string | undefined;
+        let companyLogo: string | undefined;
         try {
-            const user = await User.findById(createdBy).select('companyName').lean();
+            const user = await User.findById(createdBy).select('companyName profilePicture').lean();
             companyName = user?.companyName;
+            companyLogo = user?.profilePicture || undefined; // Use profilePicture as company logo
         } catch (error) {
-            // If user not found or error, companyName will remain undefined
-            console.warn('Failed to fetch company name for email fromName:', error);
+            // If user not found or error, companyName and companyLogo will remain undefined
+            console.warn('Failed to fetch company name and logo for email:', error);
         }
 
         // 📧 Handle Email Notifications (Always send if enabled in settings)
@@ -191,7 +193,8 @@ export class AppointmentService {
                             populatedAppointment.appointmentDetails.scheduledDate,
                             populatedAppointment.appointmentDetails.scheduledTime,
                             populatedAppointment.appointmentDetails.purpose,
-                            companyName
+                            companyName,
+                            companyLogo
                         );
                         appointment.notifications.emailSent = true;
                     }
@@ -205,7 +208,8 @@ export class AppointmentService {
                         populatedAppointment.appointmentDetails.scheduledTime,
                         populatedAppointment.appointmentDetails.purpose,
                         approvalLink.token,
-                        companyName
+                        companyName,
+                        companyLogo
                     );
                     appointment.notifications.emailSent = true;
                 } else {

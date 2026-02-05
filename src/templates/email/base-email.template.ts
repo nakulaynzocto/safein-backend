@@ -14,7 +14,7 @@ export interface EmailContent {
     additionalInfo?: string;
 }
 
-export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'): string {
+export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', companyLogo?: string): string {
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -85,6 +85,19 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
                 letter-spacing: 0.3px;
                 position: relative;
                 z-index: 1;
+            }
+            .company-logo {
+                max-width: 180px;
+                max-height: 80px;
+                margin: 0 auto 16px;
+                display: block;
+                position: relative;
+                z-index: 1;
+                object-fit: contain;
+                background: white;
+                padding: 8px 16px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             }
             .content-wrapper {
                 padding: 48px 40px;
@@ -451,6 +464,11 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
     <body>
         <div class="email-wrapper">
             <div class="email-container">
+                ${companyLogo ? `
+                <div class="header">
+                    <img src="${companyLogo}" alt="Company Logo" class="company-logo" />
+                </div>
+                ` : ''}
                 
                 <div class="content-wrapper">
                     <div class="icon-container">

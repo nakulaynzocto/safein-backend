@@ -20,7 +20,8 @@ export function getNewAppointmentRequestEmailTemplate(
     scheduledDate: Date,
     scheduledTime: string,
     purpose: string,
-    approvalToken: string
+    approvalToken: string,
+    companyLogo?: string
 ): string {
     const formattedDate = scheduledDate.toLocaleDateString('en-US', {
         weekday: 'long',
@@ -79,7 +80,7 @@ export function getNewAppointmentRequestEmailTemplate(
   `;
 
 
-    return getBaseEmailTemplate(content, 'New Appointment Request - SafeIn');
+    return getBaseEmailTemplate(content, 'New Appointment Request - SafeIn', companyLogo);
 }
 
 export function getNewAppointmentRequestEmailText(
