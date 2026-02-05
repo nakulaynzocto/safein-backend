@@ -275,10 +275,25 @@ export class EmployeeService {
             Employee.countDocuments(filter)
         ]);
 
+        // Check if each employee can be deleted (no appointments)
+        const employeesWithDeleteFlag = await Promise.all(
+            employees.map(async (employee) => {
+                const appointmentCount = await Appointment.countDocuments({
+                    employeeId: employee._id,
+                    isDeleted: false
+                });
+
+                return {
+                    ...employee,
+                    canDelete: appointmentCount === 0
+                };
+            })
+        );
+
         const totalPages = Math.ceil(totalEmployees / limit);
 
         return {
-            employees: employees as unknown as IEmployeeResponse[],
+            employees: employeesWithDeleteFlag as unknown as IEmployeeResponse[],
             pagination: {
                 currentPage: page,
                 totalPages,
