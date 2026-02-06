@@ -9,6 +9,8 @@ import { ERROR_CODES } from '../../utils';
 import { ICreateVisitorDTO } from '../../types/visitor/visitor.types';
 import { ICreateAppointmentDTO } from '../../types/appointment/appointment.types';
 import { EmployeeUtil } from '../../utils/employee.util';
+import { Visitor } from '../../models/visitor/visitor.model';
+import { toObjectId } from '../../utils/idExtractor.util';
 
 export class AppointmentBookingLinkController {
   static createAppointmentLink = async (
@@ -127,8 +129,6 @@ export class AppointmentBookingLinkController {
 
       // Check if visitor already exists for this admin (not for the employee)
       // Visitors belong to admin, so check by admin's userId, not employee's userId
-      const { Visitor } = await import('../../models/visitor/visitor.model');
-      const { toObjectId } = await import('../../utils/idExtractor.util');
       const adminUserIdObjectId = toObjectId(adminUserId);
 
       // Normalize email to ensure consistent comparison

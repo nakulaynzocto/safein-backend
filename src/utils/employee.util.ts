@@ -1,4 +1,5 @@
 import { Employee } from '../models/employee/employee.model';
+import { User } from '../models/user/user.model';
 import { IUser } from '../types/user/user.types';
 
 export class EmployeeUtil {
@@ -93,7 +94,6 @@ export class EmployeeUtil {
     }
 
     // Verify admin account exists, is active, and not deleted
-    const { User } = await import('../models/user/user.model');
     const admin = await User.findOne({
       _id: adminUserId,
       isDeleted: false,
@@ -114,7 +114,6 @@ export class EmployeeUtil {
    * If user is admin/superadmin, returns their own ID
    */
   static async getAdminId(userId: string): Promise<string> {
-    const { User } = await import('../models/user/user.model');
     const user = await User.findById(userId).select('_id roles createdBy email').lean();
 
     if (!user) {

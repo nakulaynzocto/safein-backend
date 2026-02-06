@@ -185,11 +185,17 @@ class SocketService {
     if (showNotification) {
       // Save notification to database
       try {
+        const isApproved = appointmentData.status === 'approved';
+        const title = isApproved ? 'Appointment Scheduled' : 'New Appointment Request';
+        const message = isApproved
+          ? `${visitorName} has scheduled an appointment with ${employeeName}`
+          : `${visitorName} has requested an appointment with ${employeeName}`;
+
         await NotificationService.createNotification({
           userId,
           type: 'appointment_created',
-          title: 'New Appointment Request',
-          message: `${visitorName} has requested an appointment with ${employeeName}`,
+          title,
+          message,
           appointmentId: appointmentData.appointmentId || appointmentData.appointment?._id?.toString(),
           metadata: {
             employeeName,

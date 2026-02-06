@@ -214,7 +214,7 @@ export class AppointmentBookingLinkService {
    */
   static async getAllAppointmentLinks(
     query: IGetAllAppointmentLinksQuery,
-    createdBy: string
+    userId: string
   ): Promise<any> {
     const {
       page = 1,
@@ -225,9 +225,42 @@ export class AppointmentBookingLinkService {
       sortOrder = 'desc',
     } = query;
 
-    const filter: any = {
-      createdBy: toObjectId(createdBy),
-    };
+    // Resolve admin ID to check if user is admin or employee
+    // If user is employee, getAdminId returns their admin's ID
+    // If user is admin, getAdminId returns their own ID
+    const adminId = await EmployeeUtil.getAdminId(userId);
+
+    const filter: any = {};
+
+    // Check if current user is the admin
+    if (userId === adminId) {
+      // User is Admin: Show links created by Admin AND all their Employees
+
+      // 1. Get all employees created by this admin
+      // 1. Get all employees created by this admin
+      const employees = await Employee.find({
+        createdBy: toObjectId(adminId),
+        isDeleted: false
+      }).select('email');
+
+      const employeeEmails = employees.map(emp => emp.email);
+
+      // 2. Find User IDs for these employees
+      // Appointment links are created with User ID, not Employee ID
+      const employeeUsers = await User.find({
+        email: { $in: employeeEmails }
+      }).select('_id');
+
+      const employeeUserIds = employeeUsers.map(user => user._id);
+
+      // 3. Filter links created by Admin or any of their Employees (using User IDs)
+      filter.createdBy = {
+        $in: [toObjectId(adminId), ...employeeUserIds]
+      };
+    } else {
+      // User is Employee: Show only links created by this Employee
+      filter.createdBy = toObjectId(userId);
+    }
 
     if (isBooked !== undefined) {
       filter.isBooked = isBooked;

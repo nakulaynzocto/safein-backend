@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import { User } from '../../models/user/user.model';
+import { Employee } from '../../models/employee/employee.model';
+import { EmployeeUtil } from '../../utils/employee.util';
 import {
   ICreateUserDTO,
   IUpdateUserDTO,
@@ -272,7 +274,6 @@ export class UserService {
     const { session } = options;
 
     // Check if user is an employee
-    const { EmployeeUtil } = await import('../../utils/employee.util');
     const currentUser = await User.findOne({ _id: userId, isDeleted: false }).session(session);
     if (!currentUser) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
@@ -537,8 +538,6 @@ export class UserService {
     // If admin is deleted, disable all employee accounts created by this admin
     if (isAdmin) {
       try {
-        const { Employee } = await import('../../models/employee/employee.model');
-
         // Disable all employee user accounts created by this admin
         await User.updateMany(
           {
@@ -591,8 +590,6 @@ export class UserService {
     // If admin is restored, also restore all employee accounts and employees
     if (isAdmin) {
       try {
-        const { Employee } = await import('../../models/employee/employee.model');
-
         // Restore all employee user accounts created by this admin
         await User.updateMany(
           {
