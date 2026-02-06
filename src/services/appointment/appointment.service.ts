@@ -187,15 +187,75 @@ export class AppointmentService {
             console.warn('Failed to fetch company name and logo for email:', error);
         }
 
-        // 📧 Handle Email Notifications (Always send if enabled in settings)
+        // 🔔 Process all notifications (Email, WhatsApp, Socket) in background to reduce API latency
+        this.processBackgroundNotifications(
+            (appointment._id as any).toString(),
+            appointment.status,
+            populatedAppointment,
+            createdBy,
+            approvalLink,
+            {
+                emailEnabled,
+                whatsappEnabled,
+                smsEnabled,
+                sendNotifications,
+                createdByVisitor,
+                adminUserId,
+                companyName,
+                companyLogo
+            }
+        ).catch(err => console.error('Background notification processing failed:', err));
+
+        // Socket notification also moved to background process
+
+        const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
+        return {
+            ...appointmentResponse,
+            approvalLink: approvalLink?.link || null
+        } as IAppointmentResponse;
+    }
+
+    /**
+     * Process notifications (Email, WhatsApp, SMS, Socket) in background
+     * Does NOT use the original transaction session
+     */
+    private static async processBackgroundNotifications(
+        appointmentId: string,
+        status: string,
+        populatedAppointment: any,
+        createdBy: string,
+        approvalLink: any,
+        options: {
+            emailEnabled: boolean;
+            whatsappEnabled: boolean;
+            smsEnabled: boolean;
+            sendNotifications: boolean;
+            createdByVisitor?: boolean;
+            adminUserId?: string;
+            companyName?: string;
+            companyLogo?: string;
+        }
+    ) {
+        const {
+            emailEnabled,
+            whatsappEnabled,
+            sendNotifications,
+            createdByVisitor,
+            adminUserId,
+            companyName,
+            companyLogo
+        } = options;
+
+        let emailSent = false;
+        let whatsappSent = false;
+
+        // 📧 Handle Email Notifications
         try {
             if (populatedAppointment && emailEnabled) {
                 const employeeEmail = (populatedAppointment.employeeId as any)?.email;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
-                // If appointment is already approved (e.g., via employee's link), send confirmation email instead of approval request
-                if (appointment.status === 'approved') {
-                    // Send appointment confirmation email to employee (appointment already approved)
+                if (status === 'approved') {
                     if (employeeEmail) {
                         const visitorName = (populatedAppointment.visitorId as any)?.name || 'Visitor';
                         await EmailService.sendAppointmentConfirmationEmail(
@@ -208,10 +268,9 @@ export class AppointmentService {
                             companyName,
                             companyLogo
                         );
-                        appointment.notifications.emailSent = true;
+                        emailSent = true;
                     }
                 } else if (employeeEmail && approvalLink?.token) {
-                    // Send approval request email (appointment is pending)
                     await EmailService.sendNewAppointmentRequestEmail(
                         employeeEmail,
                         employeeName,
@@ -223,38 +282,21 @@ export class AppointmentService {
                         companyName,
                         companyLogo
                     );
-                    appointment.notifications.emailSent = true;
-                } else {
-                    appointment.notifications.emailSent = false;
-                    if (!employeeEmail) {
-                        console.warn('Employee email not found, cannot send appointment notification email');
-                    }
-                    if (!approvalLink?.token && appointment.status === 'pending') {
-                        console.warn('Approval link token not found, cannot send appointment notification email');
-                    }
-                }
-            } else {
-                appointment.notifications.emailSent = false;
-                if (!emailEnabled) {
-                    console.log('Email notifications are disabled in settings');
+                    emailSent = true;
                 }
             }
         } catch (error: any) {
-            appointment.notifications.emailSent = false;
-            console.error('Failed to send appointment notification email:', error?.message || error);
+            console.error('Failed to send appointment notification email (background):', error?.message || error);
         }
 
-
-        // 📱 Send WhatsApp notification to employee (if enabled in settings)
+        // 📱 Send WhatsApp notification
         try {
             if (populatedAppointment && whatsappEnabled) {
                 const employeePhone = (populatedAppointment.employeeId as any)?.phone;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
-                // Only send WhatsApp notification if appointment is pending (needs approval)
-                // If appointment is already approved (via employee's link), skip WhatsApp notification
-                if (appointment.status === 'pending' && employeePhone && approvalLink?.link) {
-                    const whatsappSent = await WhatsAppService.sendAppointmentNotification(
+                if (status === 'pending' && employeePhone && approvalLink?.link) {
+                    const sent = await WhatsAppService.sendAppointmentNotification(
                         employeePhone,
                         employeeName,
                         {
@@ -270,60 +312,49 @@ export class AppointmentService {
                         approvalLink.link,
                         (populatedAppointment._id as any).toString()
                     );
-
-                    // Mark WhatsApp as sent only if notification is enabled and sent successfully
-                    appointment.notifications.whatsappSent = whatsappSent;
-                } else {
-                    appointment.notifications.whatsappSent = false;
-                    if (!employeePhone) {
-                        console.warn('Employee phone not found, cannot send WhatsApp notification');
-                    }
-                    if (appointment.status === 'approved') {
-                        console.log('Appointment already approved, skipping WhatsApp approval notification');
-                    } else if (!approvalLink?.link) {
-                        console.warn('Approval link not found, cannot send WhatsApp notification');
-                    }
-                }
-            } else {
-                appointment.notifications.whatsappSent = false;
-                if (!whatsappEnabled) {
-                    console.log('WhatsApp notifications are disabled in settings');
+                    whatsappSent = sent;
                 }
             }
         } catch (error: any) {
-            appointment.notifications.whatsappSent = false;
-            console.error('Failed to send WhatsApp notification:', error?.message || error);
+            console.error('Failed to send WhatsApp notification (background):', error?.message || error);
         }
 
-        appointment.notifications.smsSent = false;
-        if (smsEnabled) {
-            // NOTE: SMS service integration pending
-            // Will send appointment creation notification via SMS provider (e.g., Twilio)
+        // Update DB with notification status (New operation, no session)
+        if (emailSent || whatsappSent) {
+            try {
+                await Appointment.updateOne(
+                    { _id: appointmentId },
+                    {
+                        $set: {
+                            'notifications.emailSent': emailSent,
+                            'notifications.whatsappSent': whatsappSent,
+                            'notifications.smsSent': false
+                        }
+                    }
+                );
+            } catch (dbError) {
+                console.error('Failed to update notification status in DB:', dbError);
+            }
         }
 
-        await appointment.save({ session });
-
+        // 🔔 Send Socket Notification
         try {
             if (sendNotifications && populatedAppointment) {
                 const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
                 const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
 
-                // Use adminUserId if provided (for link-created appointments), otherwise use createdBy
                 const userIdForNotification = adminUserId || ((createdBy as any)?.toString() || createdBy);
 
                 const appointmentData = {
-                    appointmentId: (appointment._id as any).toString(),
+                    appointmentId: appointmentId,
                     appointment: serializedAppointment,
-                    status: appointment.status,
-                    createdAt: appointment.createdAt,
+                    status: status,
+                    createdAt: new Date(),
                 };
 
-                // Send socket notification
-                // If visitor created via link → notify both admin and employee
-                // If admin created directly → notify only employee
                 const actionBy = createdByVisitor ? 'visitor' : 'admin';
                 await this.sendSocketNotificationToAdminAndEmployee(
-                    appointment,
+                    null, // Pass null as we don't have the mongoose document in this context easily, or use populatedAppointment if compatible
                     populatedAppointment,
                     userIdForNotification,
                     'created',
@@ -333,15 +364,8 @@ export class AppointmentService {
                 );
             }
         } catch (socketError: any) {
-            // Socket notification failed, continue
-            console.error('Failed to send socket notification:', socketError?.message || socketError);
+            console.error('Failed to send socket notification (background):', socketError?.message || socketError);
         }
-
-        const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
-        return {
-            ...appointmentResponse,
-            approvalLink: approvalLink?.link || null
-        } as IAppointmentResponse;
     }
 
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {

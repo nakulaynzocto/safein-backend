@@ -93,21 +93,10 @@ export class EmployeeService {
                 await user.save({ session });
 
                 // Send setup email - FIRE AND FORGET (Background execution)
-                // We don't await this to keep the API response snappy
-                try {
-                    const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
-                    const setupUrl = `${baseUrl.replace(/\/$/, '')}/employee-setup?token=${setupToken}`;
-
-                    EmailService.sendEmployeeSetupEmail(
-                        employeeData.email,
-                        employeeData.name,
-                        setupUrl
-                    ).catch(emailError => {
-                        console.error(`[Background Email Error] Failed to send setup email to ${employeeData.email}:`, emailError.message);
-                    });
-                } catch (emailPrepError: any) {
-                    console.error(`[Employee Service] Failed to prepare setup email to ${employeeData.email}:`, emailPrepError.message);
-                }
+                this.processBackgroundNotifications(
+                    employeeData,
+                    setupToken
+                ).catch(err => console.error('Background notification processing failed:', err));
             } else {
                 // User already exists with this email
                 // Check if they are an employee of another admin or the current admin
@@ -581,5 +570,26 @@ export class EmployeeService {
             failedCount: errors.length,
             errors
         };
+    }
+
+    /**
+     * Process background notifications for employee creation
+     */
+    private static async processBackgroundNotifications(
+        employeeData: ICreateEmployeeDTO,
+        setupToken: string
+    ) {
+        try {
+            const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
+            const setupUrl = `${baseUrl.replace(/\/$/, '')}/employee-setup?token=${setupToken}`;
+
+            await EmailService.sendEmployeeSetupEmail(
+                employeeData.email,
+                employeeData.name,
+                setupUrl
+            );
+        } catch (error: any) {
+            console.error(`[Background Notification Error] Failed to send setup email to ${employeeData.email}:`, error?.message || error);
+        }
     }
 }
