@@ -11,6 +11,7 @@ import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class VisitorController {
     /**
@@ -42,7 +43,7 @@ export class VisitorController {
 
         const query: IGetVisitorsQuery = req.query;
         const userId = req.user._id.toString();
-        
+
         // SECURITY FIX: Always pass userId to filter by admin's createdBy
         // - For admin: shows visitors created by this admin (their own data)
         // - For employee: shows visitors created by this employee (if any)
@@ -64,9 +65,10 @@ export class VisitorController {
         const userId = req.user._id.toString();
 
         const visitor = await VisitorService.getVisitorById(id);
+        const adminId = await EmployeeUtil.getAdminId(userId);
 
         const visitorRecord = await Visitor.findById(id);
-        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
         }
 
@@ -87,8 +89,10 @@ export class VisitorController {
         const updateData: IUpdateVisitorDTO = req.body;
         const userId = req.user._id.toString();
 
+        const adminId = await EmployeeUtil.getAdminId(userId);
+
         const visitorRecord = await Visitor.findById(id);
-        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
         }
 
@@ -106,7 +110,15 @@ export class VisitorController {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
         const { id } = req.params;
-        const deletedBy = req.user._id.toString();
+        const userId = req.user._id.toString();
+        const adminId = await EmployeeUtil.getAdminId(userId);
+
+        const visitorRecord = await Visitor.findById(id);
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
+            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        const deletedBy = userId;
         await VisitorService.deleteVisitor(id, deletedBy);
         ResponseUtil.success(res, 'Visitor deleted successfully');
     }

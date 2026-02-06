@@ -31,10 +31,14 @@ export class EmployeeService {
             throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
         }
 
-        const existingEmployee = await Employee.findOne({
-            email: employeeData.email,
-            createdBy: createdByObjectId
-        }).session(session);
+        // Optimized: Parallelize initial checks for existing employee and admin user data
+        const [existingEmployee, adminUser] = await Promise.all([
+            Employee.findOne({
+                email: employeeData.email,
+                createdBy: createdByObjectId
+            }).session(session),
+            User.findById(createdByObjectId).select('companyName').session(session)
+        ]);
 
         // If an employee exists with the same email but is soft-deleted, restore it instead of blocking.
         // This matches the expected behavior: deleted records should not prevent re-creation.
@@ -64,11 +68,7 @@ export class EmployeeService {
             }).session(session);
 
             if (!existingUser) {
-                let companyName = employeeData.name; // Fallback
-                const adminUser = await User.findById(createdByObjectId).select('companyName').session(session);
-                if (adminUser) {
-                    companyName = adminUser.companyName;
-                }
+                const companyName = adminUser?.companyName || employeeData.name;
 
                 // Generate temp password and setup token
                 const tempPassword = this.generateTempPassword();
@@ -92,20 +92,21 @@ export class EmployeeService {
 
                 await user.save({ session });
 
-                // Send setup email
+                // Send setup email - FIRE AND FORGET (Background execution)
+                // We don't await this to keep the API response snappy
                 try {
                     const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
                     const setupUrl = `${baseUrl.replace(/\/$/, '')}/employee-setup?token=${setupToken}`;
 
-                    await EmailService.sendEmployeeSetupEmail(
+                    EmailService.sendEmployeeSetupEmail(
                         employeeData.email,
                         employeeData.name,
-                        setupUrl,
-                        tempPassword
-                    );
-                } catch (emailError: any) {
-                    console.error(`[Employee Service] Failed to send setup email to ${employeeData.email}:`, emailError.message);
-                    // Continue even if email fails - employee is still created
+                        setupUrl
+                    ).catch(emailError => {
+                        console.error(`[Background Email Error] Failed to send setup email to ${employeeData.email}:`, emailError.message);
+                    });
+                } catch (emailPrepError: any) {
+                    console.error(`[Employee Service] Failed to prepare setup email to ${employeeData.email}:`, emailPrepError.message);
                 }
             } else {
                 // User already exists with this email
@@ -275,20 +276,21 @@ export class EmployeeService {
             Employee.countDocuments(filter)
         ]);
 
-        // Check if each employee can be deleted (no appointments)
-        const employeesWithDeleteFlag = await Promise.all(
-            employees.map(async (employee) => {
-                const appointmentCount = await Appointment.countDocuments({
-                    employeeId: employee._id,
-                    isDeleted: false
-                });
+        // Efficiently check if employees can be deleted (bulk check instead of N+1 queries)
+        const employeeIds = employees.map(emp => emp._id);
+        const employeesWithAppointments = await Appointment.distinct('employeeId', {
+            employeeId: { $in: employeeIds },
+            isDeleted: false
+        });
 
-                return {
-                    ...employee,
-                    canDelete: appointmentCount === 0
-                };
-            })
+        const employeesWithAppointmentsSet = new Set(
+            employeesWithAppointments.map(id => id.toString())
         );
+
+        const employeesWithDeleteFlag = employees.map(employee => ({
+            ...employee,
+            canDelete: !employeesWithAppointmentsSet.has((employee._id as any).toString())
+        }));
 
         const totalPages = Math.ceil(totalEmployees / limit);
 

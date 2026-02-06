@@ -13,6 +13,7 @@ import { SafeinProfileService } from '../safeinProfile/safeinProfile.service';
 import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 import { generateInvoiceNumber } from '../../utils/invoiceNumber.util';
 import { toObjectId } from '../../utils/idExtractor.util';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 
 export class UserSubscriptionService {
@@ -531,16 +532,18 @@ export class UserSubscriptionService {
         visitors: number;
         appointments: number;
     }> {
-        const userObjectId = toObjectId(userId);
-        
+        // Resolve admin ID - employees share admin's limits
+        const adminId = await EmployeeUtil.getAdminId(userId);
+        const userObjectId = toObjectId(adminId);
+
         // Get all employees created by this user
-        const employees = await Employee.find({ 
-            createdBy: userObjectId, 
-            isDeleted: false 
+        const employees = await Employee.find({
+            createdBy: userObjectId,
+            isDeleted: false
         }).select('_id').lean();
-        
+
         const employeeIds = employees.map((emp: any) => emp._id);
-        
+
         // Calculate current month's date range based on subscription start date
         // Monthly limits reset every month from subscription start date
         // Example: If subscription started on Jan 15, then:
@@ -549,38 +552,38 @@ export class UserSubscriptionService {
         // - Month 3: Mar 15 - Apr 14
         let monthStart: Date;
         let monthEnd: Date;
-        
+
         if (subscriptionStartDate) {
             const now = new Date();
             const startDate = new Date(subscriptionStartDate);
             startDate.setHours(0, 0, 0, 0);
-            
+
             // Calculate which subscription month we're currently in
             // Monthly cycle is based on subscription start date's day
             // Example: If subscription started on Jan 15:
             // - Month 1: Jan 15 - Feb 14
             // - Month 2: Feb 15 - Mar 14
             // - Month 3: Mar 15 - Apr 14
-            
+
             const startDay = startDate.getDate();
             const nowDay = now.getDate();
-            
+
             // Calculate months difference
-            let monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + 
-                            (now.getMonth() - startDate.getMonth());
-            
+            let monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 +
+                (now.getMonth() - startDate.getMonth());
+
             // Adjust if current day is before subscription start day in the month
             // Example: Start on Jan 15, today is Feb 10 → still in Month 1
             if (nowDay < startDay) {
                 monthsDiff -= 1;
             }
-            
+
             // Calculate current subscription month start
             // Start from subscription start date + monthsDiff months
             monthStart = new Date(startDate);
             monthStart.setMonth(startDate.getMonth() + monthsDiff);
             monthStart.setHours(0, 0, 0, 0);
-            
+
             // Calculate current subscription month end (start + 1 month - 1 day)
             monthEnd = new Date(monthStart);
             monthEnd.setMonth(monthEnd.getMonth() + 1);
@@ -594,7 +597,7 @@ export class UserSubscriptionService {
             monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
             monthEnd.setHours(23, 59, 59, 999);
         }
-        
+
         // Count appointments for current month only:
         // 1. Directly created by user (createdBy = userId)
         // 2. Created by employees of this user (employeeId in employeeIds)
@@ -627,14 +630,19 @@ export class UserSubscriptionService {
      * Get a comprehensive subscription status for a user
      */
     static async getSubscriptionStatus(userId: string): Promise<ITrialLimitsStatus> {
+        // Resolve admin ID - employees share admin's subscription
+        const adminId = await EmployeeUtil.getAdminId(userId);
+        const adminObjectId = toObjectId(adminId);
+        const isEmployee = adminId !== userId;
+
         // Fetch necessary data in parallel
         const subDocPromise = UserSubscription.findOne({
-            userId: toObjectId(userId),
+            userId: adminObjectId,
             isDeleted: false
         }).sort({ createdAt: -1 });
 
         const [subDoc] = await Promise.all([subDocPromise]);
-        
+
         // Get counts with subscription start date for monthly limit calculation
         const subscriptionStartDate = subDoc?.startDate;
         const countsPromise = this.getTrialLimitsCounts(userId, subscriptionStartDate);
@@ -677,6 +685,7 @@ export class UserSubscriptionService {
             subscriptionStatus,
             isActive: isActive || false,
             isExpired,
+            isEmployeeContext: isEmployee,
             limits: {
                 employees: checkCreationLimit('employees'),
                 visitors: checkCreationLimit('visitors'),
@@ -705,9 +714,12 @@ export class UserSubscriptionService {
     static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments', isEmployeeContext: boolean = false): Promise<void> {
         const status = await this.getSubscriptionStatus(userId);
 
+        // Use detected employee context from status if not provided
+        const effectiveIsEmployeeContext = isEmployeeContext || (status as any).isEmployeeContext;
+
         // Check if subscription is expired
         if (status.isExpired) {
-            const message = isEmployeeContext
+            const message = effectiveIsEmployeeContext
                 ? "Your admin's subscription has expired. Please contact your administrator to renew the subscription."
                 : 'Your subscription has expired. Please upgrade or recharge to create new items.';
             throw new AppError(message, ERROR_CODES.PAYMENT_REQUIRED);
@@ -721,9 +733,9 @@ export class UserSubscriptionService {
         if (limitInfo.reached) {
             const limitText = limitInfo.limit === -1 ? 'unlimited' : limitInfo.limit.toString();
             const currentText = limitInfo.current.toString();
-            
+
             let message: string;
-            if (isEmployeeContext) {
+            if (effectiveIsEmployeeContext) {
                 if (status.isTrial) {
                     message = `Your admin's free ${type} limit (${limitText}) has been reached. Currently ${currentText} ${type} exist. Please contact your administrator to upgrade.`;
                 } else {
@@ -736,7 +748,7 @@ export class UserSubscriptionService {
                     message = `You have reached your plan's ${type} limit (${limitText}). You currently have ${currentText} ${type}. Please upgrade to a higher plan to create more ${type}.`;
                 }
             }
-            
+
             throw new AppError(message, ERROR_CODES.PAYMENT_REQUIRED);
         }
     }

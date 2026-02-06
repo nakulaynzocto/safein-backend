@@ -111,6 +111,7 @@ export interface ITrialLimitsStatus {
     subscriptionStatus: string;
     isActive: boolean;
     isExpired: boolean;
+    isEmployeeContext?: boolean;
     limits: {
         employees: {
             limit: number;

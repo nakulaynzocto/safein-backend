@@ -697,8 +697,7 @@ export class EmailService {
   static async sendEmployeeSetupEmail(
     email: string,
     employeeName: string,
-    setupUrl: string,
-    tempPassword: string
+    setupUrl: string
   ): Promise<void> {
     try {
       console.log(`[EmailService] Preparing to send employee setup email to: ${email}`);
@@ -706,8 +705,8 @@ export class EmailService {
       console.log(`[EmailService] SMTP Host: ${CONSTANTS.SMTP_HOST || 'Not configured'}`);
       console.log(`[EmailService] Brevo API Key: ${CONSTANTS.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
 
-      const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, tempPassword);
-      const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, tempPassword);
+      const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl);
+      const textContent = getEmployeeSetupEmailText(employeeName, setupUrl);
 
       console.log(`[EmailService] Email content generated, sending email...`);
 

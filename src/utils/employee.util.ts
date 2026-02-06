@@ -82,7 +82,7 @@ export class EmployeeUtil {
    */
   static async getAdminUserIdForEmployee(user: IUser): Promise<string | null> {
     const employee = await this.getEmployeeFromUser(user);
-    
+
     if (!employee || !employee.createdBy) {
       return null;
     }
@@ -106,6 +106,39 @@ export class EmployeeUtil {
     }
 
     return adminUserId;
+  }
+
+  /**
+   * Get the admin/owner ID for any user ID
+   * If user is employee, returns their admin's ID
+   * If user is admin/superadmin, returns their own ID
+   */
+  static async getAdminId(userId: string): Promise<string> {
+    const { User } = await import('../models/user/user.model');
+    const user = await User.findById(userId).select('_id roles createdBy email').lean();
+
+    if (!user) {
+      return userId;
+    }
+
+    // Check if user is an employee
+    const isEmployee = user.roles?.includes('employee') || false;
+
+    if (isEmployee) {
+      // Try to get from user.createdBy first (fastest)
+      if (user.createdBy) {
+        return user.createdBy.toString();
+      }
+
+      // Fallback: get from employee record
+      const adminUserId = await this.getAdminUserIdForEmployee(user as any);
+      if (adminUserId) {
+        return adminUserId;
+      }
+    }
+
+    // If not employee or couldn't find admin, return the userId itself
+    return userId;
   }
 }
 

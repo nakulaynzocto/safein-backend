@@ -8,6 +8,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils';
 import { ICreateVisitorDTO } from '../../types/visitor/visitor.types';
 import { ICreateAppointmentDTO } from '../../types/appointment/appointment.types';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class AppointmentBookingLinkController {
   static createAppointmentLink = async (
@@ -122,18 +123,17 @@ export class AppointmentBookingLinkController {
 
       // Get the admin's userId (for subscription check and visitor ownership)
       // If createdBy is an employee, get their admin's ID; otherwise use createdBy (admin)
-      const adminUserId = await AppointmentBookingLinkService.getAdminUserIdForCreator(createdBy);
-      if (!adminUserId) throw new AppError('Failed to get admin user ID', ERROR_CODES.INTERNAL_SERVER_ERROR);
-      
+      const adminUserId = await EmployeeUtil.getAdminId(createdBy);
+
       // Check if visitor already exists for this admin (not for the employee)
       // Visitors belong to admin, so check by admin's userId, not employee's userId
       const { Visitor } = await import('../../models/visitor/visitor.model');
       const { toObjectId } = await import('../../utils/idExtractor.util');
       const adminUserIdObjectId = toObjectId(adminUserId);
-      
+
       // Normalize email to ensure consistent comparison
       const normalizedEmail = normalizedVisitorEmail.toLowerCase().trim();
-      
+
       let visitor;
       if (adminUserIdObjectId) {
         // First, check if visitor already exists for this admin
@@ -150,13 +150,13 @@ export class AppointmentBookingLinkController {
         } else {
           // Check admin's subscription limits only when creating new visitor (not employee's)
           await UserSubscriptionService.checkPlanLimits(adminUserId, 'visitors');
-          
+
           // Ensure email is normalized in visitorData
           const normalizedVisitorData = {
             ...visitorData,
             email: normalizedEmail,
           };
-          
+
           // Try to create new visitor with admin's userId as createdBy (not employee's userId)
           // This ensures all visitors belong to the admin, not individual employees
           try {
@@ -165,23 +165,23 @@ export class AppointmentBookingLinkController {
           } catch (createError: any) {
             // Handle race condition: if duplicate error occurs (another request created it simultaneously),
             // fetch and return the existing visitor instead of throwing error
-            const isDuplicateError = 
-              createError.code === 11000 || 
-              createError.message?.includes('duplicate') || 
+            const isDuplicateError =
+              createError.code === 11000 ||
+              createError.message?.includes('duplicate') ||
               createError.message?.includes('VISITOR_EMAIL_EXISTS') ||
               (createError instanceof AppError && createError.statusCode === 409);
-            
+
             if (isDuplicateError) {
               // Duplicate key error or conflict - visitor was created by another concurrent request
               // Wait a small moment for the other transaction to commit, then retry
               await new Promise(resolve => setTimeout(resolve, 100));
-              
+
               const existingVisitorAfterError = await Visitor.findOne({
                 email: normalizedEmail,
                 createdBy: adminUserIdObjectId,
                 isDeleted: false,
               });
-              
+
               if (existingVisitorAfterError && existingVisitorAfterError._id) {
                 // Return the existing visitor that was created by the other request
                 visitor = existingVisitorAfterError.toObject ? existingVisitorAfterError.toObject() : existingVisitorAfterError;
@@ -198,37 +198,37 @@ export class AppointmentBookingLinkController {
       } else {
         // Check admin's subscription limits (not employee's)
         await UserSubscriptionService.checkPlanLimits(adminUserId, 'visitors');
-        
+
         // Ensure email is normalized in visitorData
         const normalizedVisitorData = {
           ...visitorData,
           email: normalizedEmail,
         };
-        
+
         // Try to create new visitor with admin's userId as createdBy
         try {
           visitor = await VisitorService.createVisitor(normalizedVisitorData, adminUserId);
           if (!visitor?._id) throw new AppError('Failed to create visitor', ERROR_CODES.INTERNAL_SERVER_ERROR);
         } catch (createError: any) {
           // Handle race condition: if duplicate error occurs, fetch and return existing visitor
-          const isDuplicateError = 
-            createError.code === 11000 || 
-            createError.message?.includes('duplicate') || 
+          const isDuplicateError =
+            createError.code === 11000 ||
+            createError.message?.includes('duplicate') ||
             createError.message?.includes('VISITOR_EMAIL_EXISTS') ||
             (createError instanceof AppError && createError.statusCode === 409);
-          
+
           if (isDuplicateError) {
             const adminUserIdObjectId = toObjectId(adminUserId);
             if (adminUserIdObjectId) {
               // Wait a small moment for the other transaction to commit, then retry
               await new Promise(resolve => setTimeout(resolve, 100));
-              
+
               const existingVisitorAfterError = await Visitor.findOne({
                 email: normalizedEmail,
                 createdBy: adminUserIdObjectId,
                 isDeleted: false,
               });
-              
+
               if (existingVisitorAfterError && existingVisitorAfterError._id) {
                 visitor = existingVisitorAfterError.toObject ? existingVisitorAfterError.toObject() : existingVisitorAfterError;
               } else {

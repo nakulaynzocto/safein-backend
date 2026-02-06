@@ -12,6 +12,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class VisitorService {
     /**
@@ -26,17 +27,23 @@ export class VisitorService {
             throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
         }
 
+        // Get admin ID - Visitors belong to the company (admin)
+        const adminId = await EmployeeUtil.getAdminId(createdBy);
+        const adminIdObjectId = toObjectId(adminId);
+
+        const normalizedEmail = visitorData.email.toLowerCase().trim();
+
         const existingVisitor = await Visitor.findOne({
-            email: visitorData.email,
-            createdBy: createdByObjectId
+            email: normalizedEmail,
+            createdBy: adminIdObjectId
         }).session(session);
 
         // If a visitor exists with the same email but is soft-deleted, restore it instead of blocking.
-        // This matches the expected behavior: deleted records should not prevent re-creation.
         if (existingVisitor) {
             if ((existingVisitor as any).isDeleted === true) {
                 existingVisitor.set({
                     ...visitorData,
+                    email: normalizedEmail,
                     isDeleted: false,
                     deletedAt: null,
                     deletedBy: null
@@ -47,7 +54,11 @@ export class VisitorService {
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        const visitor = new Visitor({ ...visitorData, createdBy: createdByObjectId });
+        const visitor = new Visitor({
+            ...visitorData,
+            email: normalizedEmail,
+            createdBy: adminIdObjectId
+        });
         await visitor.save({ session });
 
         return visitor.toObject() as unknown as IVisitorResponse;
@@ -90,7 +101,9 @@ export class VisitorService {
         const filter: any = { isDeleted: false };
 
         if (userId) {
-            filter.createdBy = userId;
+            // Filter by admin ID to show all company visitors
+            const adminId = await EmployeeUtil.getAdminId(userId);
+            filter.createdBy = toObjectId(adminId);
         }
 
         if (search) {
@@ -190,8 +203,9 @@ export class VisitorService {
         }
 
         if (safeUpdateData.email) {
+            const normalizedEmail = safeUpdateData.email.toLowerCase().trim();
             const existingEmail = await Visitor.findOne({
-                email: safeUpdateData.email,
+                email: normalizedEmail,
                 createdBy: existingVisitor.createdBy,
                 _id: { $ne: visitorIdObjectId }
             }).session(session);
@@ -202,6 +216,7 @@ export class VisitorService {
                     ERROR_CODES.CONFLICT
                 );
             }
+            safeUpdateData.email = normalizedEmail;
         }
 
         const visitor = await Visitor.findByIdAndUpdate(

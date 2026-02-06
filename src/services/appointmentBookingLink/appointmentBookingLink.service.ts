@@ -50,7 +50,7 @@ export class AppointmentBookingLinkService {
     let visitorId: any = null;
 
     // Get admin's userId (if createdBy is employee, get their admin's ID)
-    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
     const adminUserIdObjectId = toObjectId(adminUserId);
 
     if (adminUserIdObjectId) {
@@ -323,33 +323,6 @@ export class AppointmentBookingLinkService {
     return createdByIdString;
   }
 
-  /**
-   * Get admin user ID for creator
-   * If creator is an employee, returns their admin's ID
-   * If creator is an admin, returns creator's ID
-   */
-  static async getAdminUserIdForCreator(createdBy: string): Promise<string> {
-    // Get the user who created the link
-    const user = await User.findById(createdBy).select('_id roles employeeId email').lean();
-    if (!user) {
-      throw new AppError('Link creator not found', ERROR_CODES.NOT_FOUND);
-    }
-
-    // Check if user is an employee
-    const isEmployee = user.roles?.includes('employee') || false;
-
-    if (isEmployee) {
-      // If employee, get their admin's user ID (the one who created the employee)
-      const adminUserId = await EmployeeUtil.getAdminUserIdForEmployee(user as any);
-      if (!adminUserId) {
-        throw new AppError('Unable to find admin for employee', ERROR_CODES.INTERNAL_SERVER_ERROR);
-      }
-      return adminUserId;
-    }
-
-    // If not employee (admin), return the creator's own ID
-    return createdBy;
-  }
 
   /**
    * Update visitor ID in appointment link
@@ -378,7 +351,7 @@ export class AppointmentBookingLinkService {
     createdBy: string
   ): Promise<{ exists: boolean; visitor?: any }> {
     // Get admin's userId (if createdBy is employee, get their admin's ID)
-    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
     const adminUserIdObjectId = toObjectId(adminUserId);
 
     if (!adminUserIdObjectId) {
@@ -431,7 +404,7 @@ export class AppointmentBookingLinkService {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
       if (createdByIdString) {
         // Get admin's userId (if createdBy is employee, get their admin's ID)
-        const adminUserId = await this.getAdminUserIdForCreator(createdByIdString);
+        const adminUserId = await EmployeeUtil.getAdminId(createdByIdString);
         const adminUserIdObjectId = toObjectId(adminUserId);
 
         if (adminUserIdObjectId) {
@@ -481,7 +454,7 @@ export class AppointmentBookingLinkService {
 
     // Create appointment
     // Get admin user ID (if createdBy is employee, use their admin's ID)
-    const adminUserId = await this.getAdminUserIdForCreator(createdBy);
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
 
     // Check admin's subscription limits (not employee's)
     await UserSubscriptionService.checkPlanLimits(adminUserId, 'appointments');

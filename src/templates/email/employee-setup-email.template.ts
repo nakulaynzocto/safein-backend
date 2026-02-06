@@ -6,8 +6,7 @@ import { getBaseEmailTemplate } from './base-email.template';
  */
 export function getEmployeeSetupEmailTemplate(
   employeeName: string,
-  setupUrl: string,
-  tempPassword: string
+  setupUrl: string
 ): string {
   const content = `
     <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
@@ -23,15 +22,6 @@ export function getEmployeeSetupEmailTemplate(
         Your employee account has been created on SafeIn Visitor Management System. 
         To get started, you need to set up your password.
       </p>
-      
-      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 30px 0;">
-        <p style="margin: 0; font-size: 14px; color: #666;">
-          <strong>Temporary Password:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${tempPassword}</code>
-        </p>
-        <p style="margin: 10px 0 0 0; font-size: 12px; color: #999;">
-          ⚠️ Please change this password after first login
-        </p>
-      </div>
       
       <div style="text-align: center; margin: 40px 0;">
         <a href="${setupUrl}" 
@@ -81,8 +71,7 @@ export function getEmployeeSetupEmailTemplate(
 
 export function getEmployeeSetupEmailText(
   employeeName: string,
-  setupUrl: string,
-  tempPassword: string
+  setupUrl: string
 ): string {
   return `
 Welcome to SafeIn!
@@ -91,9 +80,6 @@ Hello ${employeeName},
 
 Your employee account has been created on SafeIn Visitor Management System. 
 To get started, you need to set up your password.
-
-Temporary Password: ${tempPassword}
-⚠️ Please change this password after first login
 
 Set up your password by clicking this link:
 ${setupUrl}
