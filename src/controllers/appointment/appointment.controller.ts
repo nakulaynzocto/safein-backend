@@ -236,7 +236,7 @@ export class AppointmentController {
 
         // Use common helper to determine actionBy
         const actionBy = req.user
-            ? await this.determineActionBy(req.user, request.appointmentId)
+            ? await AppointmentController.determineActionBy(req.user, request.appointmentId)
             : 'admin';
 
         // Notify admin when employee completes
@@ -279,7 +279,7 @@ export class AppointmentController {
         const { id } = req.params;
 
         // Use common helper to determine actionBy
-        const actionBy = await this.determineActionBy(req.user, id);
+        const actionBy = await AppointmentController.determineActionBy(req.user, id);
 
         const result = await AppointmentService.approveAppointment(id, {
             sendNotifications: true, // Enable socket notifications
@@ -301,7 +301,7 @@ export class AppointmentController {
         const { id } = req.params;
 
         // Use common helper to determine actionBy
-        const actionBy = await this.determineActionBy(req.user, id);
+        const actionBy = await AppointmentController.determineActionBy(req.user, id);
 
         const result = await AppointmentService.rejectAppointment(id, {
             sendNotifications: true, // Enable socket notifications

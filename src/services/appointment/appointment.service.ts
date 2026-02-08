@@ -79,7 +79,8 @@ export class AppointmentService {
             // Send to employee only if:
             // - Admin performed the action (employee needs to know admin approved/rejected)
             // - Appointment was created (employee should know about new appointments for them - whether by admin or visitor)
-            if (actionBy === 'admin' || eventType === 'created') {
+            // BUT NOT if employee is the same as admin (already got notification above)
+            if (actionBy === 'admin' || (eventType === 'created' && actionBy !== 'visitor')) {
                 try {
                     const employee = populatedAppointment?.employeeId as any;
                     if (employee && employee.email) {
