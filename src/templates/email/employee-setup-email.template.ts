@@ -6,12 +6,13 @@ import { getBaseEmailTemplate } from './base-email.template';
  */
 export function getEmployeeSetupEmailTemplate(
   employeeName: string,
-  setupUrl: string
+  setupUrl: string,
+  companyName: string = 'SafeIn'
 ): string {
   const content = `
     <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
       <h2 style="color: #1A73E8; text-align: center; margin-bottom: 30px;">
-        Welcome to SafeIn! 👋
+        Welcome to ${companyName}! 👋
       </h2>
       
       <p style="font-size: 16px; line-height: 1.6; color: #333;">
@@ -19,7 +20,7 @@ export function getEmployeeSetupEmailTemplate(
       </p>
       
       <p style="font-size: 16px; line-height: 1.6; color: #333;">
-        Your employee account has been created on SafeIn Visitor Management System. 
+        Your employee account has been created on ${companyName} Visitor Management System. 
         To get started, you need to set up your password.
       </p>
       
@@ -61,24 +62,25 @@ export function getEmployeeSetupEmailTemplate(
       
       <p style="font-size: 14px; line-height: 1.6; color: #666; margin-top: 30px;">
         Best regards,<br>
-        <strong>SafeIn Team</strong>
+        <strong>${companyName} Team</strong>
       </p>
     </div>
   `;
 
-  return getBaseEmailTemplate(content, 'Welcome to SafeIn - Set Up Your Account');
+  return getBaseEmailTemplate(content, `Welcome to ${companyName} - Set Up Your Account`, companyName);
 }
 
 export function getEmployeeSetupEmailText(
   employeeName: string,
-  setupUrl: string
+  setupUrl: string,
+  companyName: string = 'SafeIn'
 ): string {
   return `
-Welcome to SafeIn!
+Welcome to ${companyName}!
 
 Hello ${employeeName},
 
-Your employee account has been created on SafeIn Visitor Management System. 
+Your employee account has been created on ${companyName} Visitor Management System. 
 To get started, you need to set up your password.
 
 Set up your password by clicking this link:
@@ -95,7 +97,6 @@ Once you've set up your password, you'll be able to:
 If you have any questions, please contact your administrator.
 
 Best regards,
-SafeIn Team
+${companyName} Team
   `.trim();
 }
-

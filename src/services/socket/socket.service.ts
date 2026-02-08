@@ -163,6 +163,12 @@ class SocketService {
         payload,
         timestamp: new Date().toISOString()
       });
+
+      // Also emit generic notification event
+      this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
+        type: 'NEW_NOTIFICATION',
+        timestamp: new Date().toISOString()
+      });
     }
 
     // Always emit update event for dashboard refresh
@@ -212,6 +218,12 @@ class SocketService {
       this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
         type: 'APPOINTMENT_CREATED',
         payload,
+        timestamp: new Date().toISOString()
+      });
+
+      // Also emit generic notification event
+      this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
+        type: 'NEW_NOTIFICATION',
         timestamp: new Date().toISOString()
       });
     }

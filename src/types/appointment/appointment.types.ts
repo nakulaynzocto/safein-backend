@@ -6,8 +6,6 @@ export interface IVisitorDetails {
     name: string;
     email?: string;
     phone: string;
-    company?: string;
-    designation?: string;
     address?: {
         street: string;
         city: string;

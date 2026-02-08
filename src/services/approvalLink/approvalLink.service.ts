@@ -70,7 +70,7 @@ export class ApprovalLinkService {
                 path: 'appointmentId',
                 populate: [
                     { path: 'employeeId', select: 'name email department designation phone' },
-                    { path: 'visitorId', select: 'name email phone company designation address idProof photo visitorId' }
+                    { path: 'visitorId', select: 'name email phone address idProof photo' }
                 ]
             });
 
@@ -125,7 +125,7 @@ export class ApprovalLinkService {
                 path: 'appointmentId',
                 populate: [
                     { path: 'employeeId', select: 'name email department designation phone' },
-                    { path: 'visitorId', select: 'name email phone company designation address idProof photo visitorId' }
+                    { path: 'visitorId', select: 'name email phone address idProof photo' }
                 ]
             });
 
@@ -176,7 +176,7 @@ export class ApprovalLinkService {
             // Mongoose may lose populated fields after save()
             const populatedAppointment = await Appointment.findById(appointment._id)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .lean();
 
             socketService.emitAppointmentStatusChange(userId, {

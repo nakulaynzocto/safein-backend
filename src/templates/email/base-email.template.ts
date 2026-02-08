@@ -14,7 +14,7 @@ export interface EmailContent {
     additionalInfo?: string;
 }
 
-export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', companyLogo?: string): string {
+export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', companyName: string = 'SafeIn', _companyLogo?: string): string {
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -51,77 +51,18 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             }
             .header {
-                background: linear-gradient(135deg, #074463 0%, #3882a5 100%);
-                padding: 48px 40px;
-                text-align: center;
-                position: relative;
-                overflow: hidden;
+                display: none;
             }
-            .header::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
-                opacity: 0.3;
-            }
-            .logo {
-                color: #ffffff;
-                font-size: 36px;
-                font-weight: 700;
-                letter-spacing: -0.5px;
-                margin: 0;
-                text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                position: relative;
-                z-index: 1;
-            }
-            .logo-tagline {
-                color: #e0e7ff;
-                font-size: 15px;
-                margin-top: 10px;
-                font-weight: 400;
-                letter-spacing: 0.3px;
-                position: relative;
-                z-index: 1;
-            }
-            .company-logo {
-                max-width: 180px;
-                max-height: 80px;
-                margin: 0 auto 16px;
-                display: block;
-                position: relative;
-                z-index: 1;
-                object-fit: contain;
-                background: white;
-                padding: 8px 16px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            .logo,
+            .logo-tagline,
+            .company-logo,
+            .icon-container,
+            .icon-circle,
+            .icon-symbol {
+                display: none;
             }
             .content-wrapper {
-                padding: 48px 40px;
-                background-color: #ffffff;
-            }
-            .icon-container {
-                text-align: center;
-                margin-bottom: 32px;
-            }
-            .icon-circle {
-                width: 112px;
-                height: 112px;
-                background: linear-gradient(135deg, #98c7dd 0%, #e9eff6 100%);
-                border-radius: 50%;
-                margin: 0 auto;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 8px 24px rgba(7, 68, 99, 0.12);
-                border: 4px solid #ffffff;
-            }
-            .icon-symbol {
-                font-size: 56px;
-                line-height: 1;
+                padding: 40px;
             }
             .greeting {
                 font-size: 28px;
@@ -190,44 +131,29 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
                 margin: 10px 8px;
             }
             .highlight-box {
-                background: linear-gradient(135deg, #e9eff6 0%, #f8fafc 100%);
-                padding: 28px;
+                background-color: #f8fafc;
+                padding: 24px;
                 border-radius: 12px;
                 margin: 28px 0;
                 text-align: left;
-                border-left: 5px solid #074463;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+                border: 1px solid #e2e8f0;
             }
             .highlight-box h3 {
-                margin: 0 0 20px 0;
+                margin: 0 0 16px 0;
                 color: #074463;
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: 700;
-                letter-spacing: -0.3px;
             }
             .highlight-box p {
-                margin: 12px 0;
+                margin: 8px 0;
                 color: #475569;
                 font-size: 15px;
-                line-height: 1.7;
-                display: flex;
-                align-items: flex-start;
-            }
-            .highlight-box p strong {
-                color: #1e293b;
-                font-weight: 600;
-                min-width: 100px;
-                margin-right: 12px;
-            }
-            .highlight-box ul {
-                margin: 12px 0;
-                padding-left: 28px;
+                line-height: 1.6;
             }
             .highlight-box li {
-                margin: 10px 0;
+                margin: 8px 0;
                 color: #475569;
                 font-size: 15px;
-                line-height: 1.7;
             }
             .info-card {
                 background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -306,33 +232,26 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
             }
             .security-note {
                 font-size: 14px;
-                color: #64748b;
-                margin: 28px 0;
-                padding: 20px;
-                background-color: #f8fafc;
-                border-radius: 10px;
-                border-left: 4px solid #64748b;
-                line-height: 1.7;
+                color: #475569;
+                margin: 24px 0;
+                padding: 16px;
+                background-color: #f1f5f9;
+                border-radius: 8px;
+                border-left: 4px solid #3882a5;
+                line-height: 1.6;
             }
             .security-note strong {
-                color: #1e293b;
-                font-weight: 600;
+                color: #074463;
             }
             .security-warning {
-                background-color: #fffbeb;
-                border-left-color: #f59e0b;
-                color: #92400e;
-            }
-            .security-warning strong {
-                color: #78350f;
+                background-color: #fff1f2;
+                border-left-color: #e11d48;
+                color: #9f1239;
             }
             .security-success {
                 background-color: #f0fdf4;
                 border-left-color: #10b981;
-                color: #065f46;
-            }
-            .security-success strong {
-                color: #047857;
+                color: #166534;
             }
             .info-box {
                 background-color: #f8fafc;
@@ -464,40 +383,27 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
     <body>
         <div class="email-wrapper">
             <div class="email-container">
-                ${companyLogo ? `
-                <div class="header">
-                    <img src="${companyLogo}" alt="Company Logo" class="company-logo" />
-                </div>
-                ` : ''}
-                
                 <div class="content-wrapper">
-                    <div class="icon-container">
-                        <div class="icon-circle">
-                            <div class="icon-symbol">🔒</div>
-                        </div>
-                    </div>
-                    
                     ${content}
                 </div>
                 
                 <div class="footer">
                     <div class="footer-signature">Best Regards,</div>
-                    <div class="footer-company">SafeIn Security Team</div>
+                    <div class="footer-company">${companyName} Team</div>
                     <div class="footer-tagline">Professional Visitor Management Solutions</div>
                     
                     <div class="footer-links">
-                        <a href="mailto:support@safein.com">Support</a>
+                        <a href="#">Support</a>
                         <a href="#">Help Center</a>
                         <a href="#">Privacy Policy</a>
                     </div>
                     
                     <div class="footer-text">
-                        If you have any questions or need assistance, please don't hesitate to contact our support team at 
-                        <a href="mailto:support@safein.com">support@safein.com</a>
+                        If you have any questions or need assistance, please don't hesitate to contact our support team.
                     </div>
                     
                     <div class="footer-copyright">
-                        © ${new Date().getFullYear()} SafeIn. All rights reserved.<br>
+                        © ${new Date().getFullYear()} ${companyName}. All rights reserved.<br>
                         This is an automated message. Please do not reply to this email.
                     </div>
                 </div>
@@ -505,5 +411,5 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
         </div>
     </body>
     </html>
-  `;
+    `;
 }

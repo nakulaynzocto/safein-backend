@@ -20,7 +20,7 @@ export const checkPremiumSubscription = async (
         }
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
-        const hasPremium = activeSubscription && activeSubscription.planType !== "free";
+        const hasPremium = activeSubscription && activeSubscription.hasActiveSubscription && activeSubscription.planType !== "free";
 
         if (!hasPremium) {
             throw new AppError("Premium subscription required to access this feature", ERROR_CODES.FORBIDDEN);
@@ -49,7 +49,7 @@ export const checkActiveSubscription = async (
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
-        if (!activeSubscription) {
+        if (!activeSubscription || !activeSubscription.hasActiveSubscription) {
             throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 
@@ -70,7 +70,7 @@ export const checkSpecificPlan = (requiredPlanType: string) => {
 
             const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
-            if (!activeSubscription) {
+            if (!activeSubscription || !activeSubscription.hasActiveSubscription) {
                 throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
             }
 
@@ -99,7 +99,7 @@ export const checkTrialSubscription = async (
 
         const activeSubscription = await UserSubscriptionService.getUserActiveSubscription(req.user._id.toString());
 
-        if (!activeSubscription) {
+        if (!activeSubscription || !activeSubscription.hasActiveSubscription) {
             throw new AppError("Active subscription required to access this feature", ERROR_CODES.FORBIDDEN);
         }
 

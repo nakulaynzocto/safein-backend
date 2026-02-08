@@ -6,3 +6,4 @@ export * from "./subscription/subscription.model";
 export * from "./userSubscription/userSubscription.model";
 export * from "./settings/settings.model";
 export * from "./appointmentBookingLink/appointmentBookingLink.model";
+export * from "./specialVisitorBooking/specialVisitorBooking.model";

@@ -112,8 +112,6 @@ export class VisitorService {
                 { name: { $regex: escapedSearch, $options: 'i' } },
                 { email: { $regex: escapedSearch, $options: 'i' } },
                 { phone: { $regex: escapedSearch, $options: 'i' } },
-                { company: { $regex: escapedSearch, $options: 'i' } },
-                { designation: { $regex: escapedSearch, $options: 'i' } },
                 { 'address.street': { $regex: escapedSearch, $options: 'i' } },
                 { 'address.city': { $regex: escapedSearch, $options: 'i' } },
                 { 'address.state': { $regex: escapedSearch, $options: 'i' } },

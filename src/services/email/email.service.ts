@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
-import { getOtpEmailTemplate, getOtpEmailText } from '../../templates/email/otp-email.template';
+import { getOtpEmailTemplate, getOtpEmailText, getVisitorOtpEmailTemplate, getVisitorOtpEmailText } from '../../templates/email/otp-email.template';
 import { getWelcomeEmailTemplate, getWelcomeEmailText } from '../../templates/email/welcome-email.template';
 import { getAppointmentApprovalEmailTemplate, getAppointmentApprovalEmailText } from '../../templates/email/appointment-approval-email.template';
 import { getAppointmentRejectionEmailTemplate, getAppointmentRejectionEmailText } from '../../templates/email/appointment-rejection-email.template';
@@ -362,10 +362,10 @@ export class EmailService {
     try {
       await this.sendEmail({
         to: email,
-        subject: 'SafeIn Registration - Verify Your Email',
+        subject: `${companyName} Registration - Verify Your Email`,
         html: getOtpEmailTemplate(otp, companyName),
         text: getOtpEmailText(otp, companyName),
-        fromName: 'SafeIn Security Management', // Explicitly use "SafeIn Security Management" for registration
+        fromName: `${companyName} Security Management`, // Explicitly use companyName for registration
         logMessage: 'OTP email',
       });
     } catch (error: any) {
@@ -381,6 +381,25 @@ export class EmailService {
   }
 
   /**
+   * Send Visitor Entry Code email
+   */
+  static async sendVisitorOtpEmail(email: string, otp: string, visitorName: string, companyName: string): Promise<void> {
+    try {
+      await this.sendEmail({
+        to: email,
+        subject: `Visitor Verification Code - ${companyName}`,
+        html: getVisitorOtpEmailTemplate(otp, visitorName, companyName),
+        text: getVisitorOtpEmailText(otp, visitorName, companyName),
+        fromName: `${companyName} Visitor Management`,
+        logMessage: 'Visitor OTP email',
+      });
+    } catch (error: any) {
+      console.error('Failed to send Visitor OTP email:', error.message);
+      // Don't throw to avoid blocking booking flow
+    }
+  }
+
+  /**
    * Send welcome email after successful registration
    * Note: Uses "SafeIn Security Management" as fromName (only for registration)
    */
@@ -388,10 +407,10 @@ export class EmailService {
     try {
       await this.sendEmail({
         to: email,
-        subject: 'Welcome to SafeIn - Your Account is Ready!',
+        subject: `Welcome to ${companyName} - Your Account is Ready!`,
         html: getWelcomeEmailTemplate(companyName),
         text: getWelcomeEmailText(companyName),
-        fromName: 'SafeIn Security Management', // Explicitly use "SafeIn Security Management" for registration
+        fromName: `${companyName} Security Management`, // Explicitly use companyName for registration
         logMessage: 'Welcome email',
       });
     } catch (error: any) {
@@ -408,16 +427,16 @@ export class EmailService {
     employeeName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName?: string
+    companyName: string = 'SafeIn'
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
-        subject: 'Appointment Approved - SafeIn',
-        html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
-        text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
+        subject: `Appointment Approved - ${companyName}`,
+        html: getAppointmentApprovalEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
+        text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Appointment approval email',
       });
@@ -435,16 +454,16 @@ export class EmailService {
     employeeName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName?: string
+    companyName: string = 'SafeIn'
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
-        subject: 'Appointment Update - SafeIn',
-        html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime),
-        text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime),
+        subject: `Appointment Update - ${companyName}`,
+        html: getAppointmentRejectionEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
+        text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Appointment rejection email',
       });
@@ -462,16 +481,16 @@ export class EmailService {
     visitorName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName?: string
+    companyName: string = 'SafeIn'
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
-        subject: 'Appointment Approved - SafeIn',
-        html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
-        text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
+        subject: `Appointment Approved - ${companyName}`,
+        html: getEmployeeAppointmentApprovalEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime, companyName),
+        text: getEmployeeAppointmentApprovalEmailText(employeeName, visitorName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Employee appointment approval email',
       });
@@ -490,16 +509,16 @@ export class EmailService {
     visitorName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName?: string
+    companyName: string = 'SafeIn'
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
-        subject: 'Appointment Rejected - SafeIn',
-        html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime),
-        text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime),
+        subject: `Appointment Rejected - ${companyName}`,
+        html: getEmployeeAppointmentRejectionEmailTemplate(employeeName, visitorName, scheduledDate, scheduledTime, companyName),
+        text: getEmployeeAppointmentRejectionEmailText(employeeName, visitorName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Employee appointment rejection email',
       });
@@ -520,7 +539,7 @@ export class EmailService {
     scheduledTime: string,
     purpose: string,
     approvalToken: string,
-    companyName?: string,
+    companyName: string = 'SafeIn',
     companyLogo?: string
   ): Promise<void> {
     try {
@@ -528,9 +547,9 @@ export class EmailService {
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: employeeEmail,
-        subject: 'New Appointment Request - SafeIn',
-        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken, companyLogo),
-        text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken),
+        subject: `New Appointment Request - ${companyName}`,
+        html: getNewAppointmentRequestEmailTemplate(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken, companyName, companyLogo),
+        text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken, companyName),
         fromName,
         logMessage: 'New appointment request email',
       });
@@ -546,7 +565,7 @@ export class EmailService {
     try {
       await this.sendEmail({
         to: email,
-        subject: 'Reset Your Password - SafeIn',
+        subject: `Reset Your Password - ${companyName}`,
         html: getPasswordResetEmailTemplate(resetUrl, companyName),
         text: getPasswordResetEmailText(resetUrl, companyName),
         logMessage: 'Password reset email',
@@ -578,9 +597,9 @@ export class EmailService {
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
-        subject: 'Book Your Appointment - SafeIn',
-        html: getAppointmentLinkEmailTemplate(employeeName, bookingUrl, expiresAt),
-        text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt),
+        subject: `Book Your Appointment - ${companyName}`,
+        html: getAppointmentLinkEmailTemplate(employeeName, bookingUrl, expiresAt, companyName),
+        text: getAppointmentLinkEmailText(employeeName, bookingUrl, expiresAt, companyName),
         fromName,
         logMessage: 'Appointment link email',
         disableClickTracking: true, // Disable click tracking to prevent tracking URL issues
@@ -609,9 +628,9 @@ export class EmailService {
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
-        subject: 'Appointment Request Submitted - SafeIn',
-        html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyLogo),
-        text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose),
+        subject: `Appointment Request Submitted - ${companyName}`,
+        html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyName, companyLogo),
+        text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyName),
         fromName,
         logMessage: 'Appointment confirmation email to visitor',
       });
@@ -636,14 +655,14 @@ export class EmailService {
           <p>Hello ${companyName},</p>
           <p>Your password has been successfully reset.</p>
           <p>If you did not make this change, please contact our support team immediately.</p>
-          <p>Best regards,<br/>SafeIn Security Team</p>
+          <p>Best regards,<br/>${companyName} Team</p>
         </div>
       `;
-      const textContent = `Password Reset Successful\n\nHello ${companyName},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\nSafeIn Security Team`;
+      const textContent = `Password Reset Successful\n\nHello ${companyName},\n\nYour password has been successfully reset.\n\nIf you did not make this change, please contact our support team immediately.\n\nBest regards,\n${companyName} Team`;
 
       await this.sendEmail({
         to: email,
-        subject: 'Password Reset Successful - SafeIn',
+        subject: `Password Reset Successful - ${companyName}`,
         html: htmlContent,
         text: textContent,
         logMessage: 'Password reset confirmation email',
@@ -659,7 +678,7 @@ export class EmailService {
     try {
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #1A73E8; text-align: center;">Welcome to SafeIn Security Cloud</h2>
+          <h2 style="color: #1A73E8; text-align: center;">Welcome to ${companyName} Security Cloud</h2>
           <p>Hello <strong>${companyName}</strong>,</p>
           <p>Your account has been successfully created by the Super Admin.</p>
           <p>Here are your login credentials:</p>
@@ -676,11 +695,11 @@ export class EmailService {
           </p>
         </div>
       `;
-      const textContent = `Welcome to SafeIn Security Cloud\n\nHello ${companyName},\n\nYour account has been successfully created.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease login and change your password immediately.\n\nLogin here: ${CONSTANTS.FRONTEND_URL}/login`;
+      const textContent = `Welcome to ${companyName} Security Cloud\n\nHello ${companyName},\n\nYour account has been successfully created.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease login and change your password immediately.\n\nLogin here: ${CONSTANTS.FRONTEND_URL}/login`;
 
       await this.sendEmail({
         to: email,
-        subject: 'Your SafeIn Account Credentials',
+        subject: `Your ${companyName} Account Credentials`,
         html: htmlContent,
         text: textContent,
         logMessage: 'Safein user credentials email',
@@ -697,7 +716,8 @@ export class EmailService {
   static async sendEmployeeSetupEmail(
     email: string,
     employeeName: string,
-    setupUrl: string
+    setupUrl: string,
+    companyName: string = 'SafeIn'
   ): Promise<void> {
     try {
       console.log(`[EmailService] Preparing to send employee setup email to: ${email}`);
@@ -705,16 +725,17 @@ export class EmailService {
       console.log(`[EmailService] SMTP Host: ${CONSTANTS.SMTP_HOST || 'Not configured'}`);
       console.log(`[EmailService] Brevo API Key: ${CONSTANTS.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
 
-      const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl);
-      const textContent = getEmployeeSetupEmailText(employeeName, setupUrl);
+      const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, companyName);
+      const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, companyName);
 
       console.log(`[EmailService] Email content generated, sending email...`);
 
       await this.sendEmail({
         to: email,
-        subject: 'Welcome to SafeIn - Set Up Your Account',
+        subject: `Welcome to ${companyName} - Set Up Your Account`,
         html: htmlContent,
         text: textContent,
+        fromName: `${companyName} Security Management`,
         logMessage: 'Employee setup email',
       });
 

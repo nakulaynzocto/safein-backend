@@ -24,16 +24,7 @@ export const visitorSchemas = {
                 description: 'Visitor phone number',
                 example: '+1234567890'
             },
-            company: {
-                type: 'string',
-                description: 'Visitor company name',
-                example: 'ABC Corporation'
-            },
-            designation: {
-                type: 'string',
-                description: 'Visitor designation',
-                example: 'Senior Manager'
-            },
+
             address: {
                 type: 'object',
                 properties: {
@@ -125,7 +116,7 @@ export const visitorSchemas = {
                 example: '2023-01-01T00:00:00.000Z'
             }
         },
-        required: ['_id', 'name', 'email', 'phone', 'company', 'designation', 'address', 'idProof', 'isDeleted', 'createdAt', 'updatedAt']
+        required: ['_id', 'name', 'email', 'phone', 'address', 'idProof', 'isDeleted', 'createdAt', 'updatedAt']
     },
 
     CreateVisitor: {
@@ -150,13 +141,7 @@ export const visitorSchemas = {
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
             },
-            designation: {
-                type: 'string',
-                description: 'Visitor designation',
-                example: 'Senior Manager',
-                minLength: 2,
-                maxLength: 100
-            },
+
             address: {
                 type: 'object',
                 properties: {
@@ -231,7 +216,7 @@ export const visitorSchemas = {
                 maxLength: 500
             }
         },
-        required: ['name', 'email', 'phone', 'designation', 'address', 'idProof']
+        required: ['name', 'email', 'phone', 'address', 'idProof']
     },
 
     UpdateVisitor: {
@@ -256,13 +241,7 @@ export const visitorSchemas = {
                 example: '+1234567890',
                 pattern: '^[\\+]?[1-9][\\d]{0,15}$'
             },
-            designation: {
-                type: 'string',
-                description: 'Visitor designation',
-                example: 'Senior Manager',
-                minLength: 2,
-                maxLength: 100
-            },
+
             address: {
                 type: 'object',
                 properties: {
@@ -351,20 +330,7 @@ export const visitorSchemas = {
                 minItems: 1,
                 maxItems: 50
             },
-            company: {
-                type: 'string',
-                description: 'Company to update for all visitors',
-                example: 'ABC Corporation',
-                minLength: 2,
-                maxLength: 100
-            },
-            designation: {
-                type: 'string',
-                description: 'Designation to update for all visitors',
-                example: 'Senior Manager',
-                minLength: 2,
-                maxLength: 100
-            }
+
         },
         required: ['visitorIds']
     },
@@ -522,22 +488,11 @@ export const visitorSchemas = {
             },
             search: {
                 type: 'string',
-                description: 'Search term for name, email, phone, company, designation, address fields, or ID proof',
+                description: 'Search term for name, email, phone, address fields, or ID proof',
                 example: 'john',
                 maxLength: 100
             },
-            company: {
-                type: 'string',
-                description: 'Filter by company',
-                example: 'ABC Corporation',
-                maxLength: 100
-            },
-            designation: {
-                type: 'string',
-                description: 'Filter by designation',
-                example: 'Senior Manager',
-                maxLength: 100
-            },
+
             city: {
                 type: 'string',
                 description: 'Filter by city',
@@ -564,7 +519,7 @@ export const visitorSchemas = {
             },
             sortBy: {
                 type: 'string',
-                enum: ['name', 'email', 'company', 'designation', 'createdAt', 'updatedAt'],
+                enum: ['name', 'email', 'createdAt', 'updatedAt'],
                 description: 'Field to sort by',
                 example: 'createdAt',
                 default: 'createdAt'

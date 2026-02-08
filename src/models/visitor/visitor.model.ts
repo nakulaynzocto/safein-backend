@@ -17,8 +17,6 @@ export interface IVisitor extends Document {
     name: string;
     email: string;
     phone: string;
-    company: string;
-    designation: string;
     gender?: 'male' | 'female' | 'other';
     address: IAddress;
     idProof: IIdProof;
@@ -137,11 +135,6 @@ const visitorSchema = new Schema<IVisitor>({
         trim: true,
         match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
     },
-    designation: {
-        type: String,
-        trim: true,
-        maxlength: [100, 'Designation cannot exceed 100 characters']
-    },
     gender: {
         type: String,
         enum: {
@@ -235,7 +228,6 @@ const visitorSchema = new Schema<IVisitor>({
 
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
-visitorSchema.index({ company: 1 });
 visitorSchema.index({ 'address.city': 1 });
 visitorSchema.index({ 'address.state': 1 });
 visitorSchema.index({ 'address.country': 1 });

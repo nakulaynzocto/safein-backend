@@ -9,7 +9,8 @@ export function getEmployeeAppointmentApprovalEmailTemplate(
   employeeName: string,
   visitorName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -25,7 +26,7 @@ export function getEmployeeAppointmentApprovalEmailTemplate(
             
             <div class="message">
                 Hello ${employeeName},<br><br>
-                This is a confirmation that you have successfully approved the appointment request from ${visitorName}. The visitor has been notified and is expecting to meet with you at the scheduled time.
+                This is a confirmation that you have successfully approved the appointment request from ${visitorName} at ${companyName}. The visitor has been notified and is expecting to meet with you at the scheduled time.
             </div>
             
             <div class="highlight-box">
@@ -66,15 +67,16 @@ export function getEmployeeAppointmentApprovalEmailTemplate(
                 <strong>💡 Reminder:</strong> The visitor will arrive at the scheduled time and check in at the reception desk. You'll receive a notification when they arrive. If you need to reschedule or have any concerns, please contact the visitor directly or update the appointment in your dashboard.
             </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Appointment Approved - SafeIn');
+
+  return getBaseEmailTemplate(content, `Appointment Approved - ${companyName}`, companyName);
 }
 
 export function getEmployeeAppointmentApprovalEmailText(
   employeeName: string,
   visitorName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -88,7 +90,7 @@ Appointment Approved!
 
 Hello ${employeeName},
 
-You have approved the appointment request from ${visitorName}.
+You have approved the appointment request from ${visitorName} at ${companyName}.
 
 Appointment Details:
 - Date: ${formattedDate}
@@ -100,9 +102,7 @@ The visitor has been notified of the approval and will arrive at the scheduled t
 Please ensure you are available for the meeting and have prepared any necessary materials.
 
 Best regards,
-SafeIn Security Team
-
-Need help? Contact us at support@safein.com
+${companyName} Team
   `;
 }
 
@@ -115,7 +115,8 @@ export function getEmployeeAppointmentRejectionEmailTemplate(
   employeeName: string,
   visitorName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -131,7 +132,7 @@ export function getEmployeeAppointmentRejectionEmailTemplate(
             
             <div class="message">
                 Hello ${employeeName},<br><br>
-                This is a confirmation that you have declined the appointment request from ${visitorName}. The visitor has been notified of this decision.
+                This is a confirmation that you have declined the appointment request from ${visitorName} at ${companyName}. The visitor has been notified of this decision.
             </div>
             
             <div class="info-card" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-left: 5px solid #f59e0b;">
@@ -171,15 +172,16 @@ export function getEmployeeAppointmentRejectionEmailTemplate(
                 <strong>💬 Optional Follow-up:</strong> If you'd like to provide feedback or suggest alternative meeting times, you can contact ${visitorName} directly. This helps maintain good communication and may lead to a successful rescheduled appointment.
             </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Appointment Rejected - SafeIn');
+
+  return getBaseEmailTemplate(content, `Appointment Rejected - ${companyName}`, companyName);
 }
 
 export function getEmployeeAppointmentRejectionEmailText(
   employeeName: string,
   visitorName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -193,7 +195,7 @@ Appointment Rejected
 
 Hello ${employeeName},
 
-You have rejected the appointment request from ${visitorName}.
+You have rejected the appointment request from ${visitorName} at ${companyName}.
 
 Original Appointment Details:
 - Date: ${formattedDate}
@@ -205,8 +207,6 @@ The visitor has been informed of the rejection and may contact you to reschedule
 If you need to provide any feedback or alternative meeting times, please contact the visitor directly.
 
 Best regards,
-SafeIn Security Team
-
-Need help? Contact us at support@safein.com
+${companyName} Team
   `;
 }

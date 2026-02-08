@@ -180,7 +180,6 @@ export class WhatsAppService {
             name: string;
             email: string;
             phone: string;
-            company?: string;
             _id?: string;
         },
         scheduledDate: Date,
@@ -230,7 +229,6 @@ You have received a new appointment request. Please review the details below.
 👤 Name: ${visitorDetails.name}
 📧 Email: ${visitorDetails.email}
 📞 Phone: ${visitorDetails.phone}
-${visitorDetails.company ? `🏢 Company: ${visitorDetails.company}` : ''}
 ${visitorDetails._id ? `🆔 Visitor ID: ${visitorDetails._id}` : ''}
 
 ${actionUrls}

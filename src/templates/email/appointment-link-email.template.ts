@@ -8,7 +8,8 @@ import { getBaseEmailTemplate } from './base-email.template';
 export function getAppointmentLinkEmailTemplate(
   employeeName: string,
   bookingUrl: string,
-  expiresAt: Date
+  expiresAt: Date,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedExpiryDate = expiresAt.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -24,7 +25,7 @@ export function getAppointmentLinkEmailTemplate(
             
             <div class="message">
                 Hello,<br><br>
-                You have been invited to book an appointment with <strong>${employeeName}</strong>. Click the button below to complete your appointment booking.
+                You have been invited to book an appointment with <strong>${employeeName}</strong> at <strong>${companyName}</strong>. Click the button below to complete your appointment booking.
             </div>
             
             <div class="highlight-box">
@@ -34,6 +35,13 @@ export function getAppointmentLinkEmailTemplate(
                     <div class="detail-content">
                         <div class="detail-label">Meeting With</div>
                         <div class="detail-value">${employeeName}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🏢</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Company</div>
+                        <div class="detail-value">${companyName}</div>
                     </div>
                 </div>
                 <div class="detail-row">
@@ -69,7 +77,7 @@ export function getAppointmentLinkEmailTemplate(
             </div>
   `;
 
-  return getBaseEmailTemplate(content, 'Book Your Appointment - SafeIn');
+  return getBaseEmailTemplate(content, `Book Your Appointment - ${companyName}`, companyName);
 }
 
 /**
@@ -78,7 +86,8 @@ export function getAppointmentLinkEmailTemplate(
 export function getAppointmentLinkEmailText(
   employeeName: string,
   bookingUrl: string,
-  expiresAt: Date
+  expiresAt: Date,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedExpiryDate = expiresAt.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -92,10 +101,11 @@ Book Your Appointment
 
 Hello,
 
-You have been invited to book an appointment with ${employeeName}. Use the link below to complete your appointment booking.
+You have been invited to book an appointment with ${employeeName} at ${companyName}. Use the link below to complete your appointment booking.
 
 Appointment Details:
 - Meeting With: ${employeeName}
+- Company: ${companyName}
 - Link Expires: ${formattedExpiryDate}
 
 Book Appointment: ${bookingUrl}
@@ -111,6 +121,6 @@ Secure Link: This is a secure, one-time use link. Once you book an appointment, 
 If you have any questions, please contact us.
 
 Best regards,
-SafeIn Security Team
+${companyName} Team
   `.trim();
 }

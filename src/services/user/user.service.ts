@@ -717,6 +717,13 @@ export class UserService {
     user.passwordResetToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save({ session });
+
+    // Send confirmation email
+    try {
+      await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
+    } catch (error) {
+      console.warn('Failed to send password reset confirmation email:', error);
+    }
   }
 
   /**
@@ -753,6 +760,13 @@ export class UserService {
     user.isActive = true; // Activate the account
     user.isEmailVerified = true; // Mark email as verified since they clicked the link
     await user.save({ session });
+
+    // Send confirmation email
+    try {
+      await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
+    } catch (error) {
+      console.warn('Failed to send password setup confirmation email:', error);
+    }
 
     // Generate login token
     const loginToken = JwtUtil.generateToken({

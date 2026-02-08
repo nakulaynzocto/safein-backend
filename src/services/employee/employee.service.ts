@@ -95,7 +95,8 @@ export class EmployeeService {
                 // Send setup email - FIRE AND FORGET (Background execution)
                 this.processBackgroundNotifications(
                     employeeData,
-                    setupToken
+                    setupToken,
+                    companyName
                 ).catch(err => console.error('Background notification processing failed:', err));
             } else {
                 // User already exists with this email
@@ -577,7 +578,8 @@ export class EmployeeService {
      */
     private static async processBackgroundNotifications(
         employeeData: ICreateEmployeeDTO,
-        setupToken: string
+        setupToken: string,
+        companyName: string
     ) {
         try {
             const baseUrl = CONSTANTS.FRONTEND_URL || 'http://localhost:3000';
@@ -586,7 +588,8 @@ export class EmployeeService {
             await EmailService.sendEmployeeSetupEmail(
                 employeeData.email,
                 employeeData.name,
-                setupUrl
+                setupUrl,
+                companyName
             );
         } catch (error: any) {
             console.error(`[Background Notification Error] Failed to send setup email to ${employeeData.email}:`, error?.message || error);

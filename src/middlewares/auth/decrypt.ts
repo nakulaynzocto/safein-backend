@@ -23,8 +23,8 @@ export const decryptLoginPayload = (
   } catch (err) {
     // console.error("Failed to decrypt login payload:", err);
     throw new AppError(
-        "Unauthorized: Invalid encrypted payload",
-        ERROR_CODES.UNAUTHORIZED
+      "Unauthorized: Invalid encrypted payload",
+      ERROR_CODES.UNAUTHORIZED
     );
   }
 };
@@ -34,7 +34,7 @@ export const decryptRegisterPayload = (
   next: NextFunction
 ): void => {
   try {
-        // console.log("Encrypted payload:", req.body);
+    // console.log("Encrypted payload:", req.body);
 
     if (req.body.email && typeof req.body.email === "string") {
       req.body.email = decryptData(req.body.email);

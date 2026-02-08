@@ -112,8 +112,8 @@ export class AppointmentService {
     }
 
     @Transaction('Failed to create appointment')
-    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean; createdByVisitor?: boolean; adminUserId?: string } = {}): Promise<IAppointmentResponse> {
-        const { session, sendNotifications = false, createdByVisitor = false, adminUserId } = options;
+    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean; createdByVisitor?: boolean; adminUserId?: string; suppressEmails?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false, createdByVisitor = false, adminUserId, suppressEmails = false } = options;
 
         // Check plan limits before creating appointment
         // Use adminUserId if visitor is creating (from appointment link), otherwise use createdBy
@@ -154,7 +154,7 @@ export class AppointmentService {
 
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
         // Only create approval link if appointment status is 'pending'
@@ -202,7 +202,8 @@ export class AppointmentService {
                 createdByVisitor,
                 adminUserId,
                 companyName,
-                companyLogo
+                companyLogo,
+                suppressEmails
             }
         ).catch(err => console.error('Background notification processing failed:', err));
 
@@ -234,6 +235,7 @@ export class AppointmentService {
             adminUserId?: string;
             companyName?: string;
             companyLogo?: string;
+            suppressEmails?: boolean;
         }
     ) {
         const {
@@ -243,7 +245,8 @@ export class AppointmentService {
             createdByVisitor,
             adminUserId,
             companyName,
-            companyLogo
+            companyLogo,
+            suppressEmails
         } = options;
 
         let emailSent = false;
@@ -251,7 +254,7 @@ export class AppointmentService {
 
         // 📧 Handle Email Notifications
         try {
-            if (populatedAppointment && emailEnabled) {
+            if (populatedAppointment && emailEnabled && !suppressEmails) {
                 const employeeEmail = (populatedAppointment.employeeId as any)?.email;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
@@ -303,7 +306,6 @@ export class AppointmentService {
                             name: (populatedAppointment.visitorId as any).name,
                             email: (populatedAppointment.visitorId as any).email,
                             phone: (populatedAppointment.visitorId as any).phone,
-                            company: (populatedAppointment.visitorId as any).company,
                             _id: (populatedAppointment.visitorId as any)._id?.toString()
                         },
                         populatedAppointment.appointmentDetails.scheduledDate,
@@ -371,7 +373,7 @@ export class AppointmentService {
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+            .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -392,7 +394,7 @@ export class AppointmentService {
         }
         const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
             .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+            .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -471,8 +473,7 @@ export class AppointmentService {
                 $or: [
                     { name: searchRegex },
                     { phone: searchRegex },
-                    { email: searchRegex },
-                    { company: searchRegex }
+                    { email: searchRegex }
                 ]
             }).select('_id').lean();
 
@@ -557,7 +558,7 @@ export class AppointmentService {
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+                .populate('visitorId', 'name email phone photo address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
                 .sort(sort)
@@ -662,7 +663,7 @@ export class AppointmentService {
                 // Re-populate with full details for socket emission
                 const populatedAppointment = await Appointment.findById(appointment._id)
                     .populate('employeeId', 'name email phone department')
-                    .populate('visitorId', 'name email phone company designation address idProof photo')
+                    .populate('visitorId', 'name email phone address idProof photo')
                     .session(session);
 
                 if (populatedAppointment) {
@@ -744,7 +745,7 @@ export class AppointmentService {
         if (userId) {
             const populatedAppointment = await Appointment.findById(appointment._id as any)
                 .populate('employeeId', 'name email phone department')
-                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .session(session)
                 .lean();
 
@@ -809,7 +810,7 @@ export class AppointmentService {
         if (userId) {
             const populatedAppointment = await Appointment.findById(appointment._id as any)
                 .populate('employeeId', 'name email phone department')
-                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .session(session)
                 .lean();
 
@@ -897,7 +898,7 @@ export class AppointmentService {
         // Re-populate after save to ensure populated fields are available for socket emission
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
         // Get user ID who created the appointment (for settings check)
@@ -1043,7 +1044,7 @@ export class AppointmentService {
         // Re-populate after save to ensure populated fields are available for socket emission
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
         // Check settings for notifications

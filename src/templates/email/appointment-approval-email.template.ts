@@ -9,7 +9,8 @@ export function getAppointmentApprovalEmailTemplate(
   visitorName: string,
   employeeName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -19,13 +20,21 @@ export function getAppointmentApprovalEmailTemplate(
   });
 
   const content = `
-            <div class="greeting">
-                Appointment Confirmed! ✅
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="display: inline-block; width: 100px; height: 100px; background-color: #e3f2fd; border-radius: 50%; padding: 20px; box-sizing: border-box; margin: 0 auto;">
+                    <div style="width: 100%; height: 100%; background-color: #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <span style="font-size: 40px;">✅</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="greeting" style="text-align: center;">
+                Appointment Confirmed
             </div>
             
             <div class="message">
-                Hello ${visitorName},<br><br>
-                Great news! Your appointment request has been approved. We're looking forward to meeting with you.
+                Hello <strong>${visitorName}</strong>,<br><br>
+                Great news! Your appointment request with <strong>${companyName}</strong> has been approved. We're looking forward to meeting with you.
             </div>
             
             <div class="highlight-box">
@@ -65,15 +74,16 @@ export function getAppointmentApprovalEmailTemplate(
                 <strong>💡 Need to Reschedule?</strong> If you need to change your appointment time, please contact us at least 24 hours in advance. You can also reach out to ${employeeName} directly if you have any questions about the meeting.
             </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Appointment Approved - SafeIn');
+
+  return getBaseEmailTemplate(content, `Appointment Approved - ${companyName}`, companyName);
 }
 
 export function getAppointmentApprovalEmailText(
   visitorName: string,
   employeeName: string,
   scheduledDate: Date,
-  scheduledTime: string
+  scheduledTime: string,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedDate = scheduledDate.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -87,7 +97,7 @@ Appointment Approved!
 
 Hello ${visitorName},
 
-Great news! Your appointment with ${employeeName} has been approved.
+Great news! Your appointment with ${employeeName} at ${companyName} has been approved.
 
 Appointment Details:
 - Date: ${formattedDate}
@@ -99,8 +109,6 @@ Please arrive 10 minutes before your scheduled time and bring a valid ID for sec
 If you need to reschedule or have any questions, please contact us in advance.
 
 Best regards,
-SafeIn Security Team
-
-Need help? Contact us at support@safein.com
+${companyName} Team
   `;
 }

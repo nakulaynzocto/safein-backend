@@ -25,10 +25,8 @@ export class UserSubscriptionService {
         try {
             const subscription = await UserSubscription.findOne({
                 userId: toObjectId(userId),
-                isActive: true,
                 isDeleted: false,
-                endDate: { $gt: new Date() }, // Ensure not expired
-            });
+            }).sort({ createdAt: -1 });
 
             if (!subscription) {
                 return null;

@@ -134,7 +134,7 @@ export class AppointmentBookingLinkService {
   static async getAppointmentLinkByToken(token: string): Promise<any> {
     const link = await AppointmentBookingLink.findOne({ secureToken: token })
       .populate('employeeId', 'name email phone department designation')
-      .populate('visitorId', 'name email phone company designation')
+      .populate('visitorId', 'name email phone')
       .populate('createdBy', 'companyName profilePicture')
       .lean();
 
@@ -178,7 +178,7 @@ export class AppointmentBookingLinkService {
           createdBy: createdByObjectId,
           isDeleted: false,
         })
-          .select('_id name email phone company designation')
+          .select('_id name email phone')
           .lean();
 
         if (visitor && visitor._id) {
@@ -281,7 +281,7 @@ export class AppointmentBookingLinkService {
     const [links, totalLinks] = await Promise.all([
       AppointmentBookingLink.find(filter)
         .populate('employeeId', 'name email phone department')
-        .populate('visitorId', 'name email phone company')
+        .populate('visitorId', 'name email phone')
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -396,7 +396,7 @@ export class AppointmentBookingLinkService {
       createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
       isDeleted: false,
     })
-      .select('name email phone company designation')
+      .select('name email phone')
       .lean();
 
     return {

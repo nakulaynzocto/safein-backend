@@ -12,6 +12,7 @@ import appointmentBookingLinkRoutes from "./appointmentBookingLink/appointmentBo
 import settingsRoutes from "./settings/settings.routes";
 import safeinProfileRoutes from "./safeinProfile/safeinProfile.routes";
 import notificationRoutes from "./notification/notification.routes";
+import specialVisitorBookingRoutes from "./specialVisitorBooking.routes";
 
 const router = Router();
 
@@ -41,5 +42,6 @@ router.use("/upload", uploadRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/safein-profile", safeinProfileRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/special-bookings", specialVisitorBookingRoutes);
 
 export default router;

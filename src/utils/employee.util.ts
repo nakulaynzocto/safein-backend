@@ -139,5 +139,21 @@ export class EmployeeUtil {
     // If not employee or couldn't find admin, return the userId itself
     return userId;
   }
+
+  /**
+   * Get the User account ID for a given Employee record ID
+   */
+  static async getUserIdFromEmployeeId(employeeId: string): Promise<string | null> {
+    const employee = await Employee.findById(employeeId).select('email').lean();
+    if (!employee || !employee.email) return null;
+
+    const user = await User.findOne({
+      email: employee.email.toLowerCase().trim(),
+      isDeleted: false,
+      isActive: true
+    }).select('_id').lean();
+
+    return user ? (user._id as any).toString() : null;
+  }
 }
 
