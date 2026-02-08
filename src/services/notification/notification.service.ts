@@ -60,7 +60,8 @@ export class NotificationService {
         const filter: any = { userId: userIdObjectId };
 
         if (read !== undefined) {
-            filter.read = read;
+            // When filtering for unread (read=false), include null/undefined states for backward compatibility
+            filter.read = read === false ? { $ne: true } : read;
         }
 
         if (type) {
@@ -77,7 +78,7 @@ export class NotificationService {
                 .limit(limit)
                 .lean(),
             Notification.countDocuments(filter),
-            Notification.countDocuments({ userId: userIdObjectId, read: false }),
+            Notification.countDocuments({ userId: userIdObjectId, read: { $ne: true } }),
         ]);
 
         const totalPages = Math.ceil(totalNotifications / limit);
@@ -138,7 +139,7 @@ export class NotificationService {
         }
 
         const result = await Notification.updateMany(
-            { userId: userIdObjectId, read: false },
+            { userId: userIdObjectId, read: { $ne: true } },
             { read: true, readAt: new Date() }
         );
 
@@ -193,7 +194,7 @@ export class NotificationService {
             return 0;
         }
 
-        return await Notification.countDocuments({ userId: userIdObjectId, read: false });
+        return await Notification.countDocuments({ userId: userIdObjectId, read: { $ne: true } });
     }
 }
 

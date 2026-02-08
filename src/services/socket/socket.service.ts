@@ -118,6 +118,11 @@ class SocketService {
 
     if (showNotification) {
       // Save notification to database
+      let statusInfo = {
+        title: 'Appointment Status Changed',
+        message: `Appointment status has been changed to ${appointmentData.status}`,
+      };
+
       try {
         const statusMessages: { [key: string]: { title: string; message: string } } = {
           approved: {
@@ -134,10 +139,9 @@ class SocketService {
           },
         };
 
-        const statusInfo = statusMessages[appointmentData.status] || {
-          title: 'Appointment Status Changed',
-          message: `Appointment status has been changed to ${appointmentData.status}`,
-        };
+        if (statusMessages[appointmentData.status]) {
+          statusInfo = statusMessages[appointmentData.status];
+        }
 
         await NotificationService.createNotification({
           userId,
@@ -164,9 +168,15 @@ class SocketService {
         timestamp: new Date().toISOString()
       });
 
-      // Also emit generic notification event
+      // Also emit generic notification event for toast and count refresh
       this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
         type: 'NEW_NOTIFICATION',
+        payload: {
+          title: statusInfo.title,
+          message: statusInfo.message,
+          appointmentId: appointmentData.appointmentId,
+          status: appointmentData.status
+        },
         timestamp: new Date().toISOString()
       });
     }
@@ -190,13 +200,13 @@ class SocketService {
 
     if (showNotification) {
       // Save notification to database
-      try {
-        const isApproved = appointmentData.status === 'approved';
-        const title = isApproved ? 'Appointment Scheduled' : 'New Appointment Request';
-        const message = isApproved
-          ? `${visitorName} has scheduled an appointment with ${employeeName}`
-          : `${visitorName} has requested an appointment with ${employeeName}`;
+      const isApproved = appointmentData.status === 'approved';
+      const title = isApproved ? 'Appointment Scheduled' : 'New Appointment Request';
+      const message = isApproved
+        ? `${visitorName} has scheduled an appointment with ${employeeName}`
+        : `${visitorName} has requested an appointment with ${employeeName}`;
 
+      try {
         await NotificationService.createNotification({
           userId,
           type: 'appointment_created',
@@ -221,9 +231,15 @@ class SocketService {
         timestamp: new Date().toISOString()
       });
 
-      // Also emit generic notification event
+      // Also emit generic notification event for toast and count refresh
       this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
         type: 'NEW_NOTIFICATION',
+        payload: {
+          title,
+          message,
+          appointmentId: appointmentData.appointmentId || appointmentData.appointment?._id?.toString(),
+          status: appointmentData.status
+        },
         timestamp: new Date().toISOString()
       });
     }

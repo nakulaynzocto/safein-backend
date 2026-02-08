@@ -13,6 +13,7 @@ import { toObjectId } from '../../utils/idExtractor.util';
 import { EmployeeUtil } from '../../utils/employee.util';
 import { escapeRegex } from '../../utils/string.util';
 import mongoose from 'mongoose';
+import { NotificationService } from '../notification/notification.service';
 
 export class SpecialVisitorBookingService {
     /**
@@ -199,15 +200,32 @@ export class SpecialVisitorBookingService {
             }
 
             const shouldNotifyEmployee = type === 'arrival' || !isEmployee;
-            const shouldNotifyAdmin = type !== 'arrival' && isEmployee;
+            const shouldNotifyAdmin = isEmployee; // Notify admin if an employee is involved (creation, arrival, notes)
 
             if (shouldNotifyAdmin) {
                 const adminId = await EmployeeUtil.getAdminId(senderId);
-                socketService.emitToUser(adminId, SocketEvents.NEW_NOTIFICATION, {
+
+                // Save to DB
+                await NotificationService.createNotification({
+                    userId: adminId,
+                    type: 'general',
                     title,
                     message,
-                    type: socketType,
-                    bookingId: booking._id,
+                    metadata: {
+                        bookingId: booking._id,
+                        type: socketType
+                    }
+                });
+
+                socketService.emitToUser(adminId, SocketEvents.NEW_NOTIFICATION, {
+                    type: 'NEW_NOTIFICATION',
+                    payload: {
+                        title,
+                        message,
+                        type: socketType,
+                        bookingId: booking._id,
+                    },
+                    timestamp: new Date().toISOString()
                 });
             }
 
@@ -216,11 +234,27 @@ export class SpecialVisitorBookingService {
                 const employeeUserId = await EmployeeUtil.getUserIdFromEmployeeId(employeeId.toString());
 
                 if (employeeUserId) {
-                    socketService.emitToUser(employeeUserId, SocketEvents.NEW_NOTIFICATION, {
+                    // Save to DB
+                    await NotificationService.createNotification({
+                        userId: employeeUserId,
+                        type: socketType === 'special_booking_arrival' ? 'appointment_status_changed' : 'general',
                         title,
                         message,
-                        type: socketType,
-                        bookingId: booking._id,
+                        metadata: {
+                            bookingId: booking._id,
+                            type: socketType
+                        }
+                    });
+
+                    socketService.emitToUser(employeeUserId, SocketEvents.NEW_NOTIFICATION, {
+                        type: 'NEW_NOTIFICATION',
+                        payload: {
+                            title,
+                            message,
+                            type: socketType,
+                            bookingId: booking._id,
+                        },
+                        timestamp: new Date().toISOString()
                     });
                 }
             }

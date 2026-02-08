@@ -17,6 +17,33 @@ import { EmployeeUtil } from '../../utils/employee.util';
 
 export class AppointmentController {
     /**
+     * Common helper: Determine if user is employee performing action on their own appointment
+     * Returns 'employee' if user is employee acting on their appointment, otherwise 'admin'
+     */
+    private static async determineActionBy(
+        user: any,
+        appointmentId: string
+    ): Promise<'admin' | 'employee'> {
+        try {
+            const employeeId = await EmployeeUtil.getEmployeeIdFromUser(user);
+            if (employeeId) {
+                // Check if appointment belongs to this employee
+                const appointment = await AppointmentService.getAppointmentById(appointmentId);
+                if (appointment) {
+                    const appointmentEmployeeId = (appointment as any).employeeId?._id?.toString() ||
+                        (appointment as any).employeeId?.toString();
+                    if (appointmentEmployeeId === employeeId) {
+                        return 'employee';
+                    }
+                }
+            }
+        } catch (error) {
+            // If error determining employee, default to admin
+        }
+        return 'admin';
+    }
+
+    /**
      * Create a new appointment
      * POST /api/appointments
      */
@@ -204,9 +231,21 @@ export class AppointmentController {
      * POST /api/appointments/check-out
      */
     @TryCatch('Failed to check out appointment')
-    static async checkOutAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async checkOutAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const request: ICheckOutRequest = req.body;
-        const appointment = await AppointmentService.checkOutAppointment(request);
+
+        // Use common helper to determine actionBy
+        const actionBy = req.user
+            ? await this.determineActionBy(req.user, request.appointmentId)
+            : 'admin';
+
+        // Notify admin when employee completes
+        const sendNotifications = actionBy === 'employee';
+
+        const appointment = await AppointmentService.checkOutAppointment(request, {
+            actionBy,
+            sendNotifications
+        });
         ResponseUtil.success(res, 'Appointment checked out successfully', appointment);
     }
 
@@ -232,9 +271,20 @@ export class AppointmentController {
      * PUT /api/appointments/:id/approve
      */
     @TryCatch('Failed to approve appointment')
-    static async approveAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async approveAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
         const { id } = req.params;
-        const result = await AppointmentService.approveAppointment(id);
+
+        // Use common helper to determine actionBy
+        const actionBy = await this.determineActionBy(req.user, id);
+
+        const result = await AppointmentService.approveAppointment(id, {
+            sendNotifications: true, // Enable socket notifications
+            actionBy
+        });
         ResponseUtil.success(res, 'Appointment approved successfully. The visitor has been notified.', result);
     }
 
@@ -243,9 +293,20 @@ export class AppointmentController {
      * PUT /api/appointments/:id/reject
      */
     @TryCatch('Failed to reject appointment')
-    static async rejectAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async rejectAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
         const { id } = req.params;
-        const result = await AppointmentService.rejectAppointment(id);
+
+        // Use common helper to determine actionBy
+        const actionBy = await this.determineActionBy(req.user, id);
+
+        const result = await AppointmentService.rejectAppointment(id, {
+            sendNotifications: true, // Enable socket notifications
+            actionBy
+        });
         ResponseUtil.success(res, 'Appointment rejected. The visitor has been informed.', result);
     }
 
