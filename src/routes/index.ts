@@ -13,6 +13,7 @@ import settingsRoutes from "./settings/settings.routes";
 import safeinProfileRoutes from "./safeinProfile/safeinProfile.routes";
 import notificationRoutes from "./notification/notification.routes";
 import specialVisitorBookingRoutes from "./specialVisitorBooking.routes";
+import spotPassRoutes from "./spotPass/spotPass.routes";
 
 const router = Router();
 
@@ -43,5 +44,6 @@ router.use("/settings", settingsRoutes);
 router.use("/safein-profile", safeinProfileRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/special-bookings", specialVisitorBookingRoutes);
+router.use("/spot-passes", spotPassRoutes);
 
 export default router;
