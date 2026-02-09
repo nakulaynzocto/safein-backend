@@ -30,6 +30,11 @@ router.get(
     asyncWrapper(VisitorController.getAllVisitors)
 );
 
+router.get(
+    '/count',
+    asyncWrapper(VisitorController.getVisitorCount)
+);
+
 
 
 

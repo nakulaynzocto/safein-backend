@@ -48,8 +48,7 @@ export class UserController {
       email: email,
       password: password,
     };
-    console.log("login function call")
-    console.log("login details", loginData)
+
     try {
       const result = await UserService.loginUser(loginData);
       // Login attempt tracking is handled by loginAttemptTracker middleware

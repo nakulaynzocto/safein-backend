@@ -245,6 +245,7 @@ appointmentSchema.index({ createdBy: 1, isDeleted: 1, createdAt: -1 }); // For a
 appointmentSchema.index({ status: 1, isDeleted: 1, createdAt: -1 }); // For status-based queries with sorting
 appointmentSchema.index({ isDeleted: 1, createdAt: -1 }); // For default sorted lists
 appointmentSchema.index({ employeeId: 1, status: 1, 'appointmentDetails.scheduledDate': 1, isDeleted: 1 }); // For upcoming appointments
+appointmentSchema.index({ createdBy: 1, 'appointmentDetails.scheduledDate': 1, isDeleted: 1 }); // For User dashboard counts
 
 
 appointmentSchema.virtual('visitorFullName').get(function () {

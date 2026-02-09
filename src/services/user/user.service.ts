@@ -25,6 +25,18 @@ import * as crypto from 'crypto';
 
 export class UserService {
   /**
+   * Helper to populate employeeId on user profile if user is an employee
+   */
+  private static async populateEmployeeId(user: any, userProfile: IUserResponse): Promise<void> {
+    if (user.roles && user.roles.includes('employee')) {
+      // Only use the direct link present on the User model
+      if (user.employeeId) {
+        userProfile.employeeId = user.employeeId.toString();
+      }
+    }
+  }
+
+  /**
    * Generate a 6-digit OTP
    */
   private static generateOtp(): string {
@@ -248,8 +260,14 @@ export class UserService {
       email: user.email,
     });
 
+    // Get public profile
+    const userProfile = user.getPublicProfile() as any;
+
+    // If user is an employee, find their employeeId from Employee model
+    await this.populateEmployeeId(user, userProfile);
+
     return {
-      user: user.getPublicProfile(),
+      user: userProfile,
       token,
     };
   }
@@ -262,7 +280,13 @@ export class UserService {
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
-    return user.getPublicProfile();
+
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
+    return userProfile;
   }
 
   /**
@@ -753,6 +777,14 @@ export class UserService {
       throw new AppError('This setup link is only for employees', ERROR_CODES.FORBIDDEN);
     }
 
+    // Check associate employee status before activation
+    if (user.employeeId) {
+      const employee = await Employee.findById(user.employeeId).session(session);
+      if (employee && employee.status === 'Inactive') {
+        throw new AppError('Your account has been deactivated by the administrator. Please contact your company admin.', ERROR_CODES.FORBIDDEN);
+      }
+    }
+
     // Update password, activate account, and clear reset token
     user.password = newPassword;
     user.passwordResetToken = undefined;
@@ -774,8 +806,13 @@ export class UserService {
       email: user.email
     });
 
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
     return {
-      user: user.getPublicProfile(),
+      user: userProfile,
       token: loginToken
     };
   }
@@ -810,8 +847,13 @@ export class UserService {
       email: user.email
     });
 
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
     return {
-      user: user.getPublicProfile(),
+      user: userProfile,
       token
     };
   }

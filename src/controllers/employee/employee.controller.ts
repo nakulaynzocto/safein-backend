@@ -46,20 +46,46 @@ export class EmployeeController {
         const userId = req.user._id.toString();
         const userEmail = req.user.email;
         const userEmployeeId = req.user.employeeId;
-        
+
         // Check if user is an employee
         const isEmployee = await EmployeeUtil.isEmployee(req.user);
-        
+
         // SECURITY FIX: Always pass userId to filter by admin's createdBy
         // - For admin: shows employees created by this admin (their own data)
         // - For employee: shows only their own employee record
+        // Prepare filters for employee-specific view
+        const employeeEmail = isEmployee ? userEmail : undefined;
+        const employeeRefId = isEmployee ? userEmployeeId : undefined;
+
         const result = await EmployeeService.getAllEmployees(
-            query, 
-            userId, 
-            isEmployee ? userEmail : undefined, 
-            isEmployee ? userEmployeeId : undefined
+            query,
+            userId,
+            employeeEmail,
+            employeeRefId
         );
         ResponseUtil.success(res, 'Employees retrieved successfully', result);
+    }
+
+    /**
+     * Get employee count (optimized for dashboard)
+     * GET /api/employees/count
+     * Returns counts by status without fetching full employee data
+     */
+    @TryCatch('Failed to get employee count')
+    static async getEmployeeCount(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        const count = await EmployeeService.getEmployeeCount(
+            userId,
+            isEmployee ? req.user.email : undefined
+        );
+
+        ResponseUtil.success(res, 'Employee count retrieved successfully', count);
     }
 
     /**
@@ -87,8 +113,8 @@ export class EmployeeController {
         // 1. User created the employee (admin case)
         // 2. User is the employee themselves (employee accessing their own record)
         const isCreator = employeeRecord.createdBy.toString() === userId;
-        const isEmployeeSelf = req.user.employeeId === id || 
-                               (req.user.email && employeeRecord.email?.toLowerCase().trim() === req.user.email.toLowerCase().trim());
+        const isEmployeeSelf = req.user.employeeId === id ||
+            (req.user.email && employeeRecord.email?.toLowerCase().trim() === req.user.email.toLowerCase().trim());
 
         if (!isCreator && !isEmployeeSelf) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);

@@ -85,6 +85,13 @@ employeeSchema.index({ isDeleted: 1 });
 employeeSchema.index({ deletedAt: 1 });
 employeeSchema.index({ createdBy: 1 });
 
+employeeSchema.index({ createdBy: 1, isDeleted: 1, status: 1 }); // Optimize employee listing default with deleted
+employeeSchema.index({ createdBy: 1, status: 1, isDeleted: 1, createdAt: -1 }); // Optimize active employee listing with sort
+employeeSchema.index({ isDeleted: 1, status: 1 }); // Optimize general active/deleted filters
+
+// Text Index for full-text search (MUCH FASTER than regex for large data)
+employeeSchema.index({ name: 'text', email: 'text', department: 'text', designation: 'text' });
+
 employeeSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 
 employeeSchema.virtual('fullName').get(function () {

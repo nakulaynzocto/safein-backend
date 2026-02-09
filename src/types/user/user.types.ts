@@ -58,6 +58,7 @@ export interface ICreateUserDTO {
     roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
+    employeeId?: mongoose.Types.ObjectId;
 }
 
 export interface IUpdateUserDTO {

@@ -181,6 +181,22 @@ export class VisitorService {
     }
 
     /**
+     * Get visitor count (optimized for dashboard)
+     */
+    static async getVisitorCount(userId?: string): Promise<{ total: number }> {
+        const filter: any = { isDeleted: false };
+
+        if (userId) {
+            // Filter by admin ID to count all company visitors
+            const adminId = await EmployeeUtil.getAdminId(userId);
+            filter.createdBy = toObjectId(adminId);
+        }
+
+        const total = await Visitor.countDocuments(filter);
+        return { total };
+    }
+
+    /**
      * Update visitor
      */
     @Transaction('Failed to update visitor')

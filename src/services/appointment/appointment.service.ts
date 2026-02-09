@@ -584,6 +584,94 @@ export class AppointmentService {
     }
 
     /**
+     * Get appointment stats (optimized for dashboard)
+     * Uses MongoDB aggregation for efficient counting by status
+     */
+    static async getAppointmentStats(adminUserId?: string, employeeId?: string): Promise<{
+        total: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+        completed: number;
+        cancelled: number;
+    }> {
+        const filter: any = { isDeleted: false };
+
+        // SECURITY: Filter by admin's employees or specific employee
+        if (adminUserId) {
+            // Get all employees created by this admin
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id.toString());
+
+            if (adminEmployeeIds.length > 0) {
+                if (employeeId) {
+                    // Verify employee belongs to admin
+                    if (adminEmployeeIds.includes(employeeId.toString())) {
+                        filter.employeeId = toObjectId(employeeId);
+                    } else {
+                        // Invalid employee, return zeros
+                        return {
+                            total: 0,
+                            pending: 0,
+                            approved: 0,
+                            rejected: 0,
+                            completed: 0,
+                            cancelled: 0,
+                        };
+                    }
+                } else {
+                    // All admin's employees
+                    filter.employeeId = { $in: adminEmployeeIds.map(id => toObjectId(id)) };
+                }
+            } else {
+                // No employees, return zeros
+                return {
+                    total: 0,
+                    pending: 0,
+                    approved: 0,
+                    rejected: 0,
+                    completed: 0,
+                    cancelled: 0,
+                };
+            }
+        } else if (employeeId) {
+            // Employee case
+            filter.employeeId = toObjectId(employeeId);
+        }
+
+        // Use MongoDB aggregation for efficient counting
+        const stats = await Appointment.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const total = stats.reduce((sum, item) => sum + item.count, 0);
+        const pending = stats.find(s => s._id === 'pending')?.count || 0;
+        const approved = stats.find(s => s._id === 'approved')?.count || 0;
+        const rejected = stats.find(s => s._id === 'rejected')?.count || 0;
+        const completed = stats.find(s => s._id === 'completed')?.count || 0;
+        const cancelled = stats.find(s => s._id === 'cancelled')?.count || 0;
+
+        return {
+            total,
+            pending,
+            approved,
+            rejected,
+            completed,
+            cancelled,
+        };
+    }
+
+    /**
      * Update appointment
      * @param options.actionBy - 'admin' if admin is updating, 'employee' if employee is updating
      * @param options.sendNotifications - Whether to send socket notifications (only for status changes)

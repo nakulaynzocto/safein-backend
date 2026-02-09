@@ -88,6 +88,7 @@ export class EmployeeService {
                     createdBy: createdByObjectId,
                     department: employeeData.department,
                     designation: employeeData.designation || '',
+                    employeeId: employee._id, // Link User to Employee
                 });
 
                 await user.save({ session });
@@ -181,7 +182,7 @@ export class EmployeeService {
             sortOrder = 'desc'
         } = query;
 
-        const filter: any = { isDeleted: false, status: 'Active' };
+        const filter: any = { isDeleted: false };
 
         // Build access filter (who can see which employees)
         const accessConditions: any[] = [];
@@ -297,6 +298,56 @@ export class EmployeeService {
     }
 
     /**
+     * Get employee count by status (optimized for dashboard)
+     * No data fetching, only aggregation
+     */
+    static async getEmployeeCount(userId: string, employeeEmail?: string): Promise<{
+        total: number;
+        active: number;
+        inactive: number;
+    }> {
+        const userObjectId = toObjectId(userId);
+        if (!userObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Build access filter (same logic as getAllEmployees)
+        const accessConditions: any[] = [];
+        if (employeeEmail) {
+            // Employee case: only see their own record
+            accessConditions.push({ email: employeeEmail.toLowerCase().trim() });
+        } else {
+            // Admin case: only count employees they created
+            accessConditions.push({ createdBy: userObjectId });
+        }
+
+        const baseFilter: any = {
+            isDeleted: false,
+        };
+
+        if (accessConditions.length > 0) {
+            baseFilter.$or = accessConditions;
+        }
+
+        // Use MongoDB aggregation for efficient counting
+        const counts = await Employee.aggregate([
+            { $match: baseFilter },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const total = counts.reduce((sum, item) => sum + item.count, 0);
+        const active = counts.find(item => item._id === 'Active')?.count || 0;
+        const inactive = counts.find(item => item._id === 'Inactive')?.count || 0;
+
+        return { total, active, inactive };
+    }
+
+    /**
      * Update employee
      */
     @Transaction('Failed to update employee')
@@ -342,6 +393,22 @@ export class EmployeeService {
                 ERROR_MESSAGES.EMPLOYEE_NOT_FOUND,
                 ERROR_CODES.NOT_FOUND
             );
+        }
+
+        // Sync status with User account if status is changed
+        if (safeUpdateData.status) {
+            try {
+                const isActive = safeUpdateData.status === 'Active';
+                await User.updateMany(
+                    { employeeId: (employee._id as any), isDeleted: false },
+                    { $set: { isActive } },
+                    { session }
+                );
+            } catch (userUpdateError) {
+                console.error(`Failed to sync User status for employee ${employeeId}:`, userUpdateError);
+                // We don't throw here to avoid rolling back the employee update, 
+                // but in a real production app we might want to ensure consistency.
+            }
         }
 
         return employee.toObject() as unknown as IEmployeeResponse;

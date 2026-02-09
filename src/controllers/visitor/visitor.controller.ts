@@ -52,6 +52,22 @@ export class VisitorController {
     }
 
     /**
+     * Get visitor count (optimized for dashboard)
+     * GET /api/visitors/count
+     */
+    @TryCatch('Failed to get visitor count')
+    static async getVisitorCount(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const count = await VisitorService.getVisitorCount(userId);
+
+        ResponseUtil.success(res, 'Visitor count retrieved successfully', count);
+    }
+
+    /**
      * Get visitor by ID (user-specific)
      * GET /api/visitors/:id
      */

@@ -55,6 +55,11 @@ const userSchema = new Schema<IUser>(
             type: String,
             trim: true
         },
+        employeeId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Employee',
+            required: false
+        },
         designation: {
             type: String,
             trim: true
@@ -149,6 +154,9 @@ userSchema.index({ roles: 1 });
 userSchema.index({ companyId: 1, roles: 1 });
 userSchema.index({ isDeleted: 1 });
 userSchema.index({ deletedAt: 1 });
+userSchema.index({ roles: 1, isDeleted: 1 }); // Optimize employee/admin lookup
+userSchema.index({ email: 1, isDeleted: 1 }); // Optimize login lookup
+userSchema.index({ _id: 1, isDeleted: 1 }); // Optimize specific user lookup
 
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();

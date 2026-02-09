@@ -51,6 +51,11 @@ router.get(
     asyncWrapper(EmployeeController.getAllEmployees)
 );
 
+router.get(
+    '/count',
+    asyncWrapper(EmployeeController.getEmployeeCount)
+);
+
 
 
 router.get(

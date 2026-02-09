@@ -107,6 +107,39 @@ export class AppointmentController {
     }
 
     /**
+     * Get appointment stats (optimized for dashboard)
+     * GET /api/appointments/stats
+     * - Admin: sees stats for their employees' appointments
+     * - Employee: sees stats for only their own appointments
+     */
+    @TryCatch('Failed to get appointment stats')
+    static async getAppointmentStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        let employeeId: string | undefined;
+        let adminUserId: string | undefined;
+
+        if (isEmployee) {
+            // Employee: get their employeeId for filtering
+            const fetchedEmployeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
+            if (fetchedEmployeeId) {
+                employeeId = fetchedEmployeeId;
+            }
+        } else {
+            // Admin: use their userId to filter by their employees
+            adminUserId = userId;
+        }
+
+        const stats = await AppointmentService.getAppointmentStats(adminUserId, employeeId);
+        ResponseUtil.success(res, 'Appointment stats retrieved successfully', stats);
+    }
+
+    /**
      * Get appointment by ID (user-specific)
      * GET /api/appointments/:id
      */
