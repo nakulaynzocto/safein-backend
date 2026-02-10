@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { CONSTANTS } from '../../utils/constants';
 import { NotificationService } from '../notification/notification.service';
+import { chatService } from '../chat/chat.service';
 
 export enum SocketEvents {
   CONNECTION = 'connection',
@@ -13,10 +14,23 @@ export enum SocketEvents {
   APPOINTMENT_DELETED = 'appointment_deleted',
   APPOINTMENT_STATUS_CHANGED = 'appointment_status_changed',
   NEW_NOTIFICATION = 'new_notification',
+
+  // Chat Events
+  JOIN_CHAT_ROOM = 'join_chat_room',
+  LEAVE_CHAT_ROOM = 'leave_chat_room',
+  SEND_MESSAGE = 'send_message',
+  RECEIVE_MESSAGE = 'receive_message',
+  TYPING = 'typing',
+  STOP_TYPING = 'stop_typing',
+  READ_RECEIPT = 'read_receipt',
+  USER_ONLINE = 'user_online',
+  USER_OFFLINE = 'user_offline',
+  GET_ONLINE_USERS = 'get_online_users',
 }
 
 class SocketService {
   private io: SocketIOServer | null = null;
+  private onlineUsers: Map<string, string> = new Map(); // userId -> socketId
   private static instance: SocketService;
 
   private constructor() { }
@@ -35,6 +49,7 @@ class SocketService {
         methods: ['GET', 'POST'],
         credentials: true,
       },
+      transports: ['websocket'],
       pingTimeout: 60000,
       pingInterval: 25000,
     });
@@ -50,16 +65,99 @@ class SocketService {
       socket.on(SocketEvents.JOIN_USER_ROOM, (userId: string) => {
         if (userId) {
           socket.join(`user_${userId}`);
+          this.onlineUsers.set(userId, socket.id);
+          this.io?.emit(SocketEvents.USER_ONLINE, userId);
         }
       });
 
       socket.on(SocketEvents.LEAVE_USER_ROOM, (userId: string) => {
         if (userId) {
           socket.leave(`user_${userId}`);
+          this.onlineUsers.delete(userId);
+          this.io?.emit(SocketEvents.USER_OFFLINE, userId);
         }
       });
 
-      socket.on(SocketEvents.DISCONNECT, () => { });
+      socket.on(SocketEvents.GET_ONLINE_USERS, () => {
+        socket.emit(SocketEvents.GET_ONLINE_USERS, Array.from(this.onlineUsers.keys()));
+      });
+
+      socket.on(SocketEvents.DISCONNECT, () => {
+        let disconnectedUserId: string | null = null;
+        for (const [userId, socketId] of this.onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            disconnectedUserId = userId;
+            break;
+          }
+        }
+
+        if (disconnectedUserId) {
+          this.onlineUsers.delete(disconnectedUserId);
+          this.io?.emit(SocketEvents.USER_OFFLINE, disconnectedUserId);
+        }
+      });
+
+      // Initialize Chat Handlers
+      this.setupChatHandlers(socket);
+    });
+  }
+
+  private setupChatHandlers(socket: Socket): void {
+    // Join Chat Room
+    socket.on(SocketEvents.JOIN_CHAT_ROOM, (chatId: string) => {
+      if (chatId) {
+        socket.join(`chat_${chatId}`);
+      }
+    });
+
+    // Leave Chat Room
+    socket.on(SocketEvents.LEAVE_CHAT_ROOM, (chatId: string) => {
+      if (chatId) {
+        socket.leave(`chat_${chatId}`);
+      }
+    });
+
+    // Handle Send Message
+    socket.on(SocketEvents.SEND_MESSAGE, async (data: { chatId: string, senderId: string, text: string, files?: any[] }) => {
+      try {
+        const { chatId, senderId, text, files } = data;
+
+        // Save to DB
+        const message = await chatService.createMessage(chatId, senderId, text, files);
+
+        // Populate sender info
+        await message.populate('senderId', 'name profilePicture email');
+
+        // Emit to Room (including sender for confirmation/udpate)
+        if (this.io) {
+          this.io.to(`chat_${chatId}`).emit(SocketEvents.RECEIVE_MESSAGE, message);
+
+          // Emit to User Rooms to ensure Global Notifications work even if not on Chat Page
+          const chat = await chatService.getChatById(chatId);
+          if (chat && chat.participants) {
+            chat.participants.forEach((participant: any) => {
+              const pId = participant._id || participant;
+              this.io?.to(`user_${pId}`).emit(SocketEvents.RECEIVE_MESSAGE, message);
+            });
+          }
+        }
+
+        // Also emit via user list for unread counts or list updates?
+        // If we assume users are listening to their user_room for general updates:
+        // This is optional for now, `RECEIVE_MESSAGE` handles active chat.
+      } catch (error) {
+        console.error('Error sending message:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Typing Indicators
+    socket.on(SocketEvents.TYPING, (data: { chatId: string, userId: string }) => {
+      socket.to(`chat_${data.chatId}`).emit(SocketEvents.TYPING, data);
+    });
+
+    socket.on(SocketEvents.STOP_TYPING, (data: { chatId: string, userId: string }) => {
+      socket.to(`chat_${data.chatId}`).emit(SocketEvents.STOP_TYPING, data);
     });
   }
 

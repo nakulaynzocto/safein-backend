@@ -110,11 +110,11 @@ export const getEmployeesValidation = Joi.object({
     limit: Joi.number()
         .optional()
         .min(1)
-        .max(100)
+        .max(3000)
         .default(10)
         .messages({
             'number.min': 'Limit must be at least 1',
-            'number.max': 'Limit cannot exceed 100'
+            'number.max': 'Limit cannot exceed 3000'
         }),
     search: Joi.string()
         .optional()

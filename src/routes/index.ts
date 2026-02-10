@@ -14,6 +14,7 @@ import safeinProfileRoutes from "./safeinProfile/safeinProfile.routes";
 import notificationRoutes from "./notification/notification.routes";
 import specialVisitorBookingRoutes from "./specialVisitorBooking.routes";
 import spotPassRoutes from "./spotPass/spotPass.routes";
+import chatRoutes from "./chat.routes";
 
 const router = Router();
 
@@ -45,5 +46,6 @@ router.use("/safein-profile", safeinProfileRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/special-bookings", specialVisitorBookingRoutes);
 router.use("/spot-passes", spotPassRoutes);
+router.use("/chats", chatRoutes);
 
 export default router;
