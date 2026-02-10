@@ -7,6 +7,7 @@ export const createSpotPassValidation = Joi.object().keys({
     address: Joi.string().required().max(500),
     photo: Joi.string().optional().allow(''),
     vehicleNumber: Joi.string().optional().allow('').max(20),
+    employeeId: Joi.string().optional().allow('').pattern(/^[0-9a-fA-F]{24}$/),
     notes: Joi.string().optional().allow(''),
 });
 

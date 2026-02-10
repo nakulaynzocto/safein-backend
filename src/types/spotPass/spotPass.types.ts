@@ -6,6 +6,7 @@ export interface ICreateSpotPassDTO {
     photo?: string;
     vehicleNumber?: string;
     notes?: string;
+    employeeId?: string;
 }
 
 export interface ISpotPassResponse {
@@ -19,6 +20,7 @@ export interface ISpotPassResponse {
     photo?: string;
     vehicleNumber?: string;
     notes?: string;
+    employeeId?: string;
     checkInTime: Date;
     checkOutTime?: Date;
     status: string;

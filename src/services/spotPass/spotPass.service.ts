@@ -63,6 +63,7 @@ export class SpotPassService {
             address: data.address,
             photo: data.photo,
             vehicleNumber: data.vehicleNumber,
+            employeeId: data.employeeId ? toObjectId(data.employeeId) : undefined,
             notes: data.notes,
             status: SpotPassStatus.CHECKED_IN,
             checkInTime: new Date(),
@@ -128,6 +129,7 @@ export class SpotPassService {
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
+                .populate('employeeId', 'name')
                 .lean(),
             SpotPass.countDocuments(filter)
         ]);

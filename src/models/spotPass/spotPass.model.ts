@@ -18,6 +18,7 @@ export interface ISpotPass extends Document {
     checkInTime: Date;
     checkOutTime?: Date;
     status: SpotPassStatus;
+    employeeId?: mongoose.Types.ObjectId; // Optional employee they are meeting
     createdBy: mongoose.Types.ObjectId; // Same as businessId or security guard user
     isDeleted: boolean;
     createdAt: Date;
@@ -63,6 +64,10 @@ const spotPassSchema = new Schema<ISpotPass>(
         vehicleNumber: {
             type: String,
             trim: true,
+        },
+        employeeId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Employee',
         },
         notes: {
             type: String,
