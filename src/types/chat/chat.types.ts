@@ -8,7 +8,7 @@ export interface IFile {
 
 export interface IMessage extends Document {
     chatId: Types.ObjectId;
-    senderId: Types.ObjectId;
+    senderId: Types.ObjectId | any;
     text: string;
     files: IFile[];
     readBy: Types.ObjectId[];

@@ -154,7 +154,7 @@ export class AppointmentService {
         await appointment.save({ session });
 
         const populatedAppointment = await Appointment.findById(appointment._id)
-            .populate('employeeId', 'name email phone department')
+            .populate('employeeId', 'name email phone department photo')
             .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
@@ -373,7 +373,7 @@ export class AppointmentService {
 
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone')
+            .populate('employeeId', 'name email department designation phone photo')
             .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
@@ -394,7 +394,7 @@ export class AppointmentService {
             throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
         }
         const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone')
+            .populate('employeeId', 'name email department designation phone photo')
             .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
@@ -558,7 +558,7 @@ export class AppointmentService {
 
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
-                .populate('employeeId', 'name email department designation phone')
+                .populate('employeeId', 'name email department designation phone photo')
                 .populate('visitorId', 'name email phone photo address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
@@ -751,7 +751,7 @@ export class AppointmentService {
             if (userId) {
                 // Re-populate with full details for socket emission
                 const populatedAppointment = await Appointment.findById(appointment._id)
-                    .populate('employeeId', 'name email phone department')
+                    .populate('employeeId', 'name email phone department photo')
                     .populate('visitorId', 'name email phone address idProof photo')
                     .session(session);
 

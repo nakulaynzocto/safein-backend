@@ -125,19 +125,19 @@ class SocketService {
         // Save to DB
         const message = await chatService.createMessage(chatId, senderId, text, files);
 
-        // Populate sender info
-        await message.populate('senderId', 'name profilePicture email');
+        // Populate sender info using service helper
+        const populatedMessage = await chatService.populateSender(message);
 
         // Emit to Room (including sender for confirmation/udpate)
         if (this.io) {
-          this.io.to(`chat_${chatId}`).emit(SocketEvents.RECEIVE_MESSAGE, message);
+          this.io.to(`chat_${chatId}`).emit(SocketEvents.RECEIVE_MESSAGE, populatedMessage);
 
           // Emit to User Rooms to ensure Global Notifications work even if not on Chat Page
           const chat = await chatService.getChatById(chatId);
           if (chat && chat.participants) {
             chat.participants.forEach((participant: any) => {
               const pId = participant._id || participant;
-              this.io?.to(`user_${pId}`).emit(SocketEvents.RECEIVE_MESSAGE, message);
+              this.io?.to(`user_${pId}`).emit(SocketEvents.RECEIVE_MESSAGE, populatedMessage);
             });
           }
         }

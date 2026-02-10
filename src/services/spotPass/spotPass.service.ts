@@ -129,7 +129,7 @@ export class SpotPassService {
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
-                .populate('employeeId', 'name')
+                .populate('employeeId', 'name photo')
                 .lean(),
             SpotPass.countDocuments(filter)
         ]);

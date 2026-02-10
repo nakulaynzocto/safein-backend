@@ -88,10 +88,10 @@ export class ChatController {
 
         const message = await chatService.createMessage(chatId, req.user._id.toString(), text, files);
 
-        // Populate for consistency
-        await message.populate('senderId', 'name profilePicture email');
+        // Populate for consistency using service helper
+        const populatedMessage = await chatService.populateSender(message);
 
-        ResponseUtil.success(res, 'Message sent successfully', message);
+        ResponseUtil.success(res, 'Message sent successfully', populatedMessage);
     }
 
     /**

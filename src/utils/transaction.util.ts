@@ -10,15 +10,12 @@ export class TransactionUtil {
         const session = await mongoose.startSession();
 
         try {
-            session.startTransaction();
-
-            const result = await operations(session);
-
-            await session.commitTransaction();
-            return result;
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
+            let result: T;
+            await session.withTransaction(async (session) => {
+                result = await operations(session);
+                return result;
+            });
+            return result!;
         } finally {
             session.endSession();
         }
@@ -35,19 +32,17 @@ export class TransactionUtil {
         const session = await mongoose.startSession();
 
         try {
-            session.startTransaction();
-
-            const results: T[] = [];
-            for (const operation of operations) {
-                const result = await operation(session);
-                results.push(result);
-            }
-
-            await session.commitTransaction();
+            let results: T[] = [];
+            await session.withTransaction(async (session) => {
+                const batchResults: T[] = [];
+                for (const operation of operations) {
+                    const result = await operation(session);
+                    batchResults.push(result);
+                }
+                results = batchResults;
+                return results;
+            });
             return results;
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
         } finally {
             session.endSession();
         }

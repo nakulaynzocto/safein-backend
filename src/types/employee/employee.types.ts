@@ -4,6 +4,7 @@ export interface ICreateEmployeeDTO {
     phone: string;
     department: string;
     designation?: string;
+    photo?: string;
     status?: 'Active' | 'Inactive';
 }
 
@@ -13,6 +14,7 @@ export interface IUpdateEmployeeDTO {
     phone?: string;
     department?: string;
     designation?: string;
+    photo?: string;
     status?: 'Active' | 'Inactive';
 }
 
@@ -23,6 +25,7 @@ export interface IEmployeeResponse {
     phone: string;
     department: string;
     designation?: string;
+    photo?: string;
     status: 'Active' | 'Inactive';
     createdBy: string;
     isDeleted: boolean;

@@ -89,6 +89,7 @@ export class EmployeeService {
                     department: employeeData.department,
                     designation: employeeData.designation || '',
                     employeeId: employee._id, // Link User to Employee
+                    profilePicture: employeeData.photo || '',
                 });
 
                 await user.save({ session });
@@ -395,19 +396,24 @@ export class EmployeeService {
             );
         }
 
-        // Sync status with User account if status is changed
+        // Sync status and photo with User account if changed
+        const userUpdates: any = {};
         if (safeUpdateData.status) {
+            userUpdates.isActive = safeUpdateData.status === 'Active';
+        }
+        if (safeUpdateData.photo !== undefined) {
+            userUpdates.profilePicture = safeUpdateData.photo;
+        }
+
+        if (Object.keys(userUpdates).length > 0) {
             try {
-                const isActive = safeUpdateData.status === 'Active';
                 await User.updateMany(
                     { employeeId: (employee._id as any), isDeleted: false },
-                    { $set: { isActive } },
+                    { $set: userUpdates },
                     { session }
                 );
             } catch (userUpdateError) {
-                console.error(`Failed to sync User status for employee ${employeeId}:`, userUpdateError);
-                // We don't throw here to avoid rolling back the employee update, 
-                // but in a real production app we might want to ensure consistency.
+                console.error(`Failed to sync User data for employee ${employeeId}:`, userUpdateError);
             }
         }
 

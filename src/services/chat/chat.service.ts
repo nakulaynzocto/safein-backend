@@ -26,7 +26,7 @@ class ChatService {
         let employees: any[] = [];
         if (missingIds.length > 0) {
             employees = await Employee.find({ _id: { $in: missingIds } })
-                .select('name profilePicture email role updatedAt')
+                .select('name photo email role updatedAt')
                 .lean();
         }
 
@@ -34,9 +34,31 @@ class ChatService {
         const personMap = new Map<string, any>();
         users.forEach(u => personMap.set(String(u._id), u));
         // Force 'employee' role if not present, though Model should have it
-        employees.forEach(e => personMap.set(String(e._id), { ...e, role: e.role || 'employee' }));
+        // Also normalize 'photo' to 'profilePicture' for consistency
+        employees.forEach(e => personMap.set(String(e._id), {
+            ...e,
+            role: e.role || 'employee',
+            profilePicture: e.photo
+        }));
 
         return personMap;
+    }
+
+    /**
+     * Populate sender details for a single message
+     */
+    async populateSender(message: any): Promise<any> {
+        const senderId = String(message.senderId);
+        const personMap = await this._getParticipantDetails([senderId]);
+        const sender = personMap.get(senderId) || { _id: senderId, name: 'Unknown', email: '', role: 'user' };
+
+        // Return message with populated sender
+        // We need to convert to object if it's a mongoose doc to allow overwriting senderId
+        const msgObj = message.toObject ? message.toObject() : message;
+        return {
+            ...msgObj,
+            senderId: sender
+        };
     }
 
     /**

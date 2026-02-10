@@ -38,6 +38,15 @@ export const createEmployeeValidation = Joi.object({
             'string.min': 'Department must be at least 2 characters long',
             'string.max': 'Department cannot exceed 50 characters'
         }),
+    designation: Joi.string()
+        .optional()
+        .allow('')
+        .trim()
+        .max(100),
+    photo: Joi.string()
+        .optional()
+        .allow('')
+        .trim(),
     status: Joi.string()
         .optional()
         .valid('Active', 'Inactive')
@@ -81,6 +90,15 @@ export const updateEmployeeValidation = Joi.object({
             'string.min': 'Department must be at least 2 characters long',
             'string.max': 'Department cannot exceed 50 characters'
         }),
+    designation: Joi.string()
+        .optional()
+        .allow('')
+        .trim()
+        .max(100),
+    photo: Joi.string()
+        .optional()
+        .allow('')
+        .trim(),
     status: Joi.string()
         .optional()
         .valid('Active', 'Inactive')
