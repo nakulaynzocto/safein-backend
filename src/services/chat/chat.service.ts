@@ -16,7 +16,7 @@ class ChatService {
 
         // 1. Fetch Users
         const users = await User.find({ _id: { $in: uniqueIds } })
-            .select('name profilePicture email role updatedAt lastLoginAt')
+            .select('name profilePicture email role roles updatedAt lastLoginAt companyName')
             .lean();
 
         // 2. Identify missing IDs (potential Employees)
