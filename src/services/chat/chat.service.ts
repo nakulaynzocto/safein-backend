@@ -242,6 +242,23 @@ class ChatService {
             .limit(3000) // Optimization: Limit to 3000 to prevent large data payload issues
             .lean();
 
+        // 5.1 Fetch corresponding Users for these employees
+        const employeeIds = allEmployees.map(e => e._id);
+        const employeeEmails = allEmployees.map(e => e.email).filter(email => email); // Filter out empty emails
+
+        const linkedUsers = await User.find({
+            $or: [
+                { employeeId: { $in: employeeIds } },
+                { email: { $in: employeeEmails } }
+            ]
+        }).select('_id employeeId email').lean();
+
+        const employeeUserMap = new Map<string, string>();
+        linkedUsers.forEach(u => {
+            if (u.employeeId) employeeUserMap.set(String(u.employeeId), String(u._id));
+            if (u.email) employeeUserMap.set(u.email.toLowerCase(), String(u._id));
+        });
+
         // 6. Create a Set of target User IDs already in chats
         const existingChatTargetIds = new Set<string>();
         populatedChats.forEach(chat => {
@@ -254,27 +271,44 @@ class ChatService {
 
         // 7. Create "Virtual Chats" for employees not yet in chat list
         const virtualChats: IChat[] = allEmployees
-            .filter(emp => !existingChatTargetIds.has(String(emp._id)))
-            .map(emp => ({
-                _id: emp._id, // Use employee ID as chat ID for virtual chats
-                participants: [
-                    { _id: userId }, // Current User
-                    // The Employee
-                    {
-                        _id: emp._id,
-                        name: emp.name,
-                        email: emp.email,
-                        role: 'employee',
-                        profilePicture: (emp as any).profilePicture
-                    }
-                ],
-                lastMessage: null,
-                unreadCounts: { [userId]: 0 },
-                isActive: true,
-                isVirtual: true, // Custom flag for virtual chats
-                createdAt: new Date(),
-                updatedAt: new Date(0) // Default date
-            } as any));
+            .filter(emp => {
+                let linkedUserId = employeeUserMap.get(String(emp._id));
+                if (!linkedUserId && emp.email) {
+                    linkedUserId = employeeUserMap.get(emp.email.toLowerCase());
+                }
+
+                // Filter out if either Employee ID or Linked User ID is already in a chat
+                return !existingChatTargetIds.has(String(emp._id)) && (!linkedUserId || !existingChatTargetIds.has(linkedUserId));
+            })
+            .map(emp => {
+                let linkedUserId = employeeUserMap.get(String(emp._id));
+                if (!linkedUserId && emp.email) {
+                    linkedUserId = employeeUserMap.get(emp.email.toLowerCase());
+                }
+                const targetId = linkedUserId || emp._id; // Prefer User ID if available
+
+                return {
+                    _id: targetId, // Use User ID if available, else Employee ID
+                    participants: [
+                        { _id: userId }, // Current User
+                        // The Employee
+                        {
+                            _id: targetId,
+                            name: emp.name,
+                            email: emp.email,
+                            role: 'employee',
+                            profilePicture: (emp as any).profilePicture,
+                            linkedUserId: linkedUserId // Helpful for frontend debug/logic
+                        }
+                    ],
+                    lastMessage: null,
+                    unreadCounts: { [userId]: 0 },
+                    isActive: true,
+                    isVirtual: true, // Custom flag for virtual chats
+                    createdAt: new Date(),
+                    updatedAt: new Date(0) // Default date
+                } as any;
+            });
 
         // 8. Return Merged List
         return [...populatedChats, ...virtualChats] as unknown as IChat[];
