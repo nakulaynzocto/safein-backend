@@ -16,10 +16,50 @@ class ChatService {
 
         // 1. Fetch Users
         const users = await User.find({ _id: { $in: uniqueIds } })
-            .select('name profilePicture email role roles updatedAt lastLoginAt companyName')
+            .select('name profilePicture email role roles updatedAt lastLoginAt companyName employeeId')
             .lean();
 
-        // 2. Identify missing IDs (potential Employees)
+        // 1.1 Enrich Users with Employee Data (if applicable)
+        // This solves the issue where User record has Email as Name, but Employee record has Real Name
+        const userEmployeeIds = users.filter(u => u.employeeId).map(u => u.employeeId);
+        const userEmails = users.map(u => u.email).filter(email => email);
+
+        if (userEmployeeIds.length > 0 || userEmails.length > 0) {
+            const employeesForUsers = await Employee.find({
+                $or: [
+                    { _id: { $in: userEmployeeIds } },
+                    { email: { $in: userEmails } }
+                ]
+            }).select('name photo email designation department').lean();
+
+            const enrichMap = new Map<string, any>();
+            employeesForUsers.forEach(e => {
+                enrichMap.set(String(e._id), e); // Map by Employee ID
+                if (e.email) enrichMap.set(e.email.toLowerCase(), e); // Map by Email
+            });
+
+            // Apply enrichment
+            users.forEach((u: any) => {
+                let empData;
+                if (u.employeeId) empData = enrichMap.get(String(u.employeeId));
+                if (!empData && u.email) empData = enrichMap.get(u.email.toLowerCase());
+
+                if (empData) {
+                    // Prefer Employee Name if User name looks like email or is missing
+                    const userNameBad = !u.name || u.name === u.email || u.name === 'Unknown User';
+                    if (userNameBad || empData.name) {
+                        u.name = empData.name; // Always prefer official Employee Name
+                    }
+                    if (!u.profilePicture && empData.photo) {
+                        u.profilePicture = empData.photo;
+                    }
+                    if (!u.designation) u.designation = empData.designation;
+                    if (!u.department) u.department = empData.department;
+                }
+            });
+        }
+
+        // 2. Identify missing IDs (potential Employees who are not Users yet)
         const foundUserIds = new Set(users.map(u => String(u._id)));
         const missingIds = uniqueIds.filter(id => !foundUserIds.has(id));
 
