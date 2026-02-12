@@ -74,37 +74,39 @@ export const uploadToCloudinary = async (
             };
         }
 
-        const dataUri = bufferToDataUri(file.buffer, file.mimetype);
-
         const uploadOptions = generateUploadOptions(options?.folder, options?.quality);
 
-        const result = await new Promise<UploadResult>((resolve) => {
-            cloudinary.uploader.upload(dataUri, uploadOptions, (error, uploadResult) => {
-                if (error) {
-                    console.error("Cloudinary upload error:", error.message);
-                    resolve({
-                        success: false,
-                        message: error.message || "Failed to upload file to Cloudinary",
-                    });
-                } else if (uploadResult) {
-                    resolve({
-                        success: true,
-                        data: {
-                            url: uploadResult.secure_url,
-                            filename: uploadResult.original_filename || file.originalname,
-                            size: uploadResult.bytes,
-                        },
-                    });
-                } else {
-                    resolve({
-                        success: false,
-                        message: "Upload failed - no response from Cloudinary",
-                    });
+        return new Promise<UploadResult>((resolve) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+                uploadOptions,
+                (error, result) => {
+                    if (error) {
+                        console.error("Cloudinary upload error:", error.message);
+                        resolve({
+                            success: false,
+                            message: error.message || "Failed to upload file to Cloudinary",
+                        });
+                    } else if (result) {
+                        resolve({
+                            success: true,
+                            data: {
+                                url: result.secure_url,
+                                filename: result.original_filename || file.originalname,
+                                size: result.bytes,
+                            },
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: "Upload failed - no response from Cloudinary",
+                        });
+                    }
                 }
-            });
-        });
+            );
 
-        return result;
+            // Directly pipe the buffer to Cloudinary stream
+            uploadStream.end(file.buffer);
+        });
     } catch (error: any) {
         console.error("Unexpected upload error:", error);
         return {

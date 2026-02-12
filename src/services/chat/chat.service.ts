@@ -144,33 +144,44 @@ class ChatService {
         text: string,
         files: { url: string; name: string; type: string }[] = []
     ): Promise<IMessage> {
-        // Create message first
-        const message = await Message.create({
-            chatId,
-            senderId,
-            text,
-            files,
-            readBy: [senderId], // Sender has read it
-        });
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-        // Update Chat: specific unread counts logic
-        const chat = await Chat.findById(chatId);
-        if (chat) {
-            chat.lastMessage = message._id as any;
+        try {
+            // Create message first
+            const [message] = await Message.create([{
+                chatId,
+                senderId,
+                text,
+                files,
+                readBy: [senderId], // Sender has read it
+            }], { session });
 
-            // Update unread counts
-            chat.participants.forEach((pId) => {
-                const participantId = pId.toString();
-                if (participantId !== senderId.toString()) {
-                    const currentCount = chat.unreadCounts.get(participantId) || 0;
-                    chat.unreadCounts.set(participantId, currentCount + 1);
-                }
-            });
+            // Update Chat: specific unread counts logic
+            const chat = await Chat.findById(chatId).session(session);
+            if (chat) {
+                chat.lastMessage = message._id as any;
 
-            await chat.save();
+                // Update unread counts
+                chat.participants.forEach((pId) => {
+                    const participantId = pId.toString();
+                    if (participantId !== senderId.toString()) {
+                        const currentCount = chat.unreadCounts.get(participantId) || 0;
+                        chat.unreadCounts.set(participantId, currentCount + 1);
+                    }
+                });
+
+                await chat.save({ session });
+            }
+
+            await session.commitTransaction();
+            return message;
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
         }
-
-        return message;
     }
 
     /**

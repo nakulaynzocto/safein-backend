@@ -81,8 +81,8 @@ app.use(generalLimiter);
 app.use('/api/v1/user-subscriptions', webhookRouter);
 
 // Request size limits (security best practice)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Prevent HTTP Parameter Pollution (HPP)
 app.use(hpp());
