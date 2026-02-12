@@ -99,8 +99,23 @@ app.use(errorHandler);
 app.use(notFoundHandler);
 
 const PORT = CONSTANTS.PORT;
-httpServer.listen(PORT, () => {
+const server = httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+});
+
+// Avoid Server Crashing on Unhandled Errors
+process.on('unhandledRejection', (err: any) => {
+  console.error('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.error(err.name, err.message);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  console.error(err.name, err.message);
+  process.exit(1);
 });
 
 export default app;

@@ -50,6 +50,27 @@ class SocketService {
     return SocketService.instance;
   }
 
+  /**
+   * Periodic Map Cleanup to prevent Memory Leaks
+   */
+  private startCleanupTimer(): void {
+    setInterval(() => {
+      const now = Date.now();
+      const { windowMs } = this.chatLimiterConfig;
+
+      for (const [userId, limit] of this.rateLimits.entries()) {
+        if (now - limit.lastReset > windowMs * 5) { // Clear if inactive for 50 seconds
+          this.rateLimits.delete(userId);
+        }
+      }
+
+      // Cleanup stale onlineUsers if needed, but Socket.io disconnect usually handles this
+      if (this.rateLimits.size > 1000) {
+        console.log(`[SocketService] Cleaning up large rateLimits Map. Current size: ${this.rateLimits.size}`);
+      }
+    }, 60000); // Run every minute
+  }
+
   initialize(httpServer: HttpServer): SocketIOServer {
     this.io = new SocketIOServer(httpServer, {
       cors: {
@@ -63,6 +84,7 @@ class SocketService {
     });
 
     this.setupConnectionHandlers();
+    this.startCleanupTimer();
     return this.io;
   }
 
