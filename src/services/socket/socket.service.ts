@@ -31,7 +31,15 @@ export enum SocketEvents {
 class SocketService {
   private io: SocketIOServer | null = null;
   private onlineUsers: Map<string, string> = new Map(); // userId -> socketId
+  private rateLimits: Map<string, { count: number, lastReset: number }> = new Map();
   private static instance: SocketService;
+
+  // Configuration for rate limiting
+  private chatLimiterConfig = {
+    windowMs: 10 * 1000, // 10 seconds
+    max: 5,              // 5 messages
+    message: "Too many messages. Please slow down."
+  };
 
   private constructor() { }
 
@@ -122,6 +130,12 @@ class SocketService {
       try {
         const { chatId, senderId, text, files } = data;
 
+        // Rate Limiting
+        if (!this.checkRateLimit(senderId)) {
+          socket.emit('error', { message: this.chatLimiterConfig.message });
+          return;
+        }
+
         // Save to DB
         const message = await chatService.createMessage(chatId, senderId, text, files);
 
@@ -159,6 +173,26 @@ class SocketService {
     socket.on(SocketEvents.STOP_TYPING, (data: { chatId: string, userId: string }) => {
       socket.to(`chat_${data.chatId}`).emit(SocketEvents.STOP_TYPING, data);
     });
+  }
+
+  /**
+   * Check if a user has exceeded the message rate limit
+   */
+  private checkRateLimit(userId: string): boolean {
+    const now = Date.now();
+    const { windowMs, max } = this.chatLimiterConfig;
+
+    const userLimit = this.rateLimits.get(userId) || { count: 0, lastReset: now };
+
+    if (now - userLimit.lastReset > windowMs) {
+      userLimit.count = 0;
+      userLimit.lastReset = now;
+    }
+
+    userLimit.count++;
+    this.rateLimits.set(userId, userLimit);
+
+    return userLimit.count <= max;
   }
 
   getIO(): SocketIOServer | null {

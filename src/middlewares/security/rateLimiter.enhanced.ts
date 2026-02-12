@@ -209,3 +209,25 @@ export const supportInquiryLimiter: RateLimitRequestHandler = rateLimit({
   legacyHeaders: false,
   skip: () => isDevelopment && false, // Don't skip in dev if testing rate limit
 });
+
+/**
+ * Chat Message Rate Limiter
+ * - 5 messages per 10 seconds per user
+ * - Prevents message spamming
+ */
+export const chatMessageLimiter: RateLimitRequestHandler = rateLimit({
+  windowMs: 10 * 1000, // 10 seconds
+  max: 5,
+  store: getRedisStore(),
+  keyGenerator: (req: any) => {
+    return req.user?._id?.toString() || req.ip || 'unknown';
+  },
+  message: {
+    success: false,
+    message: 'Too many messages. Please slow down.',
+    statusCode: ERROR_CODES.TOO_MANY_REQUESTS
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isDevelopment,
+});

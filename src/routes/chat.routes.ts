@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ChatController } from '../controllers/chat/chat.controller';
 import { protect } from '../middlewares/auth.middleware';
+import { chatMessageLimiter } from '../middlewares/security/rateLimiter.enhanced';
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.post('/initiate', ChatController.initiateChat);
 router.post('/groups', ChatController.createGroup);
 router.get('/:chatId/messages', ChatController.getMessages);
 router.put('/:chatId/read', ChatController.markRead);
-router.post('/:chatId/message', ChatController.sendMessage);
+router.post('/:chatId/message', chatMessageLimiter, ChatController.sendMessage);
 
 // Group Management Routes
 router.patch('/:chatId', ChatController.updateChat);
