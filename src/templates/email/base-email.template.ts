@@ -387,25 +387,9 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', 
                     ${content}
                 </div>
                 
-                <div class="footer">
-                    <div class="footer-signature">Best Regards,</div>
-                    <div class="footer-company">${companyName} Team</div>
-                    <div class="footer-tagline">Professional Visitor Management Solutions</div>
-                    
-                    <div class="footer-links">
-                        <a href="#">Support</a>
-                        <a href="#">Help Center</a>
-                        <a href="#">Privacy Policy</a>
-                    </div>
-                    
-                    <div class="footer-text">
-                        If you have any questions or need assistance, please don't hesitate to contact our support team.
-                    </div>
-                    
-                    <div class="footer-copyright">
-                        © ${new Date().getFullYear()} ${companyName}. All rights reserved.<br>
-                        This is an automated message. Please do not reply to this email.
-                    </div>
+                <div class="footer" style="padding: 20px;">
+                    <div class="footer-signature" style="margin-bottom: 4px;">Best Regards,</div>
+                    <div class="footer-company" style="margin-bottom: 0;">${companyName} Team</div>
                 </div>
             </div>
         </div>
