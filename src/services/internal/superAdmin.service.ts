@@ -291,7 +291,7 @@ export class SuperAdminService {
             createdBy: createdBy || undefined
         });
 
-        await EmailService.sendSafeinUserCredentialsEmail(email, finalPassword, companyName);
+        await EmailService.sendSafeinUserCredentialsEmail(email, finalPassword, companyName, companyName);
 
         return user;
     }

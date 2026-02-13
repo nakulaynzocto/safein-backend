@@ -23,6 +23,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export interface IDashboardStats {
     totalAppointments: number;
@@ -55,58 +56,45 @@ export class AppointmentService {
         actionBy: 'admin' | 'employee' | 'visitor' = 'admin'
     ): Promise<void> {
         try {
-            // Normalize adminUserId to string for consistent comparison and socket room naming
             const adminUserIdString = adminUserId
                 ? (typeof adminUserId === 'string' ? adminUserId : (adminUserId as any)?.toString() || String(adminUserId))
                 : null;
 
-            // Send to admin only if:
+            const notifyUserIds = new Set<string>();
+
+            // 1. ADD ADMIN to notification list if:
             // - Employee performed the action (admin needs to know employee approved/rejected/completed)
             // - Visitor created appointment via link (admin should know about new appointments from visitors)
             // - NOT if admin created the appointment (admin already knows they created it)
             if (adminUserIdString && (actionBy === 'employee' || (eventType === 'created' && actionBy === 'visitor'))) {
-                try {
-                    if (eventType === 'created') {
-                        await socketService.emitAppointmentCreated(adminUserIdString, appointmentData, showNotification);
-                    } else {
-                        await socketService.emitAppointmentStatusChange(adminUserIdString, appointmentData, showNotification);
-                    }
-                } catch (socketError: any) {
-                    console.warn('Failed to send socket notification to admin:', socketError?.message || socketError);
-                }
+                notifyUserIds.add(adminUserIdString);
             }
 
-            // Send to employee only if:
+            // 2. ADD EMPLOYEE to notification list if:
             // - Admin performed the action (employee needs to know admin approved/rejected)
             // - Appointment was created (employee should know about new appointments for them - whether by admin or visitor)
-            // BUT NOT if employee is the same as admin (already got notification above)
-            if (actionBy === 'admin' || (eventType === 'created' && actionBy !== 'visitor')) {
-                try {
-                    const employee = populatedAppointment?.employeeId as any;
-                    if (employee && employee.email) {
-                        const employeeUser = await User.findOne({
-                            email: employee.email.toLowerCase().trim(),
-                            isDeleted: false,
-                            isActive: true
-                        }).select('_id').lean();
-
-                        if (employeeUser && employeeUser._id) {
-                            const employeeUserId = (employeeUser._id as any).toString();
-                            // Only send if employee user is different from admin (compare as strings)
-                            if (employeeUserId !== adminUserIdString) {
-                                if (eventType === 'created') {
-                                    await socketService.emitAppointmentCreated(employeeUserId, appointmentData, showNotification);
-                                } else {
-                                    await socketService.emitAppointmentStatusChange(employeeUserId, appointmentData, showNotification);
-                                }
-                            }
-                        }
+            if (actionBy === 'admin' || actionBy === 'visitor' || (eventType === 'created')) {
+                const employeeId = populatedAppointment?.employeeId?._id || populatedAppointment?.employeeId;
+                if (employeeId) {
+                    const employeeUserId = await EmployeeUtil.getUserIdFromEmployeeId(employeeId.toString());
+                    if (employeeUserId) {
+                        notifyUserIds.add(employeeUserId);
                     }
-                } catch (employeeSocketError: any) {
-                    console.warn('Failed to send socket notification to employee:', employeeSocketError?.message || employeeSocketError);
                 }
             }
-            // If actionBy === 'employee' and eventType === 'statusChange', only admin gets notification (employee already knows they performed the action)
+
+            // 3. Emit to all collected users
+            for (const userId of notifyUserIds) {
+                try {
+                    if (eventType === 'created') {
+                        await socketService.emitAppointmentCreated(userId, appointmentData, showNotification);
+                    } else {
+                        await socketService.emitAppointmentStatusChange(userId, appointmentData, showNotification);
+                    }
+                } catch (socketError: any) {
+                    console.warn(`Failed to send socket notification to user ${userId}:`, socketError?.message || socketError);
+                }
+            }
         } catch (socketError: any) {
             console.error('Failed to send socket notification:', socketError?.message || socketError);
         }

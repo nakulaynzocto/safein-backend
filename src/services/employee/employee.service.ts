@@ -700,7 +700,7 @@ export class EmployeeService {
                 await user.save({ session });
 
                 // Send Credentials Email
-                await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName);
+                await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName, employee.name);
 
             } else {
                 // If user exists, link it? Or throw error?

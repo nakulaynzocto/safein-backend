@@ -674,19 +674,19 @@ export class EmailService {
   /**
    * Send Safein User Credentials Email
    */
-  static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string): Promise<void> {
+  static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string, userName: string): Promise<void> {
     try {
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h2 style="color: #1A73E8; text-align: center;">Welcome to ${companyName} Security Cloud</h2>
-          <p>Hello <strong>${companyName}</strong>,</p>
-          <p>Your account has been successfully created by the Super Admin.</p>
-          <p>Here are your login credentials:</p>
+          <p>Hello <strong>${userName}</strong>,</p>
+          <p>Your account has been successfully created and verified.</p>
+          <p>Here are your login credentials to access the ${companyName} portal:</p>
           <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
             <p style="margin: 5px 0;"><strong>Password:</strong> ${password}</p>
           </div>
-          <p>Please login and change your password immediately.</p>
+          <p>Please login and change your password immediately for security.</p>
           <div style="text-align: center; margin-top: 30px;">
             <a href="${CONSTANTS.FRONTEND_URL}/login" style="background-color: #1A73E8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login to Dashboard</a>
           </div>
@@ -695,7 +695,7 @@ export class EmailService {
           </p>
         </div>
       `;
-      const textContent = `Welcome to ${companyName} Security Cloud\n\nHello ${companyName},\n\nYour account has been successfully created.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease login and change your password immediately.\n\nLogin here: ${CONSTANTS.FRONTEND_URL}/login`;
+      const textContent = `Welcome to ${companyName} Security Cloud\n\nHello ${userName},\n\nYour account has been successfully created.\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease login and change your password immediately.\n\nLogin here: ${CONSTANTS.FRONTEND_URL}/login`;
 
       await this.sendEmail({
         to: email,
@@ -706,7 +706,6 @@ export class EmailService {
       });
     } catch (error: any) {
       console.error('Failed to send credentials email:', error.message);
-      // Don't throw to avoid blocking user creation response, but log it
     }
   }
 

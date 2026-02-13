@@ -288,7 +288,7 @@ class ChatService {
             createdBy: userId,
             isDeleted: false
         })
-            .select('name email profilePicture role _id')
+            .select('name email photo _id')
             .sort({ createdAt: -1 }) // Show newest employees first
             .limit(3000) // Optimization: Limit to 3000 to prevent large data payload issues
             .lean();
@@ -348,7 +348,7 @@ class ChatService {
                             name: emp.name,
                             email: emp.email,
                             role: 'employee',
-                            profilePicture: (emp as any).profilePicture,
+                            profilePicture: (emp as any).photo,
                             linkedUserId: linkedUserId // Helpful for frontend debug/logic
                         }
                     ],
