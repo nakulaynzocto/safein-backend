@@ -25,12 +25,12 @@ export const verifyAppointmentLinkToken = async (req: Request, _res: any, next: 
         }).lean();
 
         if (!appointmentLink) {
-            throw new AppError("Invalid appointment link token", ERROR_CODES.UNAUTHORIZED);
+            throw new AppError("Invalid appointment link token", ERROR_CODES.FORBIDDEN);
         }
 
         // Check if link has expired
         if (new Date(appointmentLink.expiresAt) < new Date()) {
-            throw new AppError("Appointment link has expired", ERROR_CODES.UNAUTHORIZED);
+            throw new AppError("Appointment link has expired", ERROR_CODES.FORBIDDEN);
         }
 
 
