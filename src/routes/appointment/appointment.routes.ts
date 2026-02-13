@@ -102,4 +102,10 @@ router.get(
     asyncWrapper(AppointmentController.getAppointmentByAppointmentId)
 );
 
+router.post(
+    '/:id/resend',
+    validateRequest(appointmentParamsValidation),
+    asyncWrapper(AppointmentController.resendNotification)
+);
+
 export default router;

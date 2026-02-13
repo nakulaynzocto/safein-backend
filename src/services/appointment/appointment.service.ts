@@ -1330,4 +1330,51 @@ export class AppointmentService {
             todayAppointments: today
         };
     }
+
+    /**
+     * Resend appointment notification
+     */
+    static async resendNotification(appointmentId: string): Promise<void> {
+        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
+            .populate('employeeId', 'name email phone department photo')
+            .populate('visitorId', 'name email phone address idProof photo');
+
+        if (!appointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        if (appointment.status !== 'pending') {
+            throw new AppError('Notifications can only be resent for pending appointments', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Find existing approval link
+        const approvalLink = await ApprovalLink.findOne({ appointmentId: appointment._id });
+
+        const createdBy = (appointment.createdBy as any).toString() || appointment.createdBy;
+        const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
+        const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
+        const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
+
+        // Get company name and logo
+        const user = await User.findById(createdBy).select('companyName profilePicture').lean();
+        const companyName = user?.companyName;
+        const companyLogo = user?.profilePicture || undefined;
+
+        // Trigger background notifications
+        this.processBackgroundNotifications(
+            (appointment._id as any).toString(),
+            appointment.status,
+            appointment,
+            createdBy,
+            approvalLink,
+            {
+                emailEnabled,
+                whatsappEnabled,
+                smsEnabled,
+                sendNotifications: true,
+                companyName,
+                companyLogo
+            }
+        ).catch(err => console.error('Resend background notification failed:', err));
+    }
 }

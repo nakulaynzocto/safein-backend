@@ -384,4 +384,19 @@ export class AppointmentController {
         const stats = await AppointmentService.getDashboardStats(employeeId, adminUserId);
         ResponseUtil.success(res, 'Dashboard stats retrieved successfully', stats);
     }
+
+    /**
+     * Resend appointment notification
+     * POST /api/appointments/:id/resend
+     */
+    @TryCatch('Failed to resend appointment notification')
+    static async resendNotification(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        await AppointmentService.resendNotification(id);
+        ResponseUtil.success(res, 'Appointment notification resent successfully');
+    }
 }

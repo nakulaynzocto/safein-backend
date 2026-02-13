@@ -40,6 +40,26 @@ export class SpecialVisitorBookingController {
         }
     };
 
+    static resendOtp = async (
+        req: AuthenticatedRequest,
+        res: Response,
+        next: NextFunction
+    ): Promise<void> => {
+        try {
+            if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+
+            const { bookingId } = req.body;
+            if (!bookingId) {
+                throw new AppError('Booking ID is required', ERROR_CODES.BAD_REQUEST);
+            }
+
+            await SpecialVisitorBookingService.resendOtp(bookingId, req.user._id.toString());
+            ResponseUtil.success(res, 'Entry code resent successfully');
+        } catch (error) {
+            next(error);
+        }
+    };
+
     static getAllBookings = async (
         req: AuthenticatedRequest,
         res: Response,

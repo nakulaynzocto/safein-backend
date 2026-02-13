@@ -311,6 +311,42 @@ export class AppointmentBookingLinkService {
   }
 
   /**
+   * Resend appointment link email
+   */
+  static async resendLink(id: string, userId: string): Promise<void> {
+    const link = await AppointmentBookingLink.findById(id).populate('employeeId');
+
+    if (!link) {
+      throw new AppError('Appointment link not found', ERROR_CODES.NOT_FOUND);
+    }
+
+    if (link.isBooked) {
+      throw new AppError('Appointment link has already been used', ERROR_CODES.BAD_REQUEST);
+    }
+
+    if (new Date(link.expiresAt) < new Date()) {
+      throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    const baseUrl = this.getBaseUrl();
+    const bookingUrl = `${baseUrl}/book-appointment/${link.secureToken}`;
+
+    // Get company name from Admin
+    const adminId = await EmployeeUtil.getAdminId(userId);
+    const adminUser = await User.findById(adminId).select('companyName').lean();
+    const companyName = adminUser?.companyName;
+
+    // Send email to visitor
+    await EmailService.sendAppointmentLinkEmail(
+      link.visitorEmail,
+      (link.employeeId as any).name || 'Employee',
+      bookingUrl,
+      link.expiresAt,
+      companyName
+    );
+  }
+
+  /**
    * Delete appointment link
    */
   static async deleteAppointmentLink(id: string, createdBy: string): Promise<void> {

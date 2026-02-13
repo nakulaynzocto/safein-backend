@@ -51,6 +51,12 @@ router.post(
   asyncWrapper(AppointmentBookingLinkController.createAppointmentThroughLink)
 );
 
+router.post(
+  '/resend/:id',
+  verifyToken,
+  asyncWrapper(AppointmentBookingLinkController.resendLink)
+);
+
 router.delete(
   '/:id',
   verifyToken,

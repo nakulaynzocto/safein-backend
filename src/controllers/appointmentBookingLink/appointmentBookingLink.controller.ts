@@ -69,6 +69,20 @@ export class AppointmentBookingLinkController {
     ResponseUtil.success(res, 'Appointment links retrieved successfully', result);
   };
 
+  static resendLink = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    _next: NextFunction
+  ): Promise<void> => {
+    if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+
+    const { id } = req.params;
+    if (!id) throw new AppError('Link ID is required', ERROR_CODES.BAD_REQUEST);
+
+    await AppointmentBookingLinkService.resendLink(id, req.user._id.toString());
+    ResponseUtil.success(res, 'Appointment link resent successfully');
+  };
+
   static deleteAppointmentLink = async (
     req: AuthenticatedRequest,
     res: Response,

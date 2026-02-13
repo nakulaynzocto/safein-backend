@@ -153,6 +153,45 @@ export class SpecialVisitorBookingService {
     }
 
     /**
+     * Resend OTP for a booking
+     */
+    static async resendOtp(bookingId: string, userId: string) {
+        const booking = await SpecialVisitorBooking.findById(bookingId).populate('employeeId');
+        if (!booking) throw new AppError('Booking not found', ERROR_CODES.NOT_FOUND);
+
+        if (booking.status !== SpecialBookingStatus.PENDING) {
+            throw new AppError('OTP can only be resent for pending bookings', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Fetch Company Name (from Admin)
+        const adminId = await EmployeeUtil.getAdminId(userId);
+        const adminUser = await User.findById(adminId).select('companyName').lean();
+        const companyName: string = (adminUser as any)?.companyName || 'SafeIn';
+
+        // Resend Entry Code via SMS/WhatsApp
+        const whatsappMessage = `Hello ${booking.visitorName}, Your Visitor Entry Code for ${companyName} is: ${booking.otp}. Please show this at reception.`;
+        try {
+            await WhatsAppService.sendMessage(booking.visitorPhone, whatsappMessage);
+        } catch (error) {
+            // Ignore error
+        }
+
+        // Resend Entry Code via Email
+        try {
+            await EmailService.sendVisitorOtpEmail(
+                booking.visitorEmail || '',
+                booking.otp || '',
+                booking.visitorName || '',
+                companyName
+            );
+        } catch (error) {
+            // Ignore error
+        }
+
+        return booking;
+    }
+
+    /**
      * Update note for a booking
      */
     static async updateNote(bookingId: string, notes: string, userId: string) {

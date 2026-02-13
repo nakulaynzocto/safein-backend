@@ -16,6 +16,12 @@ router.post(
     SpecialVisitorBookingController.verifyOtp
 );
 
+router.post(
+    '/resend',
+    protect,
+    SpecialVisitorBookingController.resendOtp
+);
+
 router.get(
     '/',
     protect,
