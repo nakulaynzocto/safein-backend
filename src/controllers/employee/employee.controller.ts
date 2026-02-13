@@ -189,8 +189,7 @@ export class EmployeeController {
             'Email',
             'Phone',
             'Department',
-            'Designation',
-            'Status'
+            'Designation'
         ];
 
         // Create sample data row
@@ -200,8 +199,7 @@ export class EmployeeController {
                 'john.doe@example.com',
                 '1234567890',
                 'Engineering',
-                'Software Engineer',
-                'Active'
+                'Software Engineer'
             ]
         ];
 
@@ -214,8 +212,7 @@ export class EmployeeController {
             { wch: 30 }, // Email
             { wch: 15 }, // Phone
             { wch: 20 }, // Department
-            { wch: 25 }, // Designation
-            { wch: 12 }  // Status
+            { wch: 25 }  // Designation
         ];
 
         // Add worksheet to workbook
@@ -262,8 +259,6 @@ export class EmployeeController {
 
             // Validate and transform data - optimized with helper function
             const employees: ICreateEmployeeDTO[] = [];
-            const VALID_STATUSES = ['Active', 'Inactive'] as const;
-
             // Helper function to get value by case-insensitive key
             const getValue = (row: any, key: string): string => {
                 const keys = Object.keys(row);
@@ -279,7 +274,6 @@ export class EmployeeController {
                 const phone = getValue(row, 'phone');
                 const department = getValue(row, 'department');
                 const designation = getValue(row, 'designation');
-                const status = getValue(row, 'status');
 
                 // Skip empty rows
                 if (!name && !email && !phone) {
@@ -293,9 +287,7 @@ export class EmployeeController {
                     phone,
                     department,
                     designation: designation || undefined,
-                    status: (status && VALID_STATUSES.includes(status as typeof VALID_STATUSES[number]))
-                        ? status as 'Active' | 'Inactive'
-                        : 'Active'
+                    status: 'Inactive' // Enforce Inactive status for bulk import
                 };
 
                 employees.push(employee);
@@ -322,5 +314,53 @@ export class EmployeeController {
             }
             throw new AppError(`Failed to process Excel file: ${error.message}`, ERROR_CODES.BAD_REQUEST);
         }
+    }
+    /**
+     * Send Verification OTP
+     * POST /api/employees/:id/send-otp
+     */
+    @TryCatch('Failed to send OTP')
+    static async sendOtp(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        const userId = req.user._id.toString();
+
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        await EmployeeService.sendVerificationOtp(id);
+        ResponseUtil.success(res, 'Verification OTP sent successfully');
+    }
+
+    /**
+     * Verify OTP
+     * POST /api/employees/:id/verify-otp
+     */
+    @TryCatch('Failed to verify OTP')
+    static async verifyOtp(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        const { otp } = req.body;
+        const userId = req.user._id.toString();
+
+        if (!otp) {
+            throw new AppError('OTP is required', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        await EmployeeService.verifyEmployeeOtp(id, otp);
+        ResponseUtil.success(res, 'Employee verified and setup successfully');
     }
 }

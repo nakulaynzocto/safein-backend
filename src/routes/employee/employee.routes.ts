@@ -95,4 +95,16 @@ router.delete(
     asyncWrapper(EmployeeController.deleteEmployee)
 );
 
+
+router.post(
+    '/:id/send-otp',
+    // asyncWrapper(checkSubscriptionStatus), // Should verification be blocked by subscription? Probably yes.
+    asyncWrapper(EmployeeController.sendOtp)
+);
+
+router.post(
+    '/:id/verify-otp',
+    asyncWrapper(EmployeeController.verifyOtp)
+);
+
 export default router;

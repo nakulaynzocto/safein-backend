@@ -14,6 +14,9 @@ export interface IEmployee extends Document {
     deletedBy?: mongoose.Types.ObjectId; // Reference to User who deleted the employee
     createdAt: Date;
     updatedAt: Date;
+    isVerified: boolean;
+    verificationOtp?: string;
+    verificationOtpExpires?: Date;
 }
 
 const employeeSchema = new Schema<IEmployee>({
@@ -58,7 +61,7 @@ const employeeSchema = new Schema<IEmployee>({
     status: {
         type: String,
         enum: ['Active', 'Inactive'],
-        default: 'Active'
+        default: 'Inactive'
     },
     createdBy: {
         type: Schema.Types.ObjectId,
@@ -77,6 +80,18 @@ const employeeSchema = new Schema<IEmployee>({
         type: Schema.Types.ObjectId,
         ref: 'User',
         default: null
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationOtp: {
+        type: String,
+        select: false // Hide from default queries for security
+    },
+    verificationOtpExpires: {
+        type: Date,
+        select: false
     }
 }, {
     timestamps: true,
