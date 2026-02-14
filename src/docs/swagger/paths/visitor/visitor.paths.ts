@@ -85,21 +85,10 @@ export const visitorPaths = {
                 {
                     name: 'search',
                     in: 'query',
-                    description: 'Search term for name, email, phone, company, designation, address fields, or ID proof',
+                    description: 'Search term for name, email, phone, address fields, or ID proof',
                     schema: { type: 'string', maxLength: 100 }
                 },
-                {
-                    name: 'company',
-                    in: 'query',
-                    description: 'Filter by company',
-                    schema: { type: 'string', maxLength: 100 }
-                },
-                {
-                    name: 'designation',
-                    in: 'query',
-                    description: 'Filter by designation',
-                    schema: { type: 'string', maxLength: 100 }
-                },
+
                 {
                     name: 'city',
                     in: 'query',
@@ -128,7 +117,7 @@ export const visitorPaths = {
                     name: 'sortBy',
                     in: 'query',
                     description: 'Field to sort by',
-                    schema: { type: 'string', enum: ['name', 'email', 'company', 'designation', 'createdAt', 'updatedAt'], default: 'createdAt' }
+                    schema: { type: 'string', enum: ['name', 'email', 'createdAt', 'updatedAt'], default: 'createdAt' }
                 },
                 {
                     name: 'sortOrder',
@@ -227,21 +216,10 @@ export const visitorPaths = {
                 {
                     name: 'search',
                     in: 'query',
-                    description: 'Search term for name, email, phone, company, designation, address fields, or ID proof',
+                    description: 'Search term for name, email, phone, address fields, or ID proof',
                     schema: { type: 'string', maxLength: 100 }
                 },
-                {
-                    name: 'company',
-                    in: 'query',
-                    description: 'Filter by company',
-                    schema: { type: 'string', maxLength: 100 }
-                },
-                {
-                    name: 'designation',
-                    in: 'query',
-                    description: 'Filter by designation',
-                    schema: { type: 'string', maxLength: 100 }
-                },
+
                 {
                     name: 'city',
                     in: 'query',
@@ -264,7 +242,7 @@ export const visitorPaths = {
                     name: 'sortBy',
                     in: 'query',
                     description: 'Field to sort by',
-                    schema: { type: 'string', enum: ['name', 'email', 'company', 'designation', 'deletedAt'], default: 'deletedAt' }
+                    schema: { type: 'string', enum: ['name', 'email', 'deletedAt'], default: 'deletedAt' }
                 },
                 {
                     name: 'sortOrder',

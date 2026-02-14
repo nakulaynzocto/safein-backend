@@ -7,15 +7,42 @@ import {
     IUpdateAppointmentDTO,
     IGetAppointmentsQuery,
     ICheckInRequest,
-    ICheckOutRequest,
-    IBulkUpdateAppointmentsDTO
+    ICheckOutRequest
 } from '../../types/appointment/appointment.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class AppointmentController {
+    /**
+     * Common helper: Determine if user is employee performing action on their own appointment
+     * Returns 'employee' if user is employee acting on their appointment, otherwise 'admin'
+     */
+    private static async determineActionBy(
+        user: any,
+        appointmentId: string
+    ): Promise<'admin' | 'employee'> {
+        try {
+            const employeeId = await EmployeeUtil.getEmployeeIdFromUser(user);
+            if (employeeId) {
+                // Check if appointment belongs to this employee
+                const appointment = await AppointmentService.getAppointmentById(appointmentId);
+                if (appointment) {
+                    const appointmentEmployeeId = (appointment as any).employeeId?._id?.toString() ||
+                        (appointment as any).employeeId?.toString();
+                    if (appointmentEmployeeId === employeeId) {
+                        return 'employee';
+                    }
+                }
+            }
+        } catch (error) {
+            // If error determining employee, default to admin
+        }
+        return 'admin';
+    }
+
     /**
      * Create a new appointment
      * POST /api/appointments
@@ -27,24 +54,89 @@ export class AppointmentController {
         }
         const appointmentData: ICreateAppointmentDTO = req.body;
         const createdBy = req.user._id.toString();
-        const appointment = await AppointmentService.createAppointment(appointmentData, createdBy);
+        // Pass sendNotifications: true to enable socket notifications and real-time updates
+        const appointment = await AppointmentService.createAppointment(appointmentData, createdBy, { sendNotifications: true });
         ResponseUtil.success(res, 'Appointment created successfully', appointment, ERROR_CODES.CREATED);
     }
 
     /**
      * Get all appointments with pagination and filtering (user-specific)
      * GET /api/appointments
+     * - Admin: sees only THEIR OWN appointments (with their employees)
+     * - Employee: sees only their own appointments
      */
     @TryCatch('Failed to get appointments')
     static async getAllAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const query: IGetAppointmentsQuery = req.query;
         const userId = req.user._id.toString();
-        const result = await AppointmentService.getAllAppointments(query, userId);
+
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        // If employee, automatically filter by their employeeId (so they only see their own appointments)
+        if (isEmployee) {
+            const employeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
+            if (employeeId) {
+                // Add employeeId to query to filter appointments for this employee only
+                query.employeeId = employeeId;
+            } else {
+                // If employeeId not found, return empty result
+                ResponseUtil.success(res, 'Appointments retrieved successfully', {
+                    appointments: [],
+                    pagination: {
+                        currentPage: query.page || 1,
+                        totalPages: 0,
+                        totalAppointments: 0,
+                        hasNextPage: false,
+                        hasPrevPage: false
+                    }
+                });
+                return;
+            }
+        }
+
+        // SECURITY FIX: Pass adminUserId to filter appointments by admin's employees
+        // - For admin: shows appointments with employees created by this admin (their own data)
+        // - For employee: employeeId is already in query, adminUserId won't be used
+        const result = await AppointmentService.getAllAppointments(query, isEmployee ? undefined : userId);
         ResponseUtil.success(res, 'Appointments retrieved successfully', result);
+    }
+
+    /**
+     * Get appointment stats (optimized for dashboard)
+     * GET /api/appointments/stats
+     * - Admin: sees stats for their employees' appointments
+     * - Employee: sees stats for only their own appointments
+     */
+    @TryCatch('Failed to get appointment stats')
+    static async getAppointmentStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        let employeeId: string | undefined;
+        let adminUserId: string | undefined;
+
+        if (isEmployee) {
+            // Employee: get their employeeId for filtering
+            const fetchedEmployeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
+            if (fetchedEmployeeId) {
+                employeeId = fetchedEmployeeId;
+            }
+        } else {
+            // Admin: use their userId to filter by their employees
+            adminUserId = userId;
+        }
+
+        const stats = await AppointmentService.getAppointmentStats(adminUserId, employeeId);
+        ResponseUtil.success(res, 'Appointment stats retrieved successfully', stats);
     }
 
     /**
@@ -56,19 +148,33 @@ export class AppointmentController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const userId = req.user._id.toString();
-        
+
         // Get appointment and verify it belongs to the current user
         const appointment = await AppointmentService.getAppointmentById(id);
-        
-        // Additional check: verify the appointment was created by the current user
+
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+        const employeeId = isEmployee ? await EmployeeUtil.getEmployeeIdFromUser(req.user) : null;
+
+        // Additional check: verify access
+        // - Admin: must have created the appointment (or belongs to their employee)
+        // - Employee: must be the assigned employee for this appointment
         const appointmentRecord = await Appointment.findById(id);
-        if (!appointmentRecord || appointmentRecord.createdBy.toString() !== userId) {
-            throw new AppError('Appointment not found or access denied', ERROR_CODES.NOT_FOUND);
+
+        if (!appointmentRecord) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
-        
+
+        const isCreator = appointmentRecord.createdBy.toString() === userId;
+        const isAssignedEmployee = employeeId && appointmentRecord.employeeId.toString() === employeeId;
+
+        if (!isCreator && !isAssignedEmployee) {
+            throw new AppError('Access denied', ERROR_CODES.FORBIDDEN);
+        }
+
         ResponseUtil.success(res, 'Appointment retrieved successfully', appointment);
     }
 
@@ -88,10 +194,42 @@ export class AppointmentController {
      * PUT /api/appointments/:id
      */
     @TryCatch('Failed to update appointment')
-    static async updateAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async updateAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
         const { id } = req.params;
         const updateData: IUpdateAppointmentDTO = req.body;
-        const appointment = await AppointmentService.updateAppointment(id, updateData);
+
+        // Check if status is being changed to approved/rejected
+        const isStatusChange = updateData.status === 'approved' || updateData.status === 'rejected';
+
+        // Determine if user is an employee
+        let actionBy: 'admin' | 'employee' = 'admin';
+        if (isStatusChange) {
+            try {
+                const employeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
+                if (employeeId) {
+                    // Check if appointment belongs to this employee
+                    const appointment = await AppointmentService.getAppointmentById(id);
+                    if (appointment) {
+                        const appointmentEmployeeId = (appointment as any).employeeId?._id?.toString() ||
+                            (appointment as any).employeeId?.toString();
+                        if (appointmentEmployeeId === employeeId) {
+                            actionBy = 'employee';
+                        }
+                    }
+                }
+            } catch (error) {
+                // If error determining employee, default to admin
+            }
+        }
+
+        const appointment = await AppointmentService.updateAppointment(id, updateData, {
+            actionBy,
+            sendNotifications: isStatusChange // Send notifications only for status changes
+        });
         ResponseUtil.success(res, 'Appointment updated successfully', appointment);
     }
 
@@ -126,79 +264,29 @@ export class AppointmentController {
      * POST /api/appointments/check-out
      */
     @TryCatch('Failed to check out appointment')
-    static async checkOutAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async checkOutAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         const request: ICheckOutRequest = req.body;
-        const appointment = await AppointmentService.checkOutAppointment(request);
+
+        // Use common helper to determine actionBy
+        const actionBy = req.user
+            ? await AppointmentController.determineActionBy(req.user, request.appointmentId)
+            : 'admin';
+
+        // Notify admin when employee completes
+        const sendNotifications = actionBy === 'employee';
+
+        const appointment = await AppointmentService.checkOutAppointment(request, {
+            actionBy,
+            sendNotifications
+        });
         ResponseUtil.success(res, 'Appointment checked out successfully', appointment);
     }
 
-    /**
-     * Get appointment statistics (user-specific)
-     * GET /api/appointments/stats
-     */
-    @TryCatch('Failed to get appointment statistics')
-    static async getAppointmentStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const userId = req.user._id.toString();
-        const { startDate, endDate } = req.query;
-        
-        const stats = await AppointmentService.getAppointmentStats(
-            userId,
-            startDate as string | undefined,
-            endDate as string | undefined
-        );
-        ResponseUtil.success(res, 'Appointment statistics retrieved successfully', stats);
-    }
 
 
 
-    /**
-     * Bulk update appointments
-     * PUT /api/appointments/bulk-update
-     */
-    @TryCatch('Failed to bulk update appointments')
-    static async bulkUpdateAppointments(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const bulkData: IBulkUpdateAppointmentsDTO = req.body;
-        const result = await AppointmentService.bulkUpdateAppointments(bulkData);
-        ResponseUtil.success(res, 'Appointments updated successfully', result);
-    }
 
 
-    /**
-     * Get appointments by employee
-     * GET /api/appointments/employee/:employeeId
-     */
-    @TryCatch('Failed to get appointments by employee')
-    static async getAppointmentsByEmployee(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const { employeeId } = req.params;
-        const query: IGetAppointmentsQuery = { ...req.query, employeeId };
-        const result = await AppointmentService.getAllAppointments(query);
-        ResponseUtil.success(res, 'Employee appointments retrieved successfully', result);
-    }
-
-    /**
-     * Get appointments by date range
-     * GET /api/appointments/date-range
-     */
-    @TryCatch('Failed to get appointments by date range')
-    static async getAppointmentsByDateRange(req: Request, res: Response, _next: NextFunction): Promise<void> {
-        const { startDate, endDate } = req.query;
-
-        if (!startDate || !endDate) {
-            throw new AppError('Start date and end date are required', ERROR_CODES.BAD_REQUEST);
-        }
-
-        const query: IGetAppointmentsQuery = {
-            ...req.query,
-            startDate: startDate as string,
-            endDate: endDate as string
-        };
-        const result = await AppointmentService.getAllAppointments(query);
-        ResponseUtil.success(res, 'Appointments by date range retrieved successfully', result);
-    }
 
     /**
      * Cancel appointment
@@ -216,9 +304,20 @@ export class AppointmentController {
      * PUT /api/appointments/:id/approve
      */
     @TryCatch('Failed to approve appointment')
-    static async approveAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async approveAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
         const { id } = req.params;
-        const result = await AppointmentService.approveAppointment(id);
+
+        // Use common helper to determine actionBy
+        const actionBy = await AppointmentController.determineActionBy(req.user, id);
+
+        const result = await AppointmentService.approveAppointment(id, {
+            sendNotifications: true, // Enable socket notifications
+            actionBy
+        });
         ResponseUtil.success(res, 'Appointment approved successfully. The visitor has been notified.', result);
     }
 
@@ -227,9 +326,77 @@ export class AppointmentController {
      * PUT /api/appointments/:id/reject
      */
     @TryCatch('Failed to reject appointment')
-    static async rejectAppointment(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    static async rejectAppointment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
         const { id } = req.params;
-        const result = await AppointmentService.rejectAppointment(id);
+
+        // Use common helper to determine actionBy
+        const actionBy = await AppointmentController.determineActionBy(req.user, id);
+
+        const result = await AppointmentService.rejectAppointment(id, {
+            sendNotifications: true, // Enable socket notifications
+            actionBy
+        });
         ResponseUtil.success(res, 'Appointment rejected. The visitor has been informed.', result);
+    }
+
+    /**
+     * Get dashboard statistics (unified for admin and employee)
+     * GET /api/appointments/dashboard/stats
+     * - Admin: sees only THEIR OWN appointments stats (with their employees)
+     * - Employee: sees only their own appointments stats
+     */
+    @TryCatch('Failed to get dashboard stats')
+    static async getDashboardStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        let employeeId: string | undefined;
+        let adminUserId: string | undefined;
+
+        // If employee, get their employeeId to filter stats
+        if (isEmployee) {
+            const fetchedEmployeeId = await EmployeeUtil.getEmployeeIdFromUser(req.user);
+            if (!fetchedEmployeeId) {
+                throw new AppError(
+                    'Employee not found. Please ensure your email matches an active employee.',
+                    ERROR_CODES.NOT_FOUND
+                );
+            }
+            employeeId = fetchedEmployeeId;
+        } else {
+            // For admin, pass adminUserId to filter by their employees
+            adminUserId = userId;
+        }
+
+        // SECURITY FIX: Pass adminUserId to filter stats by admin's employees
+        // - For admin: shows stats for appointments with employees created by this admin
+        // - For employee: shows stats for only their own appointments
+        const stats = await AppointmentService.getDashboardStats(employeeId, adminUserId);
+        ResponseUtil.success(res, 'Dashboard stats retrieved successfully', stats);
+    }
+
+    /**
+     * Resend appointment notification
+     * POST /api/appointments/:id/resend
+     */
+    @TryCatch('Failed to resend appointment notification')
+    static async resendNotification(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        await AppointmentService.resendNotification(id);
+        ResponseUtil.success(res, 'Appointment notification resent successfully');
     }
 }

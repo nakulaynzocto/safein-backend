@@ -4,15 +4,13 @@ import { EmployeeController } from '../../controllers/employee/employee.controll
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
 import { userLimiter } from '../../middlewares';
 import {
     createEmployeeValidation,
     updateEmployeeValidation,
     employeeParamsValidation,
-    getEmployeesValidation,
-    updateEmployeeStatusValidation,
-    bulkUpdateEmployeesValidation
+    getEmployeesValidation
 } from '../../validations/employee/employee.validation';
 
 const router = Router();
@@ -42,7 +40,7 @@ router.use(userLimiter);
 
 router.post(
     '/',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     validateRequest(createEmployeeValidation),
     asyncWrapper(EmployeeController.createEmployee)
 );
@@ -54,9 +52,11 @@ router.get(
 );
 
 router.get(
-    '/stats',
-    asyncWrapper(EmployeeController.getEmployeeStats)
+    '/count',
+    asyncWrapper(EmployeeController.getEmployeeCount)
 );
+
+
 
 router.get(
     '/template',
@@ -65,16 +65,12 @@ router.get(
 
 router.post(
     '/bulk-create',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     upload.single('file'),
     asyncWrapper(EmployeeController.bulkCreateEmployees)
 );
 
-router.get(
-    '/:id/has-appointments',
-    validateRequest(employeeParamsValidation),
-    asyncWrapper(EmployeeController.hasAppointments)
-);
+
 
 router.get(
     '/:id',
@@ -89,23 +85,26 @@ router.put(
     asyncWrapper(EmployeeController.updateEmployee)
 );
 
-router.put(
-    '/:id/status',
-    validateRequest(employeeParamsValidation),
-    validateRequest(updateEmployeeStatusValidation),
-    asyncWrapper(EmployeeController.updateEmployeeStatus)
-);
 
-router.put(
-    '/bulk-update',
-    validateRequest(bulkUpdateEmployeesValidation),
-    asyncWrapper(EmployeeController.bulkUpdateEmployees)
-);
+
+
 
 router.delete(
     '/:id',
     validateRequest(employeeParamsValidation),
     asyncWrapper(EmployeeController.deleteEmployee)
+);
+
+
+router.post(
+    '/:id/send-otp',
+    // asyncWrapper(checkSubscriptionStatus), // Should verification be blocked by subscription? Probably yes.
+    asyncWrapper(EmployeeController.sendOtp)
+);
+
+router.post(
+    '/:id/verify-otp',
+    asyncWrapper(EmployeeController.verifyOtp)
 );
 
 export default router;

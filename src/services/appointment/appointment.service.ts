@@ -1,10 +1,13 @@
 import { Appointment } from '../../models/appointment/appointment.model';
 import { Employee } from '../../models/employee/employee.model';
 import { Visitor } from '../../models/visitor/visitor.model';
+import { User } from '../../models/user/user.model';
 import { EmailService } from '../email/email.service';
 import { ApprovalLinkService } from '../approvalLink/approvalLink.service';
+import { ApprovalLink } from '../../models/approvalLink/approvalLink.model';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { SettingsService } from '../settings/settings.service';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 import { socketService } from '../socket/socket.service';
 import {
     ICreateAppointmentDTO,
@@ -13,22 +16,103 @@ import {
     IGetAppointmentsQuery,
     IAppointmentListResponse,
     ICheckInRequest,
-    ICheckOutRequest,
-    IAppointmentStats,
-    IBulkUpdateAppointmentsDTO,
-    IAppointmentCalendarResponse,
-    IAppointmentSearchRequest
+    ICheckOutRequest
 } from '../../types/appointment/appointment.types';
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import { EmployeeUtil } from '../../utils/employee.util';
+
+export interface IDashboardStats {
+    totalAppointments: number;
+    pendingAppointments: number;
+    approvedAppointments: number;
+    rejectedAppointments: number;
+    completedAppointments: number;
+    upcomingAppointments: number;
+    todayAppointments: number;
+}
 
 export class AppointmentService {
+    /**
+     * Helper function to send socket notifications to admin and/or employee
+     * Notification Rules:
+     * 1. Admin approve/reject → Only Employee gets notification (admin performed action, so admin doesn't need notification)
+     * 2. Employee approve/reject/completed → Only Admin gets notification (employee performed action, so employee doesn't need notification)
+     * 3. Admin creates appointment → Only Employee gets notification (admin already knows they created it)
+     * 4. Visitor creates appointment via link → Both admin and employee get notification
+     * 
+     * @param actionBy - 'admin' if admin is performing the action, 'employee' if employee is performing the action, 'visitor' if visitor created via link
+     */
+    static async sendSocketNotificationToAdminAndEmployee(
+        _appointment: any,
+        populatedAppointment: any,
+        adminUserId: string,
+        eventType: 'created' | 'statusChange',
+        appointmentData: any,
+        showNotification: boolean = true,
+        actionBy: 'admin' | 'employee' | 'visitor' = 'admin'
+    ): Promise<void> {
+        try {
+            const adminUserIdString = adminUserId
+                ? (typeof adminUserId === 'string' ? adminUserId : (adminUserId as any)?.toString() || String(adminUserId))
+                : null;
+
+            const notifyUserIds = new Set<string>();
+
+            // 1. ADD ADMIN to notification list if:
+            // - Employee performed the action (admin needs to know employee approved/rejected/completed)
+            // - Visitor created appointment via link (admin should know about new appointments from visitors)
+            // - NOT if admin created the appointment (admin already knows they created it)
+            if (adminUserIdString && (actionBy === 'employee' || (eventType === 'created' && actionBy === 'visitor'))) {
+                notifyUserIds.add(adminUserIdString);
+            }
+
+            // 2. ADD EMPLOYEE to notification list if:
+            // - Admin performed the action (employee needs to know admin approved/rejected)
+            // - Appointment was created (employee should know about new appointments for them - whether by admin or visitor)
+            if (actionBy === 'admin' || actionBy === 'visitor' || (eventType === 'created')) {
+                const employeeId = populatedAppointment?.employeeId?._id || populatedAppointment?.employeeId;
+                if (employeeId) {
+                    const employeeUserId = await EmployeeUtil.getUserIdFromEmployeeId(employeeId.toString());
+                    if (employeeUserId) {
+                        notifyUserIds.add(employeeUserId);
+                    }
+                }
+            }
+
+            // 3. Emit to all collected users
+            for (const userId of notifyUserIds) {
+                try {
+                    if (eventType === 'created') {
+                        await socketService.emitAppointmentCreated(userId, appointmentData, showNotification);
+                    } else {
+                        await socketService.emitAppointmentStatusChange(userId, appointmentData, showNotification);
+                    }
+                } catch (socketError: any) {
+                    console.warn(`Failed to send socket notification to user ${userId}:`, socketError?.message || socketError);
+                }
+            }
+        } catch (socketError: any) {
+            console.error('Failed to send socket notification:', socketError?.message || socketError);
+        }
+    }
+
     @Transaction('Failed to create appointment')
-    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
-        const { session, sendNotifications = false } = options;
+    static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean; createdByVisitor?: boolean; adminUserId?: string; suppressEmails?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false, createdByVisitor = false, adminUserId, suppressEmails = false } = options;
+
+        // Check plan limits before creating appointment
+        // Use adminUserId if visitor is creating (from appointment link), otherwise use createdBy
+        const userIdForLimitCheck = adminUserId || createdBy;
+        try {
+            await UserSubscriptionService.checkPlanLimits(userIdForLimitCheck, 'appointments', false);
+        } catch (error: any) {
+            // Re-throw the error from checkPlanLimits
+            throw error;
+        }
 
         const employee = await Employee.findOne({ _id: appointmentData.employeeId, isDeleted: false }).session(session);
         if (!employee) {
@@ -58,119 +142,61 @@ export class AppointmentService {
         await appointment.save({ session });
 
         const populatedAppointment = await Appointment.findById(appointment._id)
-            .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('employeeId', 'name email phone department photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
+        // Only create approval link if appointment status is 'pending'
+        // If status is 'approved' (e.g., created via employee's appointment link), no approval needed
         let approvalLink = null;
-        try {
-            const appointmentId = (appointment._id as any).toString();
-            approvalLink = await ApprovalLinkService.createApprovalLink(appointmentId);
-        } catch {
-            // Approval link creation failed, continue without it
+        if (appointment.status === 'pending') {
+            try {
+                const appointmentId = (appointment._id as any).toString();
+                approvalLink = await ApprovalLinkService.createApprovalLink(appointmentId);
+            } catch (error: any) {
+                // Log error for debugging but continue without approval link
+                console.error('Failed to create approval link for appointment:', appointment._id, error?.message || error);
+                // Approval link creation failed, continue without it
+            }
         }
 
         const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
         const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
         const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
 
-        // 📧 Handle Email Notifications (Always send if enabled in settings)
+        // Get company name and profile picture (used as company logo) from user (createdBy) for email fromName and branding
+        let companyName: string | undefined;
+        let companyLogo: string | undefined;
         try {
-            if (populatedAppointment && emailEnabled && approvalLink?.token) {
-                await EmailService.sendNewAppointmentRequestEmail(
-                    (populatedAppointment.employeeId as any).email,
-                    (populatedAppointment.employeeId as any).name,
-                    populatedAppointment.visitorId as any,
-                    populatedAppointment.appointmentDetails.scheduledDate,
-                    populatedAppointment.appointmentDetails.scheduledTime,
-                    populatedAppointment.appointmentDetails.purpose,
-                    approvalLink.token
-                );
-                appointment.notifications.emailSent = true;
-            } else {
-                appointment.notifications.emailSent = false;
-            }
+            const user = await User.findById(createdBy).select('companyName profilePicture').lean();
+            companyName = user?.companyName;
+            companyLogo = user?.profilePicture || undefined; // Use profilePicture as company logo
         } catch (error) {
-            appointment.notifications.emailSent = false;
+            // If user not found or error, companyName and companyLogo will remain undefined
+            console.warn('Failed to fetch company name and logo for email:', error);
         }
 
-        // 📧 Send confirmation email to visitor (if enabled in settings)
-        try {
-            if (populatedAppointment && emailEnabled && (populatedAppointment.visitorId as any)?.email) {
-                await EmailService.sendAppointmentConfirmationEmail(
-                    (populatedAppointment.visitorId as any).email,
-                    (populatedAppointment.visitorId as any).name,
-                    (populatedAppointment.employeeId as any).name,
-                    populatedAppointment.appointmentDetails.scheduledDate,
-                    populatedAppointment.appointmentDetails.scheduledTime,
-                    populatedAppointment.appointmentDetails.purpose
-                );
+        // 🔔 Process all notifications (Email, WhatsApp, Socket) in background to reduce API latency
+        this.processBackgroundNotifications(
+            (appointment._id as any).toString(),
+            appointment.status,
+            populatedAppointment,
+            createdBy,
+            approvalLink,
+            {
+                emailEnabled,
+                whatsappEnabled,
+                smsEnabled,
+                sendNotifications,
+                createdByVisitor,
+                adminUserId,
+                companyName,
+                companyLogo,
+                suppressEmails
             }
-        } catch (error) {
-            // Visitor confirmation email failed, continue
-        }
+        ).catch(err => console.error('Background notification processing failed:', err));
 
-        // 📱 Send WhatsApp notification to employee (if enabled in settings)
-        try {
-            if (populatedAppointment && approvalLink?.link && whatsappEnabled) {
-                const employeePhone = (populatedAppointment.employeeId as any).phone;
-                const employeeName = (populatedAppointment.employeeId as any).name;
-
-                if (employeePhone) {
-                    const whatsappSent = await WhatsAppService.sendAppointmentNotification(
-                        employeePhone,
-                        employeeName,
-                        {
-                            name: (populatedAppointment.visitorId as any).name,
-                            email: (populatedAppointment.visitorId as any).email,
-                            phone: (populatedAppointment.visitorId as any).phone,
-                            company: (populatedAppointment.visitorId as any).company,
-                            _id: (populatedAppointment.visitorId as any)._id?.toString()
-                        },
-                        populatedAppointment.appointmentDetails.scheduledDate,
-                        populatedAppointment.appointmentDetails.scheduledTime,
-                        populatedAppointment.appointmentDetails.purpose,
-                        approvalLink.link,
-                        (populatedAppointment._id as any).toString()
-                    );
-
-                    // Mark WhatsApp as sent only if notification is enabled and sent successfully
-                    appointment.notifications.whatsappSent = whatsappSent;
-                } else {
-                    appointment.notifications.whatsappSent = false;
-                }
-            } else {
-                appointment.notifications.whatsappSent = false;
-            }
-        } catch (error) {
-            appointment.notifications.whatsappSent = false;
-        }
-
-        appointment.notifications.smsSent = false;
-        if (smsEnabled) {
-            // TODO: Implement SMS service when available
-        }
-
-        await appointment.save({ session });
-
-        try {
-            if (sendNotifications && populatedAppointment) {
-                const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
-                const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
-                const userId = (createdBy as any)?.toString() || createdBy;
-
-                if (userId) {
-                    socketService.emitAppointmentCreated(userId, {
-                        appointmentId: (appointment._id as any).toString(),
-                        appointment: serializedAppointment,
-                        status: appointment.status,
-                        createdAt: appointment.createdAt,
-                    }, sendNotifications);
-                }
-            }
-        } catch {
-            // Socket notification failed, continue
-        }
+        // Socket notification also moved to background process
 
         const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
         return {
@@ -179,10 +205,164 @@ export class AppointmentService {
         } as IAppointmentResponse;
     }
 
+    /**
+     * Process notifications (Email, WhatsApp, SMS, Socket) in background
+     * Does NOT use the original transaction session
+     */
+    private static async processBackgroundNotifications(
+        appointmentId: string,
+        status: string,
+        populatedAppointment: any,
+        createdBy: string,
+        approvalLink: any,
+        options: {
+            emailEnabled: boolean;
+            whatsappEnabled: boolean;
+            smsEnabled: boolean;
+            sendNotifications: boolean;
+            createdByVisitor?: boolean;
+            adminUserId?: string;
+            companyName?: string;
+            companyLogo?: string;
+            suppressEmails?: boolean;
+        }
+    ) {
+        const {
+            emailEnabled,
+            whatsappEnabled,
+            sendNotifications,
+            createdByVisitor,
+            adminUserId,
+            companyName,
+            companyLogo,
+            suppressEmails
+        } = options;
+
+        let emailSent = false;
+        let whatsappSent = false;
+
+        // 📧 Handle Email Notifications
+        try {
+            if (populatedAppointment && emailEnabled && !suppressEmails) {
+                const employeeEmail = (populatedAppointment.employeeId as any)?.email;
+                const employeeName = (populatedAppointment.employeeId as any)?.name;
+
+                if (status === 'approved') {
+                    if (employeeEmail) {
+                        const visitorName = (populatedAppointment.visitorId as any)?.name || 'Visitor';
+                        await EmailService.sendAppointmentConfirmationEmail(
+                            employeeEmail,
+                            employeeName,
+                            visitorName,
+                            populatedAppointment.appointmentDetails.scheduledDate,
+                            populatedAppointment.appointmentDetails.scheduledTime,
+                            populatedAppointment.appointmentDetails.purpose,
+                            companyName,
+                            companyLogo
+                        );
+                        emailSent = true;
+                    }
+                } else if (employeeEmail && approvalLink?.token) {
+                    await EmailService.sendNewAppointmentRequestEmail(
+                        employeeEmail,
+                        employeeName,
+                        populatedAppointment.visitorId as any,
+                        populatedAppointment.appointmentDetails.scheduledDate,
+                        populatedAppointment.appointmentDetails.scheduledTime,
+                        populatedAppointment.appointmentDetails.purpose,
+                        approvalLink.token,
+                        companyName,
+                        companyLogo
+                    );
+                    emailSent = true;
+                }
+            }
+        } catch (error: any) {
+            console.error('Failed to send appointment notification email (background):', error?.message || error);
+        }
+
+        // 📱 Send WhatsApp notification
+        try {
+            if (populatedAppointment && whatsappEnabled) {
+                const employeePhone = (populatedAppointment.employeeId as any)?.phone;
+                const employeeName = (populatedAppointment.employeeId as any)?.name;
+
+                if (status === 'pending' && employeePhone && approvalLink?.link) {
+                    const sent = await WhatsAppService.sendAppointmentNotification(
+                        employeePhone,
+                        employeeName,
+                        {
+                            name: (populatedAppointment.visitorId as any).name,
+                            email: (populatedAppointment.visitorId as any).email,
+                            phone: (populatedAppointment.visitorId as any).phone,
+                            _id: (populatedAppointment.visitorId as any)._id?.toString()
+                        },
+                        populatedAppointment.appointmentDetails.scheduledDate,
+                        populatedAppointment.appointmentDetails.scheduledTime,
+                        populatedAppointment.appointmentDetails.purpose,
+                        approvalLink.link,
+                        (populatedAppointment._id as any).toString()
+                    );
+                    whatsappSent = sent;
+                }
+            }
+        } catch (error: any) {
+            console.error('Failed to send WhatsApp notification (background):', error?.message || error);
+        }
+
+        // Update DB with notification status (New operation, no session)
+        if (emailSent || whatsappSent) {
+            try {
+                await Appointment.updateOne(
+                    { _id: appointmentId },
+                    {
+                        $set: {
+                            'notifications.emailSent': emailSent,
+                            'notifications.whatsappSent': whatsappSent,
+                            'notifications.smsSent': false
+                        }
+                    }
+                );
+            } catch (dbError) {
+                console.error('Failed to update notification status in DB:', dbError);
+            }
+        }
+
+        // 🔔 Send Socket Notification
+        try {
+            if (sendNotifications && populatedAppointment) {
+                const appointmentObj = populatedAppointment.toObject ? populatedAppointment.toObject({ virtuals: true }) : populatedAppointment;
+                const serializedAppointment = JSON.parse(JSON.stringify(appointmentObj));
+
+                const userIdForNotification = adminUserId || ((createdBy as any)?.toString() || createdBy);
+
+                const appointmentData = {
+                    appointmentId: appointmentId,
+                    appointment: serializedAppointment,
+                    status: status,
+                    createdAt: new Date(),
+                };
+
+                const actionBy = createdByVisitor ? 'visitor' : 'admin';
+                await this.sendSocketNotificationToAdminAndEmployee(
+                    null, // Pass null as we don't have the mongoose document in this context easily, or use populatedAppointment if compatible
+                    populatedAppointment,
+                    userIdForNotification,
+                    'created',
+                    appointmentData,
+                    sendNotifications,
+                    actionBy
+                );
+            }
+        } catch (socketError: any) {
+            console.error('Failed to send socket notification (background):', socketError?.message || socketError);
+        }
+    }
+
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+            .populate('employeeId', 'name email department designation phone photo')
+            .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -202,8 +382,8 @@ export class AppointmentService {
             throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
         }
         const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone')
-            .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+            .populate('employeeId', 'name email department designation phone photo')
+            .populate('visitorId', 'name email phone photo address idProof')
             .populate('createdBy', 'firstName lastName email')
             .populate('deletedBy', 'firstName lastName email');
 
@@ -216,8 +396,13 @@ export class AppointmentService {
 
     /**
      * Get all appointments with pagination and filtering (user-specific)
+     * @param query - Query parameters including filters
+     * @param adminUserId - Optional admin user ID for filtering admin's appointments
+     * Filter logic:
+     * - If employeeId is in query → filter by employeeId only (employee sees only their appointments)
+     * - If adminUserId is provided → filter by admin's employees (admin sees only appointments with their employees)
      */
-    static async getAllAppointments(query: IGetAppointmentsQuery = {}, userId?: string): Promise<IAppointmentListResponse> {
+    static async getAllAppointments(query: IGetAppointmentsQuery = {}, adminUserId?: string): Promise<IAppointmentListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -233,8 +418,40 @@ export class AppointmentService {
 
         const filter: any = { isDeleted: false };
 
-        if (userId) {
-            filter.createdBy = userId;
+        // SECURITY FIX: Filter appointments by admin's employees
+        // - Admin sees only appointments where employees belong to them (createdBy = adminUserId)
+        if (adminUserId) {
+            // Get all employees created by this admin
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id.toString());
+
+            if (adminEmployeeIds.length > 0) {
+                if (employeeId) {
+                    // If a specific employeeId is requested, verify they belong to this admin
+                    if (adminEmployeeIds.includes(employeeId.toString())) {
+                        filter.employeeId = toObjectId(employeeId);
+                    } else {
+                        // Employee doesn't belong to this admin, return empty result
+                        filter._id = null;
+                    }
+                } else {
+                    // No specific employee requested, show all admin's employees
+                    filter.employeeId = { $in: adminEmployeeIds.map(id => toObjectId(id)) };
+                }
+            } else {
+                // Admin has no employees, return empty result
+                filter._id = null;
+            }
+        } else if (employeeId) {
+            // Employee case: they only see their own appointments (id already filtered in controller)
+            const employeeIdObjectId = toObjectId(employeeId);
+            if (employeeIdObjectId) {
+                filter.employeeId = employeeIdObjectId;
+            }
         }
 
         if (search) {
@@ -245,8 +462,7 @@ export class AppointmentService {
                 $or: [
                     { name: searchRegex },
                     { phone: searchRegex },
-                    { email: searchRegex },
-                    { company: searchRegex }
+                    { email: searchRegex }
                 ]
             }).select('_id').lean();
 
@@ -263,11 +479,16 @@ export class AppointmentService {
             const employeeIds = matchingEmployees.map((e: any) => e._id);
 
             filter.$or = [
-                { _id: searchRegex },
                 { 'appointmentDetails.purpose': searchRegex },
                 { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
             ];
+
+            // If it's a valid ObjectId, search by ID directly
+            const searchId = toObjectId(search);
+            if (searchId) {
+                filter.$or.push({ _id: searchId });
+            }
 
             if (visitorIds.length > 0) {
                 filter.$or.push({ visitorId: { $in: visitorIds } });
@@ -276,10 +497,6 @@ export class AppointmentService {
             if (employeeIds.length > 0) {
                 filter.$or.push({ employeeId: { $in: employeeIds } });
             }
-        }
-
-        if (employeeId) {
-            filter.employeeId = employeeId;
         }
 
         if (status) {
@@ -329,8 +546,8 @@ export class AppointmentService {
 
         const [appointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
-                .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
+                .populate('employeeId', 'name email department designation phone photo')
+                .populate('visitorId', 'name email phone photo address idProof')
                 .populate('createdBy', 'firstName lastName email')
                 .populate('deletedBy', 'firstName lastName email')
                 .sort(sort)
@@ -355,24 +572,119 @@ export class AppointmentService {
     }
 
     /**
+     * Get appointment stats (optimized for dashboard)
+     * Uses MongoDB aggregation for efficient counting by status
+     */
+    static async getAppointmentStats(adminUserId?: string, employeeId?: string): Promise<{
+        total: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+        completed: number;
+        cancelled: number;
+    }> {
+        const filter: any = { isDeleted: false };
+
+        // SECURITY: Filter by admin's employees or specific employee
+        if (adminUserId) {
+            // Get all employees created by this admin
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id.toString());
+
+            if (adminEmployeeIds.length > 0) {
+                if (employeeId) {
+                    // Verify employee belongs to admin
+                    if (adminEmployeeIds.includes(employeeId.toString())) {
+                        filter.employeeId = toObjectId(employeeId);
+                    } else {
+                        // Invalid employee, return zeros
+                        return {
+                            total: 0,
+                            pending: 0,
+                            approved: 0,
+                            rejected: 0,
+                            completed: 0,
+                            cancelled: 0,
+                        };
+                    }
+                } else {
+                    // All admin's employees
+                    filter.employeeId = { $in: adminEmployeeIds.map(id => toObjectId(id)) };
+                }
+            } else {
+                // No employees, return zeros
+                return {
+                    total: 0,
+                    pending: 0,
+                    approved: 0,
+                    rejected: 0,
+                    completed: 0,
+                    cancelled: 0,
+                };
+            }
+        } else if (employeeId) {
+            // Employee case
+            filter.employeeId = toObjectId(employeeId);
+        }
+
+        // Use MongoDB aggregation for efficient counting
+        const stats = await Appointment.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const total = stats.reduce((sum, item) => sum + item.count, 0);
+        const pending = stats.find(s => s._id === 'pending')?.count || 0;
+        const approved = stats.find(s => s._id === 'approved')?.count || 0;
+        const rejected = stats.find(s => s._id === 'rejected')?.count || 0;
+        const completed = stats.find(s => s._id === 'completed')?.count || 0;
+        const cancelled = stats.find(s => s._id === 'cancelled')?.count || 0;
+
+        return {
+            total,
+            pending,
+            approved,
+            rejected,
+            completed,
+            cancelled,
+        };
+    }
+
+    /**
      * Update appointment
+     * @param options.actionBy - 'admin' if admin is updating, 'employee' if employee is updating
+     * @param options.sendNotifications - Whether to send socket notifications (only for status changes)
      */
     @Transaction('Failed to update appointment')
-    static async updateAppointment(appointmentId: string, updateData: IUpdateAppointmentDTO, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
+    static async updateAppointment(appointmentId: string, updateData: IUpdateAppointmentDTO, options: { session?: any; actionBy?: 'admin' | 'employee'; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, actionBy = 'admin', sendNotifications = false } = options;
+
+        // Get old appointment to detect status changes
+        const oldAppointment = await Appointment.findById(appointmentId).session(session);
+        if (!oldAppointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        const oldStatus = oldAppointment.status;
+        const isStatusChange = updateData.status && updateData.status !== oldStatus;
+        const isApprovalOrRejection = isStatusChange && (updateData.status === 'approved' || updateData.status === 'rejected');
 
         const cleanUpdateData = { ...updateData };
         delete (cleanUpdateData as any).session;
 
         if (updateData.appointmentDetails?.scheduledDate || updateData.appointmentDetails?.scheduledTime) {
-            const appointment = await Appointment.findById(appointmentId).session(session);
-            if (!appointment) {
-                throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
-            }
-
-            const scheduledDate = updateData.appointmentDetails?.scheduledDate || appointment.appointmentDetails.scheduledDate;
-            const scheduledTime = updateData.appointmentDetails?.scheduledTime || appointment.appointmentDetails.scheduledTime;
-            const employeeId = updateData.employeeId || appointment.employeeId.toString();
+            const scheduledDate = updateData.appointmentDetails?.scheduledDate || oldAppointment.appointmentDetails.scheduledDate;
+            const scheduledTime = updateData.appointmentDetails?.scheduledTime || oldAppointment.appointmentDetails.scheduledTime;
+            const employeeId = updateData.employeeId || oldAppointment.employeeId.toString();
 
             const conflictAppointment = await Appointment.findOne({
                 _id: { $ne: appointmentId },
@@ -399,6 +711,57 @@ export class AppointmentService {
 
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        // If status changed to approved/rejected, send notifications
+        if (isApprovalOrRejection && sendNotifications) {
+            // Mark approval link as used (expired) when status changes via dashboard
+            try {
+                await ApprovalLink.updateOne(
+                    { appointmentId: appointment._id },
+                    { isUsed: true }
+                ).session(session);
+            } catch (error) {
+                console.warn('Failed to mark approval link as used:', error);
+                // Don't throw - this is not critical
+            }
+
+            // Get user ID who created the appointment
+            let userId: string | null = null;
+            if (appointment.createdBy) {
+                if (typeof appointment.createdBy === 'string') {
+                    userId = appointment.createdBy;
+                } else if (typeof appointment.createdBy === 'object' && appointment.createdBy !== null) {
+                    userId = (appointment.createdBy as any)._id?.toString() || (appointment.createdBy as any).toString();
+                }
+            }
+
+            if (userId) {
+                // Re-populate with full details for socket emission
+                const populatedAppointment = await Appointment.findById(appointment._id)
+                    .populate('employeeId', 'name email phone department photo')
+                    .populate('visitorId', 'name email phone address idProof photo')
+                    .session(session);
+
+                if (populatedAppointment) {
+                    const appointmentData = {
+                        appointmentId: (appointment._id as any).toString(),
+                        status: appointment.status,
+                        updatedAt: new Date(),
+                        appointment: populatedAppointment
+                    };
+
+                    await this.sendSocketNotificationToAdminAndEmployee(
+                        appointment,
+                        populatedAppointment,
+                        userId,
+                        'statusChange',
+                        appointmentData,
+                        sendNotifications,
+                        actionBy
+                    );
+                }
+            }
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
@@ -459,16 +822,26 @@ export class AppointmentService {
         if (userId) {
             const populatedAppointment = await Appointment.findById(appointment._id as any)
                 .populate('employeeId', 'name email phone department')
-                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .session(session)
                 .lean();
 
-            socketService.emitAppointmentStatusChange(userId, {
+            const appointmentData = {
                 appointmentId: (appointment._id as any).toString(),
                 status: appointment.status,
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            }, false);
+            };
+
+            // Send socket notification to both admin and employee (background refresh, no popup)
+            await this.sendSocketNotificationToAdminAndEmployee(
+                appointment,
+                populatedAppointment,
+                userId,
+                'statusChange',
+                appointmentData,
+                false // No notification popup for check-in
+            );
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
@@ -476,10 +849,11 @@ export class AppointmentService {
 
     /**
      * Check out appointment
+     * @param options.actionBy - 'admin' if admin/security is completing, 'employee' if employee is completing
      */
     @Transaction('Failed to check out appointment')
-    static async checkOutAppointment(request: ICheckOutRequest, options: { session?: any } = {}): Promise<IAppointmentResponse> {
-        const { session } = options;
+    static async checkOutAppointment(request: ICheckOutRequest, options: { session?: any; actionBy?: 'admin' | 'employee'; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
+        const { session, actionBy = 'admin', sendNotifications = false } = options;
         const { appointmentId, notes } = request;
 
         const appointmentIdObjectId = toObjectId(appointmentId);
@@ -506,298 +880,48 @@ export class AppointmentService {
 
         await appointment.save({ session });
 
-        // 🔔 Emit background socket event for data refresh (no notification popup)
+        // 🔔 Send socket notification for live updates
+        // If employee completes → notify admin
+        // If admin/security completes → notify employee (optional, based on sendNotifications)
         const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
         if (userId) {
             const populatedAppointment = await Appointment.findById(appointment._id as any)
                 .populate('employeeId', 'name email phone department')
-                .populate('visitorId', 'name email phone company designation address idProof photo')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .session(session)
                 .lean();
 
-            socketService.emitAppointmentStatusChange(userId, {
+            const appointmentData = {
                 appointmentId: (appointment._id as any).toString(),
                 status: 'completed',
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            }, false);
+            };
+
+            // Send socket notification
+            // If employee completes → admin gets notification
+            // If admin completes → employee gets notification (if sendNotifications is true)
+            await this.sendSocketNotificationToAdminAndEmployee(
+                appointment,
+                populatedAppointment,
+                userId,
+                'statusChange',
+                appointmentData,
+                sendNotifications, // Show notification popup if requested
+                actionBy
+            );
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
-    /**
-     * Get appointment statistics (user-specific)
-     * @param userId - Optional user ID to filter by creator
-     * @param startDate - Optional start date for filtering (YYYY-MM-DD)
-     * @param endDate - Optional end date for filtering (YYYY-MM-DD)
-     */
-    static async getAppointmentStats(userId?: string, startDate?: string, endDate?: string): Promise<IAppointmentStats> {
-        const baseFilter: any = { isDeleted: false };
-        if (userId) {
-            baseFilter.createdBy = userId;
-        }
 
-        // Build date range filter
-        if (startDate && endDate) {
-            const start = new Date(startDate);
-            start.setHours(0, 0, 0, 0);
-            const endExclusive = new Date(endDate);
-            endExclusive.setDate(endExclusive.getDate() + 1);
-            endExclusive.setHours(0, 0, 0, 0);
 
-            baseFilter['appointmentDetails.scheduledDate'] = {
-                $gte: start,
-                $lt: endExclusive
-            };
-        } else if (startDate) {
-            const start = new Date(startDate);
-            start.setHours(0, 0, 0, 0);
-            const endExclusive = new Date(startDate);
-            endExclusive.setDate(endExclusive.getDate() + 1);
-            endExclusive.setHours(0, 0, 0, 0);
 
-            baseFilter['appointmentDetails.scheduledDate'] = {
-                $gte: start,
-                $lt: endExclusive
-            };
-        } else if (endDate) {
-            const endExclusive = new Date(endDate);
-            endExclusive.setDate(endExclusive.getDate() + 1);
-            endExclusive.setHours(0, 0, 0, 0);
 
-            baseFilter['appointmentDetails.scheduledDate'] = {
-                $lt: endExclusive
-            };
-        }
 
-        const [
-            totalAppointments,
-            scheduledAppointments,
-            checkedInAppointments,
-            completedAppointments,
-            cancelledAppointments,
-            noShowAppointments,
-            appointmentsByStatus,
-            appointmentsByEmployee,
-            appointmentsByDate
-        ] = await Promise.all([
-            Appointment.countDocuments(baseFilter),
-            Appointment.countDocuments({ ...baseFilter, status: 'scheduled' }),
-            Appointment.countDocuments({ ...baseFilter, status: 'checked_in' }),
-            Appointment.countDocuments({ ...baseFilter, status: 'completed' }),
-            Appointment.countDocuments({ ...baseFilter, status: 'cancelled' }),
-            Appointment.countDocuments({ ...baseFilter, status: 'no_show' }),
-            Appointment.aggregate([
-                { $match: baseFilter },
-                { $group: { _id: '$status', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ]),
-            Appointment.aggregate([
-                { $match: baseFilter },
-                { $group: { _id: '$employeeId', count: { $sum: 1 } } },
-                { $lookup: { from: 'employees', localField: '_id', foreignField: '_id', as: 'employee' } },
-                { $unwind: '$employee' },
-                { $project: { employeeId: '$_id', employeeName: '$employee.name', count: 1 } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Appointment.aggregate([
-                { $match: baseFilter },
-                {
-                    $group: {
-                        _id: {
-                            $dateToString: {
-                                format: '%Y-%m-%d',
-                                date: '$appointmentDetails.scheduledDate'
-                            }
-                        },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { _id: -1 } },
-                { $limit: 30 }
-            ])
-        ]);
 
-        return {
-            totalAppointments,
-            scheduledAppointments,
-            checkedInAppointments,
-            completedAppointments,
-            cancelledAppointments,
-            noShowAppointments,
-            appointmentsByStatus: appointmentsByStatus.map(item => ({
-                status: item._id,
-                count: item.count
-            })),
-            appointmentsByEmployee: appointmentsByEmployee.map(item => ({
-                employeeId: item.employeeId.toString(),
-                employeeName: item.employeeName,
-                count: item.count
-            })),
-            appointmentsByDate: appointmentsByDate.map(item => ({
-                date: item._id,
-                count: item.count
-            }))
-        };
-    }
 
-    /**
-     * Get appointments calendar view
-     */
-    static async getAppointmentsCalendar(startDate: string, endDate: string): Promise<IAppointmentCalendarResponse[]> {
-        const appointments = await Appointment.find({
-            'appointmentDetails.scheduledDate': {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            },
-            isDeleted: false
-        })
-            .populate('employeeId', 'name')
-            .populate('visitorId', 'name')
-            .sort({ 'appointmentDetails.scheduledDate': 1, 'appointmentDetails.scheduledTime': 1 })
-            .lean();
-
-        const appointmentsByDate = appointments.reduce((acc: any, appointment: any) => {
-            const date = appointment.appointmentDetails.scheduledDate.toISOString().split('T')[0];
-
-            if (!acc[date]) {
-                acc[date] = [];
-            }
-
-            acc[date].push({
-                _id: appointment._id.toString(),
-                visitorName: (appointment.visitorId as any)?.name || 'Unknown Visitor',
-                employeeName: (appointment.employeeId as any)?.name || 'Unknown Employee',
-                scheduledTime: appointment.appointmentDetails.scheduledTime,
-                duration: appointment.appointmentDetails.duration,
-                status: appointment.status,
-                purpose: appointment.appointmentDetails.purpose
-            });
-
-            return acc;
-        }, {});
-
-        return Object.entries(appointmentsByDate).map(([date, appointments]) => ({
-            date,
-            appointments: appointments as any[]
-        }));
-    }
-
-    /**
-     * Search appointments
-     */
-    static async searchAppointments(request: IAppointmentSearchRequest): Promise<IAppointmentListResponse> {
-        const { query, type, page = 1, limit = 10 } = request;
-
-        const filter: any = { isDeleted: false };
-        const escapedQuery = escapeRegex(query);
-
-        switch (type) {
-            case 'visitor_name':
-            case 'visitor_phone':
-            case 'visitor_email': {
-                // Search in Visitor collection first, then filter appointments by visitorId
-                const visitorSearchRegex = { $regex: escapedQuery, $options: 'i' };
-                const visitorFilter: any = {};
-
-                if (type === 'visitor_name') {
-                    visitorFilter.name = visitorSearchRegex;
-                } else if (type === 'visitor_phone') {
-                    visitorFilter.phone = visitorSearchRegex;
-                } else if (type === 'visitor_email') {
-                    visitorFilter.email = visitorSearchRegex;
-                }
-
-                const matchingVisitors = await Visitor.find(visitorFilter).select('_id').lean();
-                const visitorIds = matchingVisitors.map((v: any) => v._id);
-
-                if (visitorIds.length > 0) {
-                    filter.visitorId = { $in: visitorIds };
-                } else {
-                    // No matching visitors, return empty result
-                    filter.visitorId = { $in: [] };
-                }
-                break;
-            }
-            case 'appointment_id':
-                filter._id = { $regex: escapedQuery, $options: 'i' };
-                break;
-            case 'employee_name': {
-                // Search in Employee collection first, then filter appointments by employeeId
-                const employeeSearchRegex = { $regex: escapedQuery, $options: 'i' };
-                const matchingEmployees = await Employee.find({
-                    name: employeeSearchRegex
-                }).select('_id').lean();
-                const employeeIds = matchingEmployees.map((e: any) => e._id);
-
-                if (employeeIds.length > 0) {
-                    filter.employeeId = { $in: employeeIds };
-                } else {
-                    // No matching employees, return empty result
-                    filter.employeeId = { $in: [] };
-                }
-                break;
-            }
-        }
-
-        const skip = (page - 1) * limit;
-
-        const [appointments, totalAppointments] = await Promise.all([
-            Appointment.find(filter)
-                .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company purposeOfVisit photo designation address idProof')
-                .populate('createdBy', 'firstName lastName email')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean(),
-            Appointment.countDocuments(filter)
-        ]);
-
-        const totalPages = Math.ceil(totalAppointments / limit);
-
-        return {
-            appointments: appointments as unknown as IAppointmentResponse[],
-            pagination: {
-                currentPage: page,
-                totalPages,
-                totalAppointments,
-                hasNextPage: page < totalPages,
-                hasPrevPage: page > 1
-            }
-        };
-    }
-
-    /**
-     * Bulk update appointments
-     */
-    @Transaction('Failed to bulk update appointments')
-    static async bulkUpdateAppointments(bulkData: IBulkUpdateAppointmentsDTO, options: { session?: any } = {}): Promise<{ updatedCount: number }> {
-        const { session } = options;
-        const { appointmentIds, ...updateData } = bulkData;
-
-        const cleanUpdateData = Object.fromEntries(
-            Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
-        );
-
-        if (Object.keys(cleanUpdateData).length === 0) {
-            throw new AppError('No update data provided', ERROR_CODES.BAD_REQUEST);
-        }
-
-        const result = await Appointment.updateMany(
-            { _id: { $in: appointmentIds }, isDeleted: false },
-            cleanUpdateData,
-            { session }
-        );
-
-        if (result.matchedCount === 0) {
-            throw new AppError('No appointments found', ERROR_CODES.NOT_FOUND);
-        }
-
-        return { updatedCount: result.modifiedCount };
-    }
 
     /**
      * Cancel appointment
@@ -827,9 +951,10 @@ export class AppointmentService {
 
     /**
      * Approve appointment
+     * @param options.actionBy - 'admin' if admin is approving, 'employee' if employee is approving
      */
-    static async approveAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
-        const { session, sendNotifications = false } = options;
+    static async approveAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean; actionBy?: 'admin' | 'employee' } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false, actionBy = 'admin' } = options;
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
@@ -850,16 +975,37 @@ export class AppointmentService {
         // Re-populate after save to ensure populated fields are available for socket emission
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
         // Get user ID who created the appointment (for settings check)
-        const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+        // Handle both ObjectId and string formats
+        let userId: string | null = null;
+        if (appointment.createdBy) {
+            if (typeof appointment.createdBy === 'string') {
+                userId = appointment.createdBy;
+            } else if (typeof appointment.createdBy === 'object' && appointment.createdBy !== null) {
+                // Handle ObjectId or populated object
+                userId = (appointment.createdBy as any)._id?.toString() || (appointment.createdBy as any).toString();
+            }
+        }
 
         // Check settings for notifications
         const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
         const whatsappEnabled = userId ? await SettingsService.isWhatsAppEnabled(userId) : true;
         const smsEnabled = userId ? await SettingsService.isSmsEnabled(userId) : false;
+
+        // Get company name from user (createdBy) for email fromName
+        let companyName: string | undefined;
+        if (userId) {
+            try {
+                const user = await User.findById(userId).select('companyName').lean();
+                companyName = user?.companyName;
+            } catch (error) {
+                // If user not found or error, companyName will remain undefined
+                console.warn('Failed to fetch company name for email fromName:', error);
+            }
+        }
 
         // Send email notification to visitor (if enabled)
         try {
@@ -869,7 +1015,8 @@ export class AppointmentService {
                     (appointment.visitorId as any).name,
                     (appointment.employeeId as any).name,
                     appointment.appointmentDetails.scheduledDate,
-                    appointment.appointmentDetails.scheduledTime
+                    appointment.appointmentDetails.scheduledTime,
+                    companyName
                 );
             }
         } catch {
@@ -896,35 +1043,52 @@ export class AppointmentService {
         }
 
         if (smsEnabled) {
-            // TODO: Implement SMS service when available
+            // NOTE: SMS service integration pending
+            // Will send appointment approval notification via SMS provider
         }
 
-        try {
-            await EmailService.sendEmployeeAppointmentApprovalEmail(
-                (appointment.employeeId as any).email,
-                (appointment.employeeId as any).name,
-                (appointment.visitorId as any).name,
-                appointment.appointmentDetails.scheduledDate,
-                appointment.appointmentDetails.scheduledTime
-            );
-        } catch {
-            // Email sending failed, continue
-        }
+        // try {
+        //     await EmailService.sendEmployeeAppointmentApprovalEmail(
+        //         (appointment.employeeId as any).email,
+        //         (appointment.employeeId as any).name,
+        //         (appointment.visitorId as any).name,
+        //         appointment.appointmentDetails.scheduledDate,
+        //         appointment.appointmentDetails.scheduledTime,
+        //         companyName
+        //     );
+        // } catch {
+        //     // Email sending failed, continue
+        // }
 
+        // Send socket notification to both admin and employee
         if (populatedAppointment && userId) {
-            socketService.emitAppointmentStatusChange(userId, {
+            const appointmentData = {
                 appointmentId: (appointment._id as any).toString(),
                 status: 'approved',
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            }, sendNotifications);
+            };
+
+            await this.sendSocketNotificationToAdminAndEmployee(
+                appointment,
+                populatedAppointment,
+                userId,
+                'statusChange',
+                appointmentData,
+                sendNotifications,
+                actionBy
+            );
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
     }
 
-    static async rejectAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean } = {}): Promise<IAppointmentResponse> {
-        const { session, sendNotifications = false } = options;
+    /**
+     * Reject appointment
+     * @param options.actionBy - 'admin' if admin is rejecting, 'employee' if employee is rejecting
+     */
+    static async rejectAppointment(appointmentId: string, options: { session?: any; sendNotifications?: boolean; actionBy?: 'admin' | 'employee' } = {}): Promise<IAppointmentResponse> {
+        const { session, sendNotifications = false, actionBy = 'admin' } = options;
 
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
             .populate('employeeId', 'name email')
@@ -943,18 +1107,39 @@ export class AppointmentService {
         await appointment.save({ session });
 
         // Get user ID who created the appointment (for settings check)
-        const userId = (appointment.createdBy as any)?.toString() || appointment.createdBy;
+        // Handle both ObjectId and string formats
+        let userId: string | null = null;
+        if (appointment.createdBy) {
+            if (typeof appointment.createdBy === 'string') {
+                userId = appointment.createdBy;
+            } else if (typeof appointment.createdBy === 'object' && appointment.createdBy !== null) {
+                // Handle ObjectId or populated object
+                userId = (appointment.createdBy as any)._id?.toString() || (appointment.createdBy as any).toString();
+            }
+        }
 
         // Re-populate after save to ensure populated fields are available for socket emission
         const populatedAppointment = await Appointment.findById(appointment._id)
             .populate('employeeId', 'name email phone department')
-            .populate('visitorId', 'name email phone company designation address idProof photo')
+            .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
         // Check settings for notifications
         const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
         const whatsappEnabled = userId ? await SettingsService.isWhatsAppEnabled(userId) : true;
         const smsEnabled = userId ? await SettingsService.isSmsEnabled(userId) : false;
+
+        // Get company name from user (createdBy) for email fromName
+        let companyName: string | undefined;
+        if (userId) {
+            try {
+                const user = await User.findById(userId).select('companyName').lean();
+                companyName = user?.companyName;
+            } catch (error) {
+                // If user not found or error, companyName will remain undefined
+                console.warn('Failed to fetch company name for email fromName:', error);
+            }
+        }
 
         // Send email notification to visitor (if enabled)
         try {
@@ -964,7 +1149,8 @@ export class AppointmentService {
                     (appointment.visitorId as any).name,
                     (appointment.employeeId as any).name,
                     appointment.appointmentDetails.scheduledDate,
-                    appointment.appointmentDetails.scheduledTime
+                    appointment.appointmentDetails.scheduledTime,
+                    companyName
                 );
             }
         } catch {
@@ -991,30 +1177,204 @@ export class AppointmentService {
         }
 
         if (smsEnabled) {
-            // TODO: Implement SMS service when available
+            // NOTE: SMS service integration pending
+            // Will send appointment rejection notification via SMS provider
         }
 
-        try {
-            await EmailService.sendEmployeeAppointmentRejectionEmail(
-                (appointment.employeeId as any).email,
-                (appointment.employeeId as any).name,
-                (appointment.visitorId as any).name,
-                appointment.appointmentDetails.scheduledDate,
-                appointment.appointmentDetails.scheduledTime
-            );
-        } catch {
-            // Email sending failed, continue
-        }
+        // try {
+        //     await EmailService.sendEmployeeAppointmentRejectionEmail(
+        //         (appointment.employeeId as any).email,
+        //         (appointment.employeeId as any).name,
+        //         (appointment.visitorId as any).name,
+        //         appointment.appointmentDetails.scheduledDate,
+        //         appointment.appointmentDetails.scheduledTime,
+        //         companyName
+        //     );
+        // } catch {
+        //     // Email sending failed, continue
+        // }
 
+        // Send socket notification to both admin and employee
         if (populatedAppointment && userId) {
-            socketService.emitAppointmentStatusChange(userId, {
+            const appointmentData = {
                 appointmentId: (appointment._id as any).toString(),
                 status: 'rejected',
                 updatedAt: new Date(),
                 appointment: populatedAppointment
-            }, sendNotifications);
+            };
+
+            await this.sendSocketNotificationToAdminAndEmployee(
+                appointment,
+                populatedAppointment,
+                userId,
+                'statusChange',
+                appointmentData,
+                sendNotifications,
+                actionBy
+            );
         }
 
         return appointment.toObject() as unknown as IAppointmentResponse;
+    }
+
+    /**
+     * Get dashboard statistics (unified for admin and employee)
+     * @param employeeId - Optional. If provided, filters by employee (for employees)
+     * @param adminUserId - Optional. If provided, filters by admin's employees (for admin)
+     * @returns Dashboard statistics
+     */
+    static async getDashboardStats(employeeId?: string, adminUserId?: string): Promise<IDashboardStats> {
+        // Get today's date range
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        // Get future date for upcoming appointments
+        const now = new Date();
+
+        // Build match filter
+        const matchFilter: any = { isDeleted: false };
+
+        // If employeeId is provided, filter by employee (for employees)
+        // If adminUserId is provided, filter by admin's employees (for admin)
+        if (employeeId) {
+            const employeeIdObjectId = toObjectId(employeeId);
+            if (!employeeIdObjectId) {
+                throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+            }
+            matchFilter.employeeId = employeeIdObjectId;
+        } else if (adminUserId) {
+            // SECURITY FIX: Filter stats by admin's employees
+            const adminEmployees = await Employee.find({
+                createdBy: adminUserId,
+                isDeleted: false
+            }).select('_id').lean();
+
+            const adminEmployeeIds = adminEmployees.map((e: any) => e._id);
+
+            if (adminEmployeeIds.length > 0) {
+                matchFilter.employeeId = { $in: adminEmployeeIds };
+            } else {
+                // Admin has no employees, return zero stats
+                matchFilter._id = null; // This will return no results
+            }
+        }
+
+        // OPTIMIZED: Use single aggregation pipeline instead of 7 separate countDocuments
+        // This is 10-50x faster on large datasets (10+ lakhs records)
+        const statsResult = await Appointment.aggregate([
+            {
+                $match: matchFilter
+            },
+            {
+                $facet: {
+                    total: [{ $count: 'count' }],
+                    pending: [
+                        { $match: { status: 'pending' } },
+                        { $count: 'count' }
+                    ],
+                    approved: [
+                        { $match: { status: 'approved' } },
+                        { $count: 'count' }
+                    ],
+                    rejected: [
+                        { $match: { status: 'rejected' } },
+                        { $count: 'count' }
+                    ],
+                    completed: [
+                        { $match: { status: 'completed' } },
+                        { $count: 'count' }
+                    ],
+                    upcoming: [
+                        {
+                            $match: {
+                                status: 'approved',
+                                'appointmentDetails.scheduledDate': { $gte: now }
+                            }
+                        },
+                        { $count: 'count' }
+                    ],
+                    today: [
+                        {
+                            $match: {
+                                'appointmentDetails.scheduledDate': {
+                                    $gte: todayStart,
+                                    $lte: todayEnd
+                                }
+                            }
+                        },
+                        { $count: 'count' }
+                    ]
+                }
+            }
+        ]);
+
+        // Extract counts from aggregation result
+        const stats = statsResult[0];
+        const total = stats.total[0]?.count || 0;
+        const pending = stats.pending[0]?.count || 0;
+        const approved = stats.approved[0]?.count || 0;
+        const rejected = stats.rejected[0]?.count || 0;
+        const completed = stats.completed[0]?.count || 0;
+        const upcoming = stats.upcoming[0]?.count || 0;
+        const today = stats.today[0]?.count || 0;
+
+        return {
+            totalAppointments: total,
+            pendingAppointments: pending,
+            approvedAppointments: approved,
+            rejectedAppointments: rejected,
+            completedAppointments: completed,
+            upcomingAppointments: upcoming,
+            todayAppointments: today
+        };
+    }
+
+    /**
+     * Resend appointment notification
+     */
+    static async resendNotification(appointmentId: string): Promise<void> {
+        const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
+            .populate('employeeId', 'name email phone department photo')
+            .populate('visitorId', 'name email phone address idProof photo');
+
+        if (!appointment) {
+            throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
+        }
+
+        if (appointment.status !== 'pending') {
+            throw new AppError('Notifications can only be resent for pending appointments', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Find existing approval link
+        const approvalLink = await ApprovalLink.findOne({ appointmentId: appointment._id });
+
+        const createdBy = (appointment.createdBy as any).toString() || appointment.createdBy;
+        const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
+        const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
+        const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
+
+        // Get company name and logo
+        const user = await User.findById(createdBy).select('companyName profilePicture').lean();
+        const companyName = user?.companyName;
+        const companyLogo = user?.profilePicture || undefined;
+
+        // Trigger background notifications
+        this.processBackgroundNotifications(
+            (appointment._id as any).toString(),
+            appointment.status,
+            appointment,
+            createdBy,
+            approvalLink,
+            {
+                emailEnabled,
+                whatsappEnabled,
+                smsEnabled,
+                sendNotifications: true,
+                companyName,
+                companyLogo
+            }
+        ).catch(err => console.error('Resend background notification failed:', err));
     }
 }

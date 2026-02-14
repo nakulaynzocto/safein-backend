@@ -5,14 +5,13 @@ import { ResponseUtil } from '../../utils';
 import {
     ICreateVisitorDTO,
     IUpdateVisitorDTO,
-    IGetVisitorsQuery,
-    IBulkUpdateVisitorsDTO,
-    IVisitorSearchQuery
+    IGetVisitorsQuery
 } from '../../types/visitor/visitor.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class VisitorController {
     /**
@@ -33,17 +32,39 @@ export class VisitorController {
     /**
      * Get all visitors with pagination and filtering (user-specific)
      * GET /api/visitors
+     * - Admin: sees only THEIR OWN visitors (created by them or their employees)
+     * - Employee: sees only visitors they created (if any)
      */
     @TryCatch('Failed to get visitors')
     static async getAllVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const query: IGetVisitorsQuery = req.query;
         const userId = req.user._id.toString();
+
+        // SECURITY FIX: Always pass userId to filter by admin's createdBy
+        // - For admin: shows visitors created by this admin (their own data)
+        // - For employee: shows visitors created by this employee (if any)
         const result = await VisitorService.getAllVisitors(query, userId);
         ResponseUtil.success(res, 'Visitors retrieved successfully', result);
+    }
+
+    /**
+     * Get visitor count (optimized for dashboard)
+     * GET /api/visitors/count
+     */
+    @TryCatch('Failed to get visitor count')
+    static async getVisitorCount(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const count = await VisitorService.getVisitorCount(userId);
+
+        ResponseUtil.success(res, 'Visitor count retrieved successfully', count);
     }
 
     /**
@@ -55,17 +76,18 @@ export class VisitorController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const userId = req.user._id.toString();
-        
+
         const visitor = await VisitorService.getVisitorById(id);
-        
+        const adminId = await EmployeeUtil.getAdminId(userId);
+
         const visitorRecord = await Visitor.findById(id);
-        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
         }
-        
+
         ResponseUtil.success(res, 'Visitor retrieved successfully', visitor);
     }
 
@@ -78,16 +100,18 @@ export class VisitorController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const updateData: IUpdateVisitorDTO = req.body;
         const userId = req.user._id.toString();
-        
+
+        const adminId = await EmployeeUtil.getAdminId(userId);
+
         const visitorRecord = await Visitor.findById(id);
-        if (!visitorRecord || visitorRecord.createdBy.toString() !== userId) {
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
             throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
         }
-        
+
         const visitor = await VisitorService.updateVisitor(id, updateData);
         ResponseUtil.success(res, 'Visitor updated successfully', visitor);
     }
@@ -102,7 +126,15 @@ export class VisitorController {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
         const { id } = req.params;
-        const deletedBy = req.user._id.toString();
+        const userId = req.user._id.toString();
+        const adminId = await EmployeeUtil.getAdminId(userId);
+
+        const visitorRecord = await Visitor.findById(id);
+        if (!visitorRecord || visitorRecord.createdBy.toString() !== adminId) {
+            throw new AppError('Visitor not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        const deletedBy = userId;
         await VisitorService.deleteVisitor(id, deletedBy);
         ResponseUtil.success(res, 'Visitor deleted successfully');
     }
@@ -116,66 +148,15 @@ export class VisitorController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const result = await VisitorService.hasAppointments(id);
         ResponseUtil.success(res, 'Appointment check completed', result);
     }
 
-    /**
-     * Bulk update visitors (user-specific)
-     * PUT /api/visitors/bulk-update
-     */
-    @TryCatch('Failed to bulk update visitors')
-    static async bulkUpdateVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const bulkData: IBulkUpdateVisitorsDTO = req.body;
-        const userId = req.user._id.toString();
-        
-        const visitors = await Visitor.find({ 
-            _id: { $in: bulkData.visitorIds },
-            createdBy: userId 
-        });
-        
-        if (visitors.length !== bulkData.visitorIds.length) {
-            throw new AppError('Some visitors not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const result = await VisitorService.bulkUpdateVisitors(bulkData);
-        ResponseUtil.success(res, 'Visitors updated successfully', result);
-    }
 
-    /**
-     * Search visitors by phone or email (user-specific)
-     * POST /api/visitors/search
-     */
-    @TryCatch('Failed to search visitors')
-    static async searchVisitors(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const searchQuery: IVisitorSearchQuery = req.body;
-        const userId = req.user._id.toString();
-        const result = await VisitorService.searchVisitors(searchQuery, userId);
-        ResponseUtil.success(res, result.message, result);
-    }
 
-    /**
-     * Get visitor statistics (user-specific)
-     * GET /api/visitors/stats
-     */
-    @TryCatch('Failed to get visitor statistics')
-    static async getVisitorStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const userId = req.user._id.toString();
-        const stats = await VisitorService.getVisitorStats(userId);
-        ResponseUtil.success(res, 'Visitor statistics retrieved successfully', stats);
-    }
+
+
+
 }

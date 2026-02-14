@@ -5,17 +5,14 @@ import {
     IUpdateVisitorDTO,
     IVisitorResponse,
     IGetVisitorsQuery,
-    IVisitorListResponse,
-    IBulkUpdateVisitorsDTO,
-    IVisitorStats,
-    IVisitorSearchQuery,
-    IVisitorSearchResponse
+    IVisitorListResponse
 } from '../../types/visitor/visitor.types';
 import { ERROR_MESSAGES, ERROR_CODES } from '../../utils';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class VisitorService {
     /**
@@ -30,17 +27,23 @@ export class VisitorService {
             throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
         }
 
+        // Get admin ID - Visitors belong to the company (admin)
+        const adminId = await EmployeeUtil.getAdminId(createdBy);
+        const adminIdObjectId = toObjectId(adminId);
+
+        const normalizedEmail = visitorData.email.toLowerCase().trim();
+
         const existingVisitor = await Visitor.findOne({
-            email: visitorData.email,
-            createdBy: createdByObjectId
+            email: normalizedEmail,
+            createdBy: adminIdObjectId
         }).session(session);
 
         // If a visitor exists with the same email but is soft-deleted, restore it instead of blocking.
-        // This matches the expected behavior: deleted records should not prevent re-creation.
         if (existingVisitor) {
             if ((existingVisitor as any).isDeleted === true) {
                 existingVisitor.set({
                     ...visitorData,
+                    email: normalizedEmail,
                     isDeleted: false,
                     deletedAt: null,
                     deletedBy: null
@@ -51,7 +54,11 @@ export class VisitorService {
             throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        const visitor = new Visitor({ ...visitorData, createdBy: createdByObjectId });
+        const visitor = new Visitor({
+            ...visitorData,
+            email: normalizedEmail,
+            createdBy: adminIdObjectId
+        });
         await visitor.save({ session });
 
         return visitor.toObject() as unknown as IVisitorResponse;
@@ -92,9 +99,11 @@ export class VisitorService {
         } = query;
 
         const filter: any = { isDeleted: false };
-        
+
         if (userId) {
-            filter.createdBy = userId;
+            // Filter by admin ID to show all company visitors
+            const adminId = await EmployeeUtil.getAdminId(userId);
+            filter.createdBy = toObjectId(adminId);
         }
 
         if (search) {
@@ -103,8 +112,6 @@ export class VisitorService {
                 { name: { $regex: escapedSearch, $options: 'i' } },
                 { email: { $regex: escapedSearch, $options: 'i' } },
                 { phone: { $regex: escapedSearch, $options: 'i' } },
-                { company: { $regex: escapedSearch, $options: 'i' } },
-                { designation: { $regex: escapedSearch, $options: 'i' } },
                 { 'address.street': { $regex: escapedSearch, $options: 'i' } },
                 { 'address.city': { $regex: escapedSearch, $options: 'i' } },
                 { 'address.state': { $regex: escapedSearch, $options: 'i' } },
@@ -174,6 +181,22 @@ export class VisitorService {
     }
 
     /**
+     * Get visitor count (optimized for dashboard)
+     */
+    static async getVisitorCount(userId?: string): Promise<{ total: number }> {
+        const filter: any = { isDeleted: false };
+
+        if (userId) {
+            // Filter by admin ID to count all company visitors
+            const adminId = await EmployeeUtil.getAdminId(userId);
+            filter.createdBy = toObjectId(adminId);
+        }
+
+        const total = await Visitor.countDocuments(filter);
+        return { total };
+    }
+
+    /**
      * Update visitor
      */
     @Transaction('Failed to update visitor')
@@ -194,8 +217,9 @@ export class VisitorService {
         }
 
         if (safeUpdateData.email) {
+            const normalizedEmail = safeUpdateData.email.toLowerCase().trim();
             const existingEmail = await Visitor.findOne({
-                email: safeUpdateData.email,
+                email: normalizedEmail,
                 createdBy: existingVisitor.createdBy,
                 _id: { $ne: visitorIdObjectId }
             }).session(session);
@@ -206,6 +230,7 @@ export class VisitorService {
                     ERROR_CODES.CONFLICT
                 );
             }
+            safeUpdateData.email = normalizedEmail;
         }
 
         const visitor = await Visitor.findByIdAndUpdate(
@@ -233,8 +258,8 @@ export class VisitorService {
             throw new AppError('Invalid visitor ID format', ERROR_CODES.BAD_REQUEST);
         }
 
-        const count = await Appointment.countDocuments({ 
-            visitorId: visitorIdObjectId, 
+        const count = await Appointment.countDocuments({
+            visitorId: visitorIdObjectId,
             isDeleted: false,
             status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
         });
@@ -264,9 +289,9 @@ export class VisitorService {
         }
 
         // Check if any appointments exist for this visitor
-        const existingAppointments = await Appointment.countDocuments({ 
-            visitorId: visitorIdObjectId, 
-            isDeleted: false 
+        const existingAppointments = await Appointment.countDocuments({
+            visitorId: visitorIdObjectId,
+            isDeleted: false
         }).session(session);
 
         if (existingAppointments > 0) {
@@ -280,142 +305,9 @@ export class VisitorService {
     }
 
 
-    /**
-     * Bulk update visitors
-     */
-    @Transaction('Failed to bulk update visitors')
-    static async bulkUpdateVisitors(bulkData: IBulkUpdateVisitorsDTO, options: { session?: any } = {}): Promise<{ updatedCount: number }> {
-        const { session } = options;
-        const { visitorIds, ...updateData } = bulkData;
 
-        const cleanUpdateData = Object.fromEntries(
-            Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
-        );
 
-        if (Object.keys(cleanUpdateData).length === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_UPDATE_DATA, ERROR_CODES.BAD_REQUEST);
-        }
 
-        const result = await Visitor.updateMany(
-            { _id: { $in: visitorIds }, isDeleted: false },
-            cleanUpdateData,
-            { session }
-        );
 
-        if (result.matchedCount === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_VISITORS_FOUND, ERROR_CODES.NOT_FOUND);
-        }
 
-        return { updatedCount: result.modifiedCount };
-    }
-
-    /**
-     * Search visitors by phone or email
-     */
-    static async searchVisitors(searchQuery: IVisitorSearchQuery, userId?: string): Promise<IVisitorSearchResponse> {
-        const { phone, email } = searchQuery;
-
-        const searchCriteria: any = { isDeleted: false };
-        
-        if (userId) {
-            searchCriteria.createdBy = userId;
-        }
-
-        if (phone && email) {
-            searchCriteria.$or = [
-                { phone: phone },
-                { email: email }
-            ];
-        } else if (phone) {
-            searchCriteria.phone = phone;
-        } else if (email) {
-            searchCriteria.email = email;
-        } else {
-            throw new AppError('Either phone or email must be provided for search', ERROR_CODES.BAD_REQUEST);
-        }
-
-        const visitors = await Visitor.find(searchCriteria).sort({ createdAt: -1 });
-        const visitorResponses = visitors.map(visitor => visitor.toObject() as unknown as IVisitorResponse);
-
-        return {
-            visitors: visitorResponses,
-            found: visitorResponses.length > 0,
-            message: visitorResponses.length > 0 
-                ? `Found ${visitorResponses.length} visitor(s)` 
-                : 'No visitors found with the provided criteria'
-        };
-    }
-
-    /**
-     * Get visitor statistics (user-specific)
-     */
-    static async getVisitorStats(userId?: string): Promise<IVisitorStats> {
-        const baseFilter: any = {};
-        if (userId) {
-            baseFilter.createdBy = userId;
-        }
-
-        const [
-            totalVisitors,
-            deletedVisitors,
-            visitorsByCity,
-            visitorsByState,
-            visitorsByCountry,
-            visitorsByIdProofType
-        ] = await Promise.all([
-            Visitor.countDocuments({ ...baseFilter, isDeleted: false }),
-            Visitor.countDocuments({ ...baseFilter, isDeleted: true }),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.city', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.city', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.state', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$address.country', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Visitor.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$idProof.type', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ])
-        ]);
-
-        return {
-            totalVisitors,
-            deletedVisitors,
-            visitorsByCity: visitorsByCity.map((item: any) => ({
-                city: item._id,
-                count: item.count
-            })),
-            visitorsByState: visitorsByState.map((item: any) => ({
-                state: item._id,
-                count: item.count
-            })),
-            visitorsByCountry: visitorsByCountry.map((item: any) => ({
-                country: item._id,
-                count: item.count
-            })),
-            visitorsByIdProofType: visitorsByIdProofType.map((item: any) => ({
-                idProofType: item._id,
-                count: item.count
-            }))
-        };
-    }
 }

@@ -227,6 +227,7 @@ const appointmentSchema = new Schema<IAppointment>(
     }
 );
 
+// Single field indexes
 appointmentSchema.index({ employeeId: 1 });
 appointmentSchema.index({ visitorId: 1 });
 appointmentSchema.index({ 'appointmentDetails.scheduledDate': 1 });
@@ -234,7 +235,17 @@ appointmentSchema.index({ status: 1 });
 appointmentSchema.index({ createdBy: 1 });
 appointmentSchema.index({ isDeleted: 1 });
 appointmentSchema.index({ createdAt: -1 });
+
+// Compound indexes for common query patterns (CRITICAL for performance with large datasets)
+// These indexes dramatically improve query performance on 10+ lakhs records
 appointmentSchema.index({ employeeId: 1, 'appointmentDetails.scheduledDate': 1 });
+appointmentSchema.index({ employeeId: 1, status: 1, isDeleted: 1 }); // For dashboard stats
+appointmentSchema.index({ employeeId: 1, 'appointmentDetails.scheduledDate': 1, isDeleted: 1 }); // For date range queries
+appointmentSchema.index({ createdBy: 1, isDeleted: 1, createdAt: -1 }); // For admin appointment lists
+appointmentSchema.index({ status: 1, isDeleted: 1, createdAt: -1 }); // For status-based queries with sorting
+appointmentSchema.index({ isDeleted: 1, createdAt: -1 }); // For default sorted lists
+appointmentSchema.index({ employeeId: 1, status: 1, 'appointmentDetails.scheduledDate': 1, isDeleted: 1 }); // For upcoming appointments
+appointmentSchema.index({ createdBy: 1, 'appointmentDetails.scheduledDate': 1, isDeleted: 1 }); // For User dashboard counts
 
 
 appointmentSchema.virtual('visitorFullName').get(function () {

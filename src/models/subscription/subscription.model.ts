@@ -9,11 +9,13 @@ export interface ISubscriptionPlan extends Document {
     name: string;
     description?: string;
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-    amount: number; // in cents
+    amount: number; // in rupees (INR)
+    taxPercentage: number; // GST/Tax in percentage
     currency: string;
     features: string[];
     isActive: boolean;
     isPopular: boolean;
+    isPublic: boolean; // true = public, false = super admin only
     trialDays?: number;
     sortOrder: number;
     discountPercentage?: number;
@@ -23,6 +25,11 @@ export interface ISubscriptionPlan extends Document {
     deletedBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
+    limits: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+    };
 }
 
 const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -51,10 +58,16 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
             required: [true, 'Amount is required'],
             min: [0, 'Amount cannot be negative'],
         },
+        taxPercentage: {
+            type: Number,
+            default: 0,
+            min: [0, 'Tax percentage cannot be negative'],
+            max: [100, 'Tax percentage cannot exceed 100'],
+        },
         currency: {
             type: String,
             required: [true, 'Currency is required'],
-            default: 'usd',
+            default: 'inr',
             lowercase: true,
             length: [3, 'Currency must be a 3-letter code'],
         },
@@ -72,6 +85,10 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
         isPopular: {
             type: Boolean,
             default: false,
+        },
+        isPublic: {
+            type: Boolean,
+            default: true, // true = visible to all, false = super admin only
         },
         trialDays: {
             type: Number,
@@ -107,6 +124,20 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
             ref: 'User',
             default: null,
         },
+        limits: {
+            employees: {
+                type: Number,
+                default: -1,
+            },
+            visitors: {
+                type: Number,
+                default: -1,
+            },
+            appointments: {
+                type: Number,
+                default: -1,
+            },
+        },
     },
     {
         timestamps: true,
@@ -121,8 +152,8 @@ subscriptionPlanSchema.index({ createdAt: -1 });
 subscriptionPlanSchema.index({ isPopular: 1 });
 
 subscriptionPlanSchema.virtual('formattedPrice').get(function () {
-    const price = (this.amount / 100).toFixed(2);
-    return `$${price}`;
+    const price = this.amount.toFixed(2);
+    return `₹${price}`;
 });
 
 subscriptionPlanSchema.virtual('monthlyEquivalent').get(function () {
@@ -143,6 +174,28 @@ subscriptionPlanSchema.virtual('savingsPercentage').get(function () {
         return 10;
     }
     return 0;
+});
+
+subscriptionPlanSchema.virtual('totalAmount').get(function () {
+    const tax = this.taxPercentage || 0;
+    const total = this.amount + (this.amount * tax) / 100;
+    return Math.round(total);
+});
+
+subscriptionPlanSchema.virtual('duration').get(function () {
+    switch (this.planType) {
+        case 'weekly':
+            return 7;
+        case 'monthly':
+            return 30;
+        case 'quarterly':
+            return 90;
+        case 'yearly':
+            return 365;
+        case 'free':
+        default:
+            return 30; // default to 30 days
+    }
 });
 
 subscriptionPlanSchema.methods.hasTrial = function (): boolean {

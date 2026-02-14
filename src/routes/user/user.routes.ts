@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { UserController } from '../../controllers/user/user.controller';
 import {
     protect,
+    verifyTokenOptional,
     validateRequest,
     passwordResetLimiter,
     userLimiter
@@ -12,6 +13,7 @@ import {
     checkAccountLock,
     loginAttemptTracker
 } from '../../middlewares/security';
+import { decryptLoginPayload, decryptRegisterPayload } from '../../middlewares/auth/decrypt';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
 import {
     createUserValidation,
@@ -30,14 +32,16 @@ const router = Router();
 
 router.post('/register',
     authLimiter,
+    decryptRegisterPayload,
     validateRequest(createUserValidation),
     asyncWrapper(UserController.register)
 );
 
 router.post('/login',
-    authLimiter,
+    // authLimiter,
     bruteForceProtection,
     checkAccountLock,
+    decryptLoginPayload,
     validateRequest(loginValidation),
     loginAttemptTracker,
     asyncWrapper(UserController.login)
@@ -56,6 +60,12 @@ router.post('/reset-password',
     asyncWrapper(UserController.resetPassword)
 );
 
+router.post('/setup-employee-password',
+    passwordResetLimiter,
+    validateRequest(resetPasswordValidation),
+    asyncWrapper(UserController.setupEmployeePassword)
+);
+
 router.post('/verify-otp',
     authLimiter,
     validateRequest(verifyOtpValidation),
@@ -67,6 +77,15 @@ router.post('/resend-otp',
     validateRequest(resendOtpValidation),
     asyncWrapper(UserController.resendOtp)
 );
+
+router.post('/exchange-impersonation-token',
+    authLimiter,
+    asyncWrapper(UserController.exchangeImpersonationToken)
+);
+
+// Logout should be idempotent: allow calling without Authorization header
+// This prevents noisy 401s during auth transitions (e.g., registration/login flows)
+router.post('/logout', verifyTokenOptional, asyncWrapper(UserController.logout));
 
 router.use(protect);
 router.use(userLimiter);
@@ -81,7 +100,6 @@ router.post('/change-password',
     validateRequest(changePasswordValidation),
     asyncWrapper(UserController.changePassword)
 );
-router.post('/logout', asyncWrapper(UserController.logout));
 
 router.get('/:id',
     validateRequest(getUserByIdValidation),

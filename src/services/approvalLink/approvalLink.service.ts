@@ -7,7 +7,7 @@ import { socketService } from '../socket/socket.service';
 
 export class ApprovalLinkService {
     private static getBaseUrl(): string {
-        const url = process.env.APPROVAL_LINK_BASE_URL || '';
+        const url = process.env.FRONTEND_URL || 'http://localhost:3000';
         return url.replace(/\/$/, ''); // Remove trailing slash
     }
     /**
@@ -70,7 +70,7 @@ export class ApprovalLinkService {
                 path: 'appointmentId',
                 populate: [
                     { path: 'employeeId', select: 'name email department designation phone' },
-                    { path: 'visitorId', select: 'name email phone company designation address idProof photo visitorId' }
+                    { path: 'visitorId', select: 'name email phone address idProof photo' }
                 ]
             });
 
@@ -83,6 +83,19 @@ export class ApprovalLinkService {
         }
 
         const appointment = approvalLink.appointmentId as any;
+
+        // Check if appointment time has passed (timeout)
+        if (appointment && appointment.appointmentDetails) {
+            const scheduledDateTime = new Date(`${appointment.appointmentDetails.scheduledDate}T${appointment.appointmentDetails.scheduledTime}`);
+            const now = new Date();
+
+            if (scheduledDateTime < now) {
+                // Appointment time has passed - mark link as used and treat as expired
+                approvalLink.isUsed = true;
+                await approvalLink.save();
+                return { isValid: true, isUsed: true };
+            }
+        }
 
         return {
             isValid: true,
@@ -112,7 +125,7 @@ export class ApprovalLinkService {
                 path: 'appointmentId',
                 populate: [
                     { path: 'employeeId', select: 'name email department designation phone' },
-                    { path: 'visitorId', select: 'name email phone company designation address idProof photo visitorId' }
+                    { path: 'visitorId', select: 'name email phone address idProof photo' }
                 ]
             });
 
@@ -135,6 +148,19 @@ export class ApprovalLinkService {
             throw new AppError('Appointment status cannot be changed', ERROR_CODES.BAD_REQUEST);
         }
 
+        // Check if appointment time has passed (timeout)
+        if (appointment.appointmentDetails) {
+            const scheduledDateTime = new Date(`${appointment.appointmentDetails.scheduledDate}T${appointment.appointmentDetails.scheduledTime}`);
+            const now = new Date();
+
+            if (scheduledDateTime < now) {
+                // Appointment time has passed - cannot approve or reject
+                approvalLink.isUsed = true;
+                await approvalLink.save();
+                throw new AppError('Link expired or already used - appointment time has passed', ERROR_CODES.BAD_REQUEST);
+            }
+        }
+
         // Update appointment status
         appointment.status = status;
         await appointment.save();
@@ -150,7 +176,7 @@ export class ApprovalLinkService {
             // Mongoose may lose populated fields after save()
             const populatedAppointment = await Appointment.findById(appointment._id)
                 .populate('employeeId', 'name email department designation phone')
-                .populate('visitorId', 'name email phone company designation address idProof photo visitorId')
+                .populate('visitorId', 'name email phone address idProof photo')
                 .lean();
 
             socketService.emitAppointmentStatusChange(userId, {

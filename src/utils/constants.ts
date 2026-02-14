@@ -1,15 +1,87 @@
 const CONSTANTS = {
+    // Server & Auth
+    PORT: process.env.PORT || 4010,
+    NODE_ENV: process.env.NODE_ENV || "development",
     JWT_SECRET: process.env.JWT_SECRET || "your-secret-key",
     JWT_EXPIRATION: process.env.JWT_EXPIRATION || "1d",
-    PORT: process.env.PORT || 3000,
-    NODE_ENV: process.env.NODE_ENV || "development",
+    MASTER_TOKEN: process.env.MASTER_TOKEN || "dev-master-token-123",
+
+    // URLs
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
-    FRONTEND_URLS: process.env.FRONTEND_URLS ? process.env.FRONTEND_URLS.split(',') : [],
-    APPROVAL_LINK_BASE_URL: process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL,
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    FRONTEND_URLS: (process.env.FRONTEND_URLS ?? "http://localhost:3000,http://localhost:3001").split(","),
+
+    // Database
+    MONGODB_URI: process.env.MONGODB_URI || "mongodb://localhost:27017/visitor-app",
+    REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+
+    // Email Configuration
+    BREVO_API_KEY: process.env.BREVO_API_KEY,
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_PORT: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587,
+    SMTP_SECURE: process.env.SMTP_SECURE === "true",
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASS: process.env.SMTP_PASS,
+    SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || "SafeIn Security Management",
+    SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || "no-reply@safein.app",
+    SKIP_SMTP_VERIFY: process.env.SKIP_SMTP_VERIFY === "true",
+
+    // Company Invoice Details
+    COMPANY_BILLING_DETAILS: {
+        name: "Aynzo Global Private Limited",
+        cin: "U62099PB2025PTC066099",
+        gstin: "29AANCA4679D1ZA",
+        address: {
+            street: "Registered Office Address",
+            city: "City",
+            state: "State",
+            country: "Country",
+            pincode: "000000"
+        },
+        email: "support@aynzo.com",
+        phone: "+91-XXXXXXXXXX"
+    },
+
+    // Cloudinary Configuration
+    ...getCloudinaryConfig(),
 };
+
+function getCloudinaryConfig() {
+    const rawName = process.env.CLOUDINARY_CLOUD_NAME || "";
+    const rawUrl = process.env.CLOUDINARY_URL || "";
+
+    // Check if CLOUDINARY_CLOUD_NAME is actually a URL
+    if (rawName.startsWith("cloudinary://")) {
+        const match = rawName.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
+        if (match && match.length >= 4) {
+            return {
+                CLOUDINARY_CLOUD_NAME: match[3],
+                CLOUDINARY_API_KEY: match[1],
+                CLOUDINARY_API_SECRET: match[2],
+                CLOUDINARY_URL: rawName,
+            };
+        }
+    }
+
+    // Check if CLOUDINARY_URL is set and valid
+    if (rawUrl.startsWith("cloudinary://")) {
+        const match = rawUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
+        if (match && match.length >= 4) {
+            return {
+                CLOUDINARY_CLOUD_NAME: match[3],
+                CLOUDINARY_API_KEY: match[1],
+                CLOUDINARY_API_SECRET: match[2],
+                CLOUDINARY_URL: rawUrl,
+            };
+        }
+    }
+
+    return {
+        CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+        CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+        CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+        CLOUDINARY_URL: process.env.CLOUDINARY_URL,
+    };
+}
 
 const ERROR_MESSAGES = {
     USER_ALREADY_EXISTS: "User already exists with this email",
@@ -50,11 +122,5 @@ const ERROR_CODES = {
     INTERNAL_SERVER_ERROR: 500,
     TOO_MANY_REQUESTS: 429,
 };
-
-export const TRIAL_LIMITS = {
-    employees: 1,
-    visitors: 1,
-    appointments: 5,
-} as const;
 
 export { CONSTANTS, ERROR_MESSAGES, ERROR_CODES };

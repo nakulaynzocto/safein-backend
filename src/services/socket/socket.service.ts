@@ -1,6 +1,8 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { CONSTANTS } from '../../utils/constants';
+import { NotificationService } from '../notification/notification.service';
+import { chatService } from '../chat/chat.service';
 
 export enum SocketEvents {
   CONNECTION = 'connection',
@@ -12,11 +14,32 @@ export enum SocketEvents {
   APPOINTMENT_DELETED = 'appointment_deleted',
   APPOINTMENT_STATUS_CHANGED = 'appointment_status_changed',
   NEW_NOTIFICATION = 'new_notification',
+
+  // Chat Events
+  JOIN_CHAT_ROOM = 'join_chat_room',
+  LEAVE_CHAT_ROOM = 'leave_chat_room',
+  SEND_MESSAGE = 'send_message',
+  RECEIVE_MESSAGE = 'receive_message',
+  TYPING = 'typing',
+  STOP_TYPING = 'stop_typing',
+  READ_RECEIPT = 'read_receipt',
+  USER_ONLINE = 'user_online',
+  USER_OFFLINE = 'user_offline',
+  GET_ONLINE_USERS = 'get_online_users',
 }
 
 class SocketService {
   private io: SocketIOServer | null = null;
+  private onlineUsers: Map<string, string> = new Map(); // userId -> socketId
+  private rateLimits: Map<string, { count: number, lastReset: number }> = new Map();
   private static instance: SocketService;
+
+  // Configuration for rate limiting
+  private chatLimiterConfig = {
+    windowMs: 10 * 1000, // 10 seconds
+    max: 5,              // 5 messages
+    message: "Too many messages. Please slow down."
+  };
 
   private constructor() { }
 
@@ -27,6 +50,27 @@ class SocketService {
     return SocketService.instance;
   }
 
+  /**
+   * Periodic Map Cleanup to prevent Memory Leaks
+   */
+  private startCleanupTimer(): void {
+    setInterval(() => {
+      const now = Date.now();
+      const { windowMs } = this.chatLimiterConfig;
+
+      for (const [userId, limit] of this.rateLimits.entries()) {
+        if (now - limit.lastReset > windowMs * 5) { // Clear if inactive for 50 seconds
+          this.rateLimits.delete(userId);
+        }
+      }
+
+      // Cleanup stale onlineUsers if needed, but Socket.io disconnect usually handles this
+      if (this.rateLimits.size > 1000) {
+        console.log(`[SocketService] Cleaning up large rateLimits Map. Current size: ${this.rateLimits.size}`);
+      }
+    }, 60000); // Run every minute
+  }
+
   initialize(httpServer: HttpServer): SocketIOServer {
     this.io = new SocketIOServer(httpServer, {
       cors: {
@@ -34,11 +78,13 @@ class SocketService {
         methods: ['GET', 'POST'],
         credentials: true,
       },
+      transports: ['websocket'],
       pingTimeout: 60000,
       pingInterval: 25000,
     });
 
     this.setupConnectionHandlers();
+    this.startCleanupTimer();
     return this.io;
   }
 
@@ -49,17 +95,126 @@ class SocketService {
       socket.on(SocketEvents.JOIN_USER_ROOM, (userId: string) => {
         if (userId) {
           socket.join(`user_${userId}`);
+          this.onlineUsers.set(userId, socket.id);
+          this.io?.emit(SocketEvents.USER_ONLINE, userId);
         }
       });
 
       socket.on(SocketEvents.LEAVE_USER_ROOM, (userId: string) => {
         if (userId) {
           socket.leave(`user_${userId}`);
+          this.onlineUsers.delete(userId);
+          this.io?.emit(SocketEvents.USER_OFFLINE, userId);
         }
       });
 
-      socket.on(SocketEvents.DISCONNECT, () => { });
+      socket.on(SocketEvents.GET_ONLINE_USERS, () => {
+        socket.emit(SocketEvents.GET_ONLINE_USERS, Array.from(this.onlineUsers.keys()));
+      });
+
+      socket.on(SocketEvents.DISCONNECT, () => {
+        let disconnectedUserId: string | null = null;
+        for (const [userId, socketId] of this.onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            disconnectedUserId = userId;
+            break;
+          }
+        }
+
+        if (disconnectedUserId) {
+          this.onlineUsers.delete(disconnectedUserId);
+          this.io?.emit(SocketEvents.USER_OFFLINE, disconnectedUserId);
+        }
+      });
+
+      // Initialize Chat Handlers
+      this.setupChatHandlers(socket);
     });
+  }
+
+  private setupChatHandlers(socket: Socket): void {
+    // Join Chat Room
+    socket.on(SocketEvents.JOIN_CHAT_ROOM, (chatId: string) => {
+      if (chatId) {
+        socket.join(`chat_${chatId}`);
+      }
+    });
+
+    // Leave Chat Room
+    socket.on(SocketEvents.LEAVE_CHAT_ROOM, (chatId: string) => {
+      if (chatId) {
+        socket.leave(`chat_${chatId}`);
+      }
+    });
+
+    // Handle Send Message
+    socket.on(SocketEvents.SEND_MESSAGE, async (data: { chatId: string, senderId: string, text: string, files?: any[] }) => {
+      try {
+        const { chatId, senderId, text, files } = data;
+
+        // Rate Limiting
+        if (!this.checkRateLimit(senderId)) {
+          socket.emit('error', { message: this.chatLimiterConfig.message });
+          return;
+        }
+
+        // Save to DB
+        const message = await chatService.createMessage(chatId, senderId, text, files);
+
+        // Populate sender info using service helper
+        const populatedMessage = await chatService.populateSender(message);
+
+        // Emit to Room (including sender for confirmation/udpate)
+        if (this.io) {
+          this.io.to(`chat_${chatId}`).emit(SocketEvents.RECEIVE_MESSAGE, populatedMessage);
+
+          // Emit to User Rooms to ensure Global Notifications work even if not on Chat Page
+          const chat = await chatService.getChatById(chatId);
+          if (chat && chat.participants) {
+            chat.participants.forEach((participant: any) => {
+              const pId = participant._id || participant;
+              this.io?.to(`user_${pId}`).emit(SocketEvents.RECEIVE_MESSAGE, populatedMessage);
+            });
+          }
+        }
+
+        // Also emit via user list for unread counts or list updates?
+        // If we assume users are listening to their user_room for general updates:
+        // This is optional for now, `RECEIVE_MESSAGE` handles active chat.
+      } catch (error) {
+        console.error('Error sending message:', error);
+        socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Typing Indicators
+    socket.on(SocketEvents.TYPING, (data: { chatId: string, userId: string }) => {
+      socket.to(`chat_${data.chatId}`).emit(SocketEvents.TYPING, data);
+    });
+
+    socket.on(SocketEvents.STOP_TYPING, (data: { chatId: string, userId: string }) => {
+      socket.to(`chat_${data.chatId}`).emit(SocketEvents.STOP_TYPING, data);
+    });
+  }
+
+  /**
+   * Check if a user has exceeded the message rate limit
+   */
+  private checkRateLimit(userId: string): boolean {
+    const now = Date.now();
+    const { windowMs, max } = this.chatLimiterConfig;
+
+    const userLimit = this.rateLimits.get(userId) || { count: 0, lastReset: now };
+
+    if (now - userLimit.lastReset > windowMs) {
+      userLimit.count = 0;
+      userLimit.lastReset = now;
+    }
+
+    userLimit.count++;
+    this.rateLimits.set(userId, userLimit);
+
+    return userLimit.count <= max;
   }
 
   getIO(): SocketIOServer | null {
@@ -101,12 +256,12 @@ class SocketService {
     };
   }
 
-  emitAppointmentStatusChange(userId: string, appointmentData: {
+  async emitAppointmentStatusChange(userId: string, appointmentData: {
     appointmentId: string;
     status: string;
     updatedAt?: Date;
     appointment?: any;
-  }, showNotification: boolean = true): void {
+  }, showNotification: boolean = true): Promise<void> {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
 
     const payload = {
@@ -116,13 +271,71 @@ class SocketService {
     };
 
     if (showNotification) {
+      // Save notification to database
+      let statusInfo = {
+        title: 'Appointment Status Changed',
+        message: `Appointment status has been changed to ${appointmentData.status}`,
+      };
+
+      try {
+        const statusMessages: { [key: string]: { title: string; message: string } } = {
+          approved: {
+            title: 'Appointment Approved',
+            message: `${employeeName} has approved the appointment with ${visitorName}`,
+          },
+          rejected: {
+            title: 'Appointment Rejected',
+            message: `${employeeName} has rejected the appointment with ${visitorName}`,
+          },
+          completed: {
+            title: 'Appointment Completed',
+            message: `Appointment with ${visitorName} has been completed`,
+          },
+        };
+
+        if (statusMessages[appointmentData.status]) {
+          statusInfo = statusMessages[appointmentData.status];
+        }
+
+        await NotificationService.createNotification({
+          userId,
+          type: appointmentData.status === 'approved' ? 'appointment_approved' :
+            appointmentData.status === 'rejected' ? 'appointment_rejected' :
+              'appointment_status_changed',
+          title: statusInfo.title,
+          message: statusInfo.message,
+          appointmentId: appointmentData.appointmentId,
+          metadata: {
+            status: appointmentData.status,
+            employeeName,
+            visitorName,
+          },
+        });
+      } catch (error: any) {
+        // Log error but don't fail the socket emission
+        console.error('Failed to save notification to database:', error?.message || error);
+      }
+
       this.emitToUser(userId, SocketEvents.APPOINTMENT_STATUS_CHANGED, {
         type: 'APPOINTMENT_STATUS_CHANGED',
         payload,
         timestamp: new Date().toISOString()
       });
+
+      // Also emit generic notification event for toast and count refresh
+      this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
+        type: 'NEW_NOTIFICATION',
+        payload: {
+          title: statusInfo.title,
+          message: statusInfo.message,
+          appointmentId: appointmentData.appointmentId,
+          status: appointmentData.status
+        },
+        timestamp: new Date().toISOString()
+      });
     }
 
+    // Always emit update event for dashboard refresh
     this.emitToAll(SocketEvents.APPOINTMENT_UPDATED, {
       type: 'APPOINTMENT_UPDATED',
       payload: appointmentData,
@@ -130,7 +343,7 @@ class SocketService {
     });
   }
 
-  emitAppointmentCreated(userId: string, appointmentData: any, showNotification: boolean = true): void {
+  async emitAppointmentCreated(userId: string, appointmentData: any, showNotification: boolean = true): Promise<void> {
     const { employeeName, visitorName } = this.extractNames(appointmentData.appointment);
 
     const payload = {
@@ -140,9 +353,47 @@ class SocketService {
     };
 
     if (showNotification) {
+      // Save notification to database
+      const isApproved = appointmentData.status === 'approved';
+      const title = isApproved ? 'Appointment Scheduled' : 'New Appointment Request';
+      const message = isApproved
+        ? `${visitorName} has scheduled an appointment with ${employeeName}`
+        : `${visitorName} has requested an appointment with ${employeeName}`;
+
+      try {
+        await NotificationService.createNotification({
+          userId,
+          type: 'appointment_created',
+          title,
+          message,
+          appointmentId: appointmentData.appointmentId || appointmentData.appointment?._id?.toString(),
+          metadata: {
+            employeeName,
+            visitorName,
+            scheduledDate: appointmentData.appointment?.appointmentDetails?.scheduledDate,
+            scheduledTime: appointmentData.appointment?.appointmentDetails?.scheduledTime,
+          },
+        });
+      } catch (error: any) {
+        // Log error but don't fail the socket emission
+        console.error('Failed to save notification to database:', error?.message || error);
+      }
+
       this.emitToUser(userId, SocketEvents.APPOINTMENT_CREATED, {
         type: 'APPOINTMENT_CREATED',
         payload,
+        timestamp: new Date().toISOString()
+      });
+
+      // Also emit generic notification event for toast and count refresh
+      this.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
+        type: 'NEW_NOTIFICATION',
+        payload: {
+          title,
+          message,
+          appointmentId: appointmentData.appointmentId || appointmentData.appointment?._id?.toString(),
+          status: appointmentData.status
+        },
         timestamp: new Date().toISOString()
       });
     }

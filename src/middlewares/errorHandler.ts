@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { ERROR_CODES } from '../utils/constants';
-import { sendErrorResponse } from '../utils/errorResponse.util';
+import { Request, Response, NextFunction } from "express";
+import { ERROR_CODES } from "../utils/constants";
+import { sendErrorResponse } from "../utils/errorResponse.util";
 
 export class AppError extends Error {
     public statusCode: number;
@@ -15,43 +15,33 @@ export class AppError extends Error {
     }
 }
 
-export const errorHandler = (
-    error: Error | AppError,
-    _req: Request,
-    res: Response,
-    _next: NextFunction
-): void => {
+export const errorHandler = (error: Error | AppError, _req: Request, res: Response, _next: NextFunction): void => {
     let statusCode = ERROR_CODES.INTERNAL_SERVER_ERROR;
-    let message = 'Internal Server Error';
+    let message = "Internal Server Error";
 
     if (error instanceof AppError) {
         statusCode = error.statusCode;
         message = error.message;
-    } else if (error.name === 'ValidationError') {
+    } else if (error.name === "ValidationError") {
         statusCode = ERROR_CODES.BAD_REQUEST;
-        message = 'Validation Error';
-    } else if (error.name === 'CastError') {
+        message = "Validation Error";
+    } else if (error.name === "CastError") {
         statusCode = ERROR_CODES.BAD_REQUEST;
-        message = 'Invalid ID format';
-    } else if (error.name === 'MongoError' && (error as any).code === 11000) {
+        message = "Invalid ID format";
+    } else if (error.name === "MongoError" && (error as any).code === 11000) {
         statusCode = ERROR_CODES.CONFLICT;
-        message = 'Duplicate field value';
-    } else if (error.name === 'JsonWebTokenError') {
+        message = "Duplicate field value";
+    } else if (error.name === "JsonWebTokenError") {
         statusCode = ERROR_CODES.UNAUTHORIZED;
-        message = 'Invalid token';
-    } else if (error.name === 'TokenExpiredError') {
+        message = "Invalid token";
+    } else if (error.name === "TokenExpiredError") {
         statusCode = ERROR_CODES.UNAUTHORIZED;
-        message = 'Token expired';
+        message = "Token expired";
     }
 
-    if (process.env.NODE_ENV === 'development') {
-        console.error('Error:', error);
+    if (process.env.NODE_ENV === "development") {
+        console.error("Error:", error);
     }
 
-    sendErrorResponse(
-        res,
-        message,
-        statusCode,
-        process.env.NODE_ENV === 'development' ? error.message : undefined
-    );
+    sendErrorResponse(res, message, statusCode, process.env.NODE_ENV === "development" ? error.message : undefined);
 };

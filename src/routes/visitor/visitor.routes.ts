@@ -3,15 +3,13 @@ import { VisitorController } from '../../controllers/visitor/visitor.controller'
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
 import { userLimiter } from '../../middlewares';
 import {
     createVisitorValidation,
     updateVisitorValidation,
     visitorParamsValidation,
-    getVisitorsValidation,
-    bulkUpdateVisitorsValidation,
-    visitorSearchValidation
+    getVisitorsValidation
 } from '../../validations/visitor/visitor.validation';
 
 const router = Router();
@@ -21,7 +19,7 @@ router.use(userLimiter);
 
 router.post(
     '/',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     validateRequest(createVisitorValidation),
     asyncWrapper(VisitorController.createVisitor)
 );
@@ -33,15 +31,13 @@ router.get(
 );
 
 router.get(
-    '/stats',
-    asyncWrapper(VisitorController.getVisitorStats)
+    '/count',
+    asyncWrapper(VisitorController.getVisitorCount)
 );
 
-router.post(
-    '/search',
-    validateRequest(visitorSearchValidation),
-    asyncWrapper(VisitorController.searchVisitors)
-);
+
+
+
 
 router.get(
     '/:id/has-appointments',
@@ -62,11 +58,7 @@ router.put(
     asyncWrapper(VisitorController.updateVisitor)
 );
 
-router.put(
-    '/bulk-update',
-    validateRequest(bulkUpdateVisitorsValidation),
-    asyncWrapper(VisitorController.bulkUpdateVisitors)
-);
+
 
 router.delete(
     '/:id',

@@ -1,5 +1,5 @@
-export { logger } from './logger';
-export { requestLogger, errorLogger } from './requestLogger';
+export { logger } from "./logger";
+export { requestLogger, errorLogger } from "./requestLogger";
 export {
     devFormat,
     combinedFormat,
@@ -9,7 +9,7 @@ export {
     morganErrorOptions,
     errorFormat,
     accessLogStream,
-    errorLogStream
-} from './morgan.config';
+    errorLogStream,
+} from "./morgan.config";
 
-export type { LogEntry } from './logger';
+export type { LogEntry } from "./logger";

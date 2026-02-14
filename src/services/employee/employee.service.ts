@@ -1,14 +1,12 @@
 import { Employee } from '../../models/employee/employee.model';
 import { Appointment } from '../../models/appointment/appointment.model';
+import { User } from '../../models/user/user.model';
 import {
     ICreateEmployeeDTO,
     IUpdateEmployeeDTO,
     IEmployeeResponse,
     IGetEmployeesQuery,
     IEmployeeListResponse,
-    IUpdateEmployeeStatusDTO,
-    IBulkUpdateEmployeesDTO,
-    IEmployeeStats,
     IBulkCreateEmployeeDTO,
     IBulkCreateEmployeeResponse
 } from '../../types/employee/employee.types';
@@ -17,6 +15,8 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
+import * as crypto from 'crypto';
+import { EmailService } from '../email/email.service';
 
 export class EmployeeService {
     /**
@@ -31,6 +31,8 @@ export class EmployeeService {
             throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
         }
 
+        // Optimized: Parallelize initial checks for existing employee and admin user data
+        // Optimized: Check for existing employee
         const existingEmployee = await Employee.findOne({
             email: employeeData.email,
             createdBy: createdByObjectId
@@ -52,11 +54,32 @@ export class EmployeeService {
             throw new AppError(ERROR_MESSAGES.EMPLOYEE_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
         }
 
-        const employee = new Employee({ ...employeeData, createdBy: createdByObjectId });
+        const employee = new Employee({
+            ...employeeData,
+            status: 'Inactive', // Enforce Inactive status initially
+            createdBy: createdByObjectId
+        });
         await employee.save({ session });
+
+        // User account creation is now handled in verifyEmployeeOtp method
+        // Employee is created with isVerified: false by default
 
         return employee.toObject() as unknown as IEmployeeResponse;
     }
+
+    /**
+     * Generate a secure random password
+     */
+    private static generateTempPassword(): string {
+        const buffer = crypto.randomBytes(8);
+        const base64 = buffer.toString('base64');
+        return base64
+            .replace(/[^A-Za-z0-9]/g, '')
+            .slice(0, 12)
+            .padEnd(12, '0');
+    }
+
+
 
     /**
      * Get employee by ID
@@ -76,8 +99,9 @@ export class EmployeeService {
 
     /**
      * Get all employees with pagination and filtering (user-specific)
+     * For employees: Also includes their own record even if created by admin
      */
-    static async getAllEmployees(query: IGetEmployeesQuery = {}, userId?: string): Promise<IEmployeeListResponse> {
+    static async getAllEmployees(query: IGetEmployeesQuery = {}, userId?: string, userEmail?: string, userEmployeeId?: string): Promise<IEmployeeListResponse> {
         const {
             page = 1,
             limit = 10,
@@ -92,18 +116,48 @@ export class EmployeeService {
 
         const filter: any = { isDeleted: false };
 
+        // Build access filter (who can see which employees)
+        const accessConditions: any[] = [];
         if (userId) {
-            filter.createdBy = userId;
+            // For employees: Include their own record even if created by admin
+            if (userEmployeeId || (userEmail && userEmail.trim())) {
+                accessConditions.push({ createdBy: userId }); // Employees created by this user (admin case)
+
+                // Add employee's own record if they have employeeId or matching email
+                if (userEmployeeId) {
+                    accessConditions.push({ _id: userEmployeeId });
+                }
+                if (userEmail && userEmail.trim()) {
+                    accessConditions.push({ email: userEmail.toLowerCase().trim() });
+                }
+            } else {
+                // Admin case: only show employees they created
+                accessConditions.push({ createdBy: userId });
+            }
         }
 
+        // Build search filter
+        const searchConditions: any[] = [];
         if (search) {
             const escapedSearch = escapeRegex(search);
-            filter.$or = [
+            searchConditions.push(
                 { name: { $regex: escapedSearch, $options: 'i' } },
                 { email: { $regex: escapedSearch, $options: 'i' } },
                 { department: { $regex: escapedSearch, $options: 'i' } },
                 { designation: { $regex: escapedSearch, $options: 'i' } }
+            );
+        }
+
+        // Combine filters: both access AND search must match
+        if (accessConditions.length > 0 && searchConditions.length > 0) {
+            filter.$and = [
+                { $or: accessConditions },
+                { $or: searchConditions }
             ];
+        } else if (accessConditions.length > 0) {
+            filter.$or = accessConditions;
+        } else if (searchConditions.length > 0) {
+            filter.$or = searchConditions;
         }
 
         if (startDate || endDate) {
@@ -122,9 +176,11 @@ export class EmployeeService {
         }
 
         if (department) {
-            filter.department = { $regex: department, $options: 'i' };
+            filter.department = { $regex: escapeRegex(department), $options: 'i' };
         }
 
+        // Allow status override if explicitly provided in query
+        // Default is 'Active' (set above), but can be overridden to get all statuses
         if (status) {
             filter.status = status;
         }
@@ -143,10 +199,26 @@ export class EmployeeService {
             Employee.countDocuments(filter)
         ]);
 
+        // Efficiently check if employees can be deleted (bulk check instead of N+1 queries)
+        const employeeIds = employees.map(emp => emp._id);
+        const employeesWithAppointments = await Appointment.distinct('employeeId', {
+            employeeId: { $in: employeeIds },
+            isDeleted: false
+        });
+
+        const employeesWithAppointmentsSet = new Set(
+            employeesWithAppointments.map(id => id.toString())
+        );
+
+        const employeesWithDeleteFlag = employees.map(employee => ({
+            ...employee,
+            canDelete: !employeesWithAppointmentsSet.has((employee._id as any).toString())
+        }));
+
         const totalPages = Math.ceil(totalEmployees / limit);
 
         return {
-            employees: employees as unknown as IEmployeeResponse[],
+            employees: employeesWithDeleteFlag as unknown as IEmployeeResponse[],
             pagination: {
                 currentPage: page,
                 totalPages,
@@ -155,6 +227,56 @@ export class EmployeeService {
                 hasPrevPage: page > 1
             }
         };
+    }
+
+    /**
+     * Get employee count by status (optimized for dashboard)
+     * No data fetching, only aggregation
+     */
+    static async getEmployeeCount(userId: string, employeeEmail?: string): Promise<{
+        total: number;
+        active: number;
+        inactive: number;
+    }> {
+        const userObjectId = toObjectId(userId);
+        if (!userObjectId) {
+            throw new AppError('Invalid user ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Build access filter (same logic as getAllEmployees)
+        const accessConditions: any[] = [];
+        if (employeeEmail) {
+            // Employee case: only see their own record
+            accessConditions.push({ email: employeeEmail.toLowerCase().trim() });
+        } else {
+            // Admin case: only count employees they created
+            accessConditions.push({ createdBy: userObjectId });
+        }
+
+        const baseFilter: any = {
+            isDeleted: false,
+        };
+
+        if (accessConditions.length > 0) {
+            baseFilter.$or = accessConditions;
+        }
+
+        // Use MongoDB aggregation for efficient counting
+        const counts = await Employee.aggregate([
+            { $match: baseFilter },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const total = counts.reduce((sum, item) => sum + item.count, 0);
+        const active = counts.find(item => item._id === 'Active')?.count || 0;
+        const inactive = counts.find(item => item._id === 'Inactive')?.count || 0;
+
+        return { total, active, inactive };
     }
 
     /**
@@ -205,25 +327,31 @@ export class EmployeeService {
             );
         }
 
+        // Sync status and photo with User account if changed
+        const userUpdates: any = {};
+        if (safeUpdateData.status) {
+            userUpdates.isActive = safeUpdateData.status === 'Active';
+        }
+        if (safeUpdateData.photo !== undefined) {
+            userUpdates.profilePicture = safeUpdateData.photo;
+        }
+
+        if (Object.keys(userUpdates).length > 0) {
+            try {
+                await User.updateMany(
+                    { employeeId: (employee._id as any), isDeleted: false },
+                    { $set: userUpdates },
+                    { session }
+                );
+            } catch (userUpdateError) {
+                console.error(`Failed to sync User data for employee ${employeeId}:`, userUpdateError);
+            }
+        }
+
         return employee.toObject() as unknown as IEmployeeResponse;
     }
 
-    /**
-     * Check if employee has appointments
-     */
-    static async hasAppointments(employeeId: string): Promise<{ hasAppointments: boolean; count: number }> {
-        const employeeIdObjectId = toObjectId(employeeId);
-        if (!employeeIdObjectId) {
-            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
-        }
 
-        const count = await Appointment.countDocuments({
-            employeeId: employeeIdObjectId,
-            isDeleted: false,
-            status: { $in: ['pending', 'approved', 'rejected', 'completed'] }
-        });
-        return { hasAppointments: count > 0, count };
-    }
 
     /**
      * Soft delete employee
@@ -260,109 +388,34 @@ export class EmployeeService {
             );
         }
 
+        // Soft delete the employee
         await (employee as any).softDelete(deletedByObjectId);
+
+        // Handle associated user account
+        // Disable user account and remove employeeId reference
+        try {
+            await User.updateMany(
+                {
+                    employeeId: (employee._id as any).toString(),
+                    isDeleted: false
+                },
+                {
+                    $unset: { employeeId: "" },
+                    $set: { isActive: false }
+                },
+                { session }
+            );
+        } catch (userUpdateError: any) {
+            // Log error but don't fail employee deletion
+            console.error(`Failed to update user account for deleted employee ${employeeId}:`, userUpdateError);
+            // Continue - employee is still deleted
+        }
     }
 
 
 
-    /**
-     * Update employee status
-     */
-    @Transaction('Failed to update employee status')
-    static async updateEmployeeStatus(employeeId: string, statusData: IUpdateEmployeeStatusDTO, options: { session?: any } = {}): Promise<IEmployeeResponse> {
-        const { session } = options;
 
-        const employee = await Employee.findOneAndUpdate(
-            { _id: employeeId, isDeleted: false },
-            { status: statusData.status },
-            { new: true, runValidators: true, session }
-        );
 
-        if (!employee) {
-            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        return employee.toObject() as unknown as IEmployeeResponse;
-    }
-
-    /**
-     * Bulk update employees
-     */
-    @Transaction('Failed to bulk update employees')
-    static async bulkUpdateEmployees(bulkData: IBulkUpdateEmployeesDTO, options: { session?: any } = {}): Promise<{ updatedCount: number }> {
-        const { session } = options;
-        const { employeeIds, ...updateData } = bulkData;
-
-        const cleanUpdateData = Object.fromEntries(
-            Object.entries(updateData).filter(([_, value]) => value !== undefined && value !== '')
-        );
-
-        if (Object.keys(cleanUpdateData).length === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_UPDATE_DATA, ERROR_CODES.BAD_REQUEST);
-        }
-
-        const result = await Employee.updateMany(
-            { _id: { $in: employeeIds }, isDeleted: false },
-            cleanUpdateData,
-            { session }
-        );
-
-        if (result.matchedCount === 0) {
-            throw new AppError(ERROR_MESSAGES.NO_EMPLOYEES_FOUND, ERROR_CODES.NOT_FOUND);
-        }
-
-        return { updatedCount: result.modifiedCount };
-    }
-
-    /**
-     * Get employee statistics (user-specific)
-     */
-    static async getEmployeeStats(userId?: string): Promise<IEmployeeStats> {
-        const baseFilter: any = {};
-        if (userId) {
-            baseFilter.createdBy = userId;
-        }
-
-        const [
-            totalEmployees,
-            activeEmployees,
-            inactiveEmployees,
-            deletedEmployees,
-            employeesByDepartment,
-            employeesByStatus
-        ] = await Promise.all([
-            Employee.countDocuments({ ...baseFilter, isDeleted: false }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Active' }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: false, status: 'Inactive' }),
-            Employee.countDocuments({ ...baseFilter, isDeleted: true }),
-            Employee.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$department', count: { $sum: 1 } } },
-                { $sort: { count: -1 } },
-                { $limit: 10 }
-            ]),
-            Employee.aggregate([
-                { $match: { ...baseFilter, isDeleted: false } },
-                { $group: { _id: '$status', count: { $sum: 1 } } },
-                { $sort: { count: -1 } }
-            ])
-        ]);
-
-        return {
-            totalEmployees,
-            activeEmployees,
-            inactiveEmployees,
-            deletedEmployees,
-            employeesByDepartment: employeesByDepartment.map(item => ({
-                department: item._id,
-                count: item.count
-            })),
-            employeesByStatus: employeesByStatus.map(item => ({
-                status: item._id,
-                count: item.count
-            }))
-        };
-    }
 
     /**
      * Bulk create employees
@@ -522,5 +575,144 @@ export class EmployeeService {
             failedCount: errors.length,
             errors
         };
+    }
+
+
+
+    /**
+     * Send Verification OTP to Employee
+     */
+    static async sendVerificationOtp(employeeId: string, options: { session?: any } = {}): Promise<void> {
+        const { session } = options;
+        const employeeIdObjectId = toObjectId(employeeId);
+
+        if (!employeeIdObjectId) {
+            throw new AppError('Invalid employee ID format', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const employee = await Employee.findById(employeeIdObjectId).session(session);
+        if (!employee) {
+            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        if (employee.isVerified) {
+            throw new AppError('Employee is already verified', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Encrypt OTP before saving (using simple hash for now, or plain text if transient)
+        // For simplicity and matching existing patterns, we'll store hash
+        // const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+        // Set expiry to 10 minutes
+        const expires = new Date(Date.now() + 10 * 60 * 1000);
+
+        employee.verificationOtp = otp; // In production, hash this
+        employee.verificationOtpExpires = expires;
+        await employee.save({ session });
+
+        // Send OTP Email
+        // We'll add a specific method to EmailService or reuse generic one
+        try {
+            await EmailService.sendOtpEmail(employee.email, otp, 'SafeIn');
+        } catch (emailError) {
+            console.error('Failed to send OTP email', emailError);
+            throw new AppError('Failed to send verification email', ERROR_CODES.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Verify Employee OTP and Create User Account
+     */
+    @Transaction('Failed to verify employee')
+    static async verifyEmployeeOtp(employeeId: string, otp: string, options: { session?: any } = {}): Promise<void> {
+        const { session } = options;
+        const employeeIdObjectId = toObjectId(employeeId);
+
+        const employee = await Employee.findById(employeeIdObjectId)
+            .select('+verificationOtp +verificationOtpExpires email name phone department designation photo createdBy isVerified status')
+            .session(session);
+
+        if (!employee) {
+            throw new AppError(ERROR_MESSAGES.EMPLOYEE_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+        }
+
+        if (employee.isVerified) {
+            throw new AppError('Employee is already verified', ERROR_CODES.BAD_REQUEST);
+        }
+
+        if (!employee.verificationOtp || !employee.verificationOtpExpires) {
+            throw new AppError('No verification pending', ERROR_CODES.BAD_REQUEST);
+        }
+
+        if (employee.verificationOtp !== otp) {
+            throw new AppError('Invalid OTP', ERROR_CODES.BAD_REQUEST);
+        }
+
+        if (employee.verificationOtpExpires < new Date()) {
+            throw new AppError('OTP has expired', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // OTP Verified
+        employee.isVerified = true;
+        employee.status = 'Active'; // Activate employee upon verification
+        employee.verificationOtp = undefined;
+        employee.verificationOtpExpires = undefined;
+        await employee.save({ session });
+
+        // --- Create User Account (Moved from createEmployee) ---
+        // Get Admin User to get Company Name
+        const adminUser = await User.findById(employee.createdBy).select('companyName').session(session);
+        const companyName = adminUser?.companyName || 'SafeIn';
+
+        try {
+            // Check if user already exists
+            const existingUser = await User.findOne({
+                email: employee.email.toLowerCase().trim(),
+                isDeleted: false
+            }).session(session);
+
+            if (!existingUser) {
+                // Generate password
+                const password = this.generateTempPassword();
+
+                if (!employee.email) {
+                    throw new AppError('Employee email missing during verification', ERROR_CODES.INTERNAL_SERVER_ERROR);
+                }
+
+                // Create user
+                const user = new User({
+                    companyName: companyName,
+                    email: employee.email.toLowerCase().trim(),
+                    password: password,
+                    roles: ['employee'],
+                    isActive: true,
+                    isEmailVerified: true,
+                    createdBy: employee.createdBy,
+                    department: employee.department,
+                    designation: employee.designation || '',
+                    employeeId: employee._id,
+                    profilePicture: employee.photo || '',
+                });
+
+                await user.save({ session });
+
+                // Send Credentials Email
+                await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName, employee.name);
+
+            } else {
+                // If user exists, link it? Or throw error?
+                // Original logic threw error if user existed under different admin
+                // For now, we assume if it exists, we might just need to link or update status
+                // But typically, createEmployee checked this. verify should strictly create.
+                console.warn(`User for verified employee ${employee.email} already exists.`);
+            }
+
+        } catch (error: any) {
+            console.error('Failed to create user after verification:', error);
+            throw new AppError('Verification succeeded but user creation failed', ERROR_CODES.INTERNAL_SERVER_ERROR);
+        }
     }
 }

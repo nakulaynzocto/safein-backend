@@ -36,6 +36,7 @@ export class SubscriptionPlanService {
         const subscriptionPlan = new SubscriptionPlan({
             ...planData,
             currency: planData.currency || 'usd',
+            taxPercentage: planData.taxPercentage || 0,
             isActive: planData.isActive ?? true,
             isPopular: planData.isPopular ?? false,
             trialDays: planData.trialDays || 0,
@@ -49,6 +50,16 @@ export class SubscriptionPlanService {
 
     /**
      * Get all subscription plans with pagination and filtering
+     * @param query - Query parameters for filtering and pagination
+     * @param query.page - Page number (default: 1)
+     * @param query.limit - Items per page (default: 10)
+     * @param query.planType - Filter by plan type (free, weekly, monthly, quarterly, yearly)
+     * @param query.isActive - Filter by active status ('all' to show all)
+     * @param query.isPopular - Filter by popular status
+     * @param query.isPublic - Filter by public visibility ('all' to show all)
+     * @param query.sortBy - Field to sort by (default: 'sortOrder')
+     * @param query.sortOrder - Sort direction 'asc' or 'desc' (default: 'asc')
+     * @returns Promise with paginated subscription plans and metadata
      */
     static async getAllSubscriptionPlans(
         query: IGetSubscriptionPlansQuery
@@ -59,18 +70,34 @@ export class SubscriptionPlanService {
             planType,
             isActive,
             isPopular,
+            isPublic,
             sortBy = 'sortOrder',
             sortOrder = 'asc'
         } = query;
 
         const filter: any = { isDeleted: false };
 
+        // Handle Visibility Filter
+        if (isPublic === 'all') {
+            // No filter on isPublic - show everything (for Super Admin)
+        } else if (isPublic !== undefined) {
+            filter.isPublic = isPublic;
+        } else {
+            // Default: Show public + legacy (missing field)
+            filter.isPublic = { $ne: false };
+        }
+
         if (planType) {
             filter.planType = planType;
         }
 
-        if (isActive !== undefined) {
+        // By default, only show active plans unless explicitly set to false
+        if (isActive === 'all') {
+            // No active filter - show all
+        } else if (isActive !== undefined) {
             filter.isActive = isActive;
+        } else {
+            filter.isActive = true; // Default to active plans only
         }
 
         if (isPopular !== undefined) {
@@ -216,6 +243,13 @@ export class SubscriptionPlanService {
 
     /**
      * Get subscription plan statistics
+     * Calculates aggregated statistics including:
+     * - Total number of plans
+     * - Active plans count
+     * - Popular plans count
+     * - Plans grouped by type
+     * - Average price across all active plans
+     * @returns Promise with subscription plan statistics
      */
     static async getSubscriptionPlanStats(): Promise<ISubscriptionPlanStats> {
         const [
@@ -267,7 +301,8 @@ export class SubscriptionPlanService {
         const plans = await SubscriptionPlan.find({
             isDeleted: false,
             isActive: true,
-            isPopular: true
+            isPopular: true,
+            isPublic: { $ne: false }
         }).sort({ sortOrder: 1 });
 
         return plans.map(plan => this.formatSubscriptionPlanResponse(plan));
@@ -280,10 +315,30 @@ export class SubscriptionPlanService {
         const plans = await SubscriptionPlan.find({
             planType,
             isDeleted: false,
-            isActive: true
+            isActive: true,
+            isPublic: { $ne: false }
         }).sort({ sortOrder: 1 });
 
         return plans.map(plan => this.formatSubscriptionPlanResponse(plan));
+    }
+
+    /**
+     * Calculate duration in days based on plan type
+     */
+    private static calculateDuration(planType: string): number {
+        switch (planType) {
+            case 'weekly':
+                return 7;
+            case 'monthly':
+                return 30;
+            case 'quarterly':
+                return 90;
+            case 'yearly':
+                return 365;
+            case 'free':
+            default:
+                return 30; // default to 30 days
+        }
     }
 
     /**
@@ -295,16 +350,21 @@ export class SubscriptionPlanService {
             name: plan.name,
             description: plan.description,
             planType: plan.planType,
-            amount: plan.amount,
+            amount: plan.amount, // Return as stored (Rupees)
+            taxPercentage: plan.taxPercentage || 0,
             currency: plan.currency,
             features: plan.features,
             isActive: plan.isActive,
             isPopular: plan.isPopular,
+            isPublic: plan.isPublic,
             trialDays: plan.trialDays,
             sortOrder: plan.sortOrder,
             discountPercentage: plan.discountPercentage,
             metadata: plan.metadata,
             formattedPrice: plan.formattedPrice,
+            duration: plan.duration || SubscriptionPlanService.calculateDuration(plan.planType),
+            taxAmount: Math.round(((plan.amount || 0) * (plan.taxPercentage || 0)) / 100),
+            totalAmount: plan.totalAmount || Math.round((plan.amount || 0) + ((plan.amount || 0) * (plan.taxPercentage || 0)) / 100), // Calculate if virtual missing (lean)
             monthlyEquivalent: plan.monthlyEquivalent,
             savingsPercentage: plan.savingsPercentage,
             createdAt: plan.createdAt,

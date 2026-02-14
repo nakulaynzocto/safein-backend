@@ -3,17 +3,14 @@ import { AppointmentController } from '../../controllers/appointment/appointment
 import { validateRequest } from '../../middlewares/validateRequest';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { checkTrialLimits } from '../../middlewares/checkTrialLimits.middleware';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
 import { userLimiter } from '../../middlewares';
 import {
     createAppointmentValidation,
     updateAppointmentValidation,
     appointmentParamsValidation,
     appointmentIdParamsValidation,
-    getAppointmentsValidation,
-    bulkUpdateAppointmentsValidation,
-    employeeIdParamsValidation,
-    dateRangeValidation
+    getAppointmentsValidation
 } from '../../validations/appointment/appointment.validation';
 
 const router = Router();
@@ -23,7 +20,7 @@ router.use(userLimiter);
 
 router.post(
     '/',
-    checkTrialLimits,
+    checkSubscriptionStatus,
     validateRequest(createAppointmentValidation),
     asyncWrapper(AppointmentController.createAppointment)
 );
@@ -39,25 +36,17 @@ router.get(
     asyncWrapper(AppointmentController.getAppointmentStats)
 );
 
-router.put(
-    '/bulk-update',
-    validateRequest(bulkUpdateAppointmentsValidation),
-    asyncWrapper(AppointmentController.bulkUpdateAppointments)
+// Dashboard stats (unified for admin and employee)
+router.get(
+    '/dashboard/stats',
+    asyncWrapper(AppointmentController.getDashboardStats)
 );
 
-router.get(
-    '/employee/:employeeId',
-    validateRequest(employeeIdParamsValidation),
-    validateRequest(getAppointmentsValidation),
-    asyncWrapper(AppointmentController.getAppointmentsByEmployee)
-);
 
-router.get(
-    '/date-range',
-    validateRequest(dateRangeValidation),
-    validateRequest(getAppointmentsValidation),
-    asyncWrapper(AppointmentController.getAppointmentsByDateRange)
-);
+
+
+
+
 
 router.post(
     '/check-in',
@@ -111,6 +100,12 @@ router.get(
     '/appointment/:appointmentId',
     validateRequest(appointmentIdParamsValidation),
     asyncWrapper(AppointmentController.getAppointmentByAppointmentId)
+);
+
+router.post(
+    '/:id/resend',
+    validateRequest(appointmentParamsValidation),
+    asyncWrapper(AppointmentController.resendNotification)
 );
 
 export default router;

@@ -4,10 +4,11 @@ export interface IUser extends Document {
     _id: string;
     companyName: string;
     email: string;
+    mobileNumber?: string;
     password: string;
     profilePicture?: string;
     companyId?: mongoose.Types.ObjectId; // Reference to Company
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -15,13 +16,30 @@ export interface IUser extends Document {
     isPhoneVerified: boolean;
     isActive: boolean;
     isDeleted: boolean;
-    deletedAt?: Date;
-    deletedBy?: string;
+    deletedAt: Date | null;
+    deletedBy: mongoose.Types.ObjectId | null;
+    createdBy: mongoose.Types.ObjectId | null;
+    updatedBy: mongoose.Types.ObjectId | null;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
-    activeSubscriptionId?: mongoose.Types.ObjectId;
-    stripeCustomerId?: string;
+    activeSubscriptionId?: mongoose.Types.ObjectId | { endDate: Date } | null;
+    stripeCustomerId?: string | null;
+
+    // Profile Fields
+    bio?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        pincode: string;
+    };
+    socialLinks?: {
+        linkedin?: string;
+        twitter?: string;
+        website?: string;
+    };
     passwordResetToken?: string;
     resetPasswordExpires?: Date;
 
@@ -37,18 +55,35 @@ export interface ICreateUserDTO {
     email: string;
     password: string;
     companyId?: string;
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
+    employeeId?: mongoose.Types.ObjectId;
 }
 
 export interface IUpdateUserDTO {
     companyName?: string;
+    mobileNumber?: string;
+    isActive?: boolean;
     profilePicture?: string;
+    bio?: string;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        country: string;
+        pincode: string;
+    };
+    socialLinks?: {
+        linkedin?: string;
+        twitter?: string;
+        website?: string;
+    };
     companyId?: string;
-    role?: "admin" | "safein" | "employee" | "visitor";
+    roles?: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
+    updatedBy?: string;
 }
 
 export interface ILoginDTO {
@@ -74,10 +109,11 @@ export interface IUserResponse {
     _id: string;
     companyName: string;
     email: string;
+    mobileNumber?: string;
     profilePicture?: string;
     stripeCustomerId?: string; // Stripe Customer ID
     companyId?: mongoose.Types.ObjectId;
-    role: "admin" | "safein" | "employee" | "visitor";
+    roles: ("admin" | "visitor" | "employee" | "superadmin")[];
     department?: string;
     designation?: string;
     employeeId?: string;
@@ -87,6 +123,8 @@ export interface IUserResponse {
     isDeleted: boolean;
     deletedAt?: Date;
     deletedBy?: string;
+    createdBy?: string;
+    updatedBy?: string;
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;

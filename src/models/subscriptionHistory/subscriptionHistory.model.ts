@@ -5,6 +5,7 @@ export interface ISubscriptionHistory extends Document {
     subscriptionId: mongoose.Types.ObjectId; // Reference to the UserSubscription model
     planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
     planId?: mongoose.Types.ObjectId; // Reference to SubscriptionPlan (if available)
+    invoiceNumber?: string; // Generated invoice number with dynamic date formatting
     purchaseDate: Date; // When the plan was purchased
     startDate: Date; // When the subscription started
     endDate: Date; // When the subscription ends/ended
@@ -15,6 +16,10 @@ export interface ISubscriptionHistory extends Document {
     razorpayPaymentId?: string; // Razorpay payment ID
     previousSubscriptionId?: mongoose.Types.ObjectId; // Reference to previous subscription (if upgraded)
     remainingDaysFromPrevious?: number; // Days carried forward from previous subscription
+    source?: 'user' | 'admin' | 'system'; // Who initiated the subscription
+    taxAmount?: number; // Tax amount included in the total
+    taxPercentage?: number; // Tax percentage applied
+    billingDetails?: any; // Flexible structure
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
     createdAt: Date;
@@ -43,6 +48,10 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         planId: {
             type: Schema.Types.ObjectId,
             ref: 'SubscriptionPlan',
+            default: null,
+        },
+        invoiceNumber: {
+            type: String,
             default: null,
         },
         purchaseDate: {
@@ -88,6 +97,23 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         remainingDaysFromPrevious: {
             type: Number,
             default: 0,
+        },
+        source: {
+            type: String,
+            enum: ['user', 'admin', 'system'],
+            default: 'user', // Default to user for backward compatibility
+        },
+        taxAmount: {
+            type: Number,
+            default: 0,
+        },
+        taxPercentage: {
+            type: Number,
+            default: 0,
+        },
+        billingDetails: {
+            type: Schema.Types.Mixed, // Allow flexible structure to avoid validation errors
+            default: {}
         },
         isDeleted: {
             type: Boolean,

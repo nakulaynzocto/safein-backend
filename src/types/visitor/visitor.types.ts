@@ -59,38 +59,8 @@ export interface IVisitorListResponse {
     };
 }
 
-export interface IBulkUpdateVisitorsDTO {
-    visitorIds: string[];
-}
 
-export interface IVisitorSearchQuery {
-    phone?: string;
-    email?: string;
-}
 
-export interface IVisitorSearchResponse {
-    visitors: IVisitorResponse[];
-    found: boolean;
-    message: string;
-}
 
-export interface IVisitorStats {
-    totalVisitors: number;
-    deletedVisitors: number;
-    visitorsByCity: Array<{
-        city: string;
-        count: number;
-    }>;
-    visitorsByState: Array<{
-        state: string;
-        count: number;
-    }>;
-    visitorsByCountry: Array<{
-        country: string;
-        count: number;
-    }>;
-    visitorsByIdProofType: Array<{
-        idProofType: string;
-        count: number;
-    }>;
-}
+
+

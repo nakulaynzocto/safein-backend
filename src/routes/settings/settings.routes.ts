@@ -10,7 +10,7 @@ const router = Router();
 router.use(protect);
 
 router.get('/', asyncWrapper(SettingsController.getSettings));
-router.put('/', 
+router.put('/',
     validateRequest(updateSettingsValidation),
     asyncWrapper(SettingsController.updateSettings)
 );

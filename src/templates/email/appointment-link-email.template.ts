@@ -3,11 +3,13 @@ import { getBaseEmailTemplate } from './base-email.template';
 /**
  * Appointment Link Email Template
  * Sent to visitor when appointment booking link is created
+ * Modern, Professional, and User-Friendly Design
  */
 export function getAppointmentLinkEmailTemplate(
   employeeName: string,
   bookingUrl: string,
-  expiresAt: Date
+  expiresAt: Date,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedExpiryDate = expiresAt.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -23,24 +25,42 @@ export function getAppointmentLinkEmailTemplate(
             
             <div class="message">
                 Hello,<br><br>
-                You have been invited to book an appointment with <strong>${employeeName}</strong>. Click the button below to complete your appointment booking.
+                You have been invited to book an appointment with <strong>${employeeName}</strong> at <strong>${companyName}</strong>. Click the button below to complete your appointment booking.
             </div>
             
             <div class="highlight-box">
                 <h3>Appointment Details</h3>
-                <p><strong>👤 Meeting With:</strong> ${employeeName}</p>
-                <p><strong>⏰ Link Expires:</strong> ${formattedExpiryDate}</p>
+                <div class="detail-row">
+                    <div class="detail-icon">👤</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Meeting With</div>
+                        <div class="detail-value">${employeeName}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">🏢</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Company</div>
+                        <div class="detail-value">${companyName}</div>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-icon">⏰</div>
+                    <div class="detail-content">
+                        <div class="detail-label">Link Expires</div>
+                        <div class="detail-value">${formattedExpiryDate}</div>
+                    </div>
+                </div>
             </div>
             
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="${bookingUrl}" 
-                   style="display: inline-block; padding: 14px 28px; background-color: #1A73E8; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
-                    Book Appointment
+            <div class="button-group">
+                <a href="${bookingUrl}" class="action-button action-button-primary">
+                    Book Appointment Now
                 </a>
             </div>
             
-            <div class="message">
-                <strong>What to Expect:</strong><br><br>
+            <div class="info-box">
+                <strong>📋 What to Expect:</strong><br><br>
                 • Click the button above to open the appointment booking form<br>
                 • Your visitor and employee information will be pre-filled<br>
                 • Complete the remaining appointment details (date, time, purpose, etc.)<br>
@@ -51,13 +71,13 @@ export function getAppointmentLinkEmailTemplate(
                 <strong>🔒 Secure Link:</strong> This is a secure, one-time use link. Once you book an appointment, this link will no longer be valid. If you have any questions, please contact us.
             </div>
             
-            <div class="message" style="margin-top: 20px; font-size: 12px; color: #666;">
+            <div class="info-box" style="margin-top: 24px; font-size: 13px; padding: 16px;">
                 <strong>Note:</strong> If the button doesn't work, copy and paste this link into your browser:<br>
-                <a href="${bookingUrl}" style="color: #1A73E8; word-break: break-all;">${bookingUrl}</a>
+                <a href="${bookingUrl}" style="word-break: break-all; font-size: 12px;">${bookingUrl}</a>
             </div>
   `;
 
-  return getBaseEmailTemplate(content, 'Book Your Appointment - SafeIn');
+  return getBaseEmailTemplate(content, `Book Your Appointment - ${companyName}`, companyName);
 }
 
 /**
@@ -66,7 +86,8 @@ export function getAppointmentLinkEmailTemplate(
 export function getAppointmentLinkEmailText(
   employeeName: string,
   bookingUrl: string,
-  expiresAt: Date
+  expiresAt: Date,
+  companyName: string = 'SafeIn'
 ): string {
   const formattedExpiryDate = expiresAt.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -80,10 +101,11 @@ Book Your Appointment
 
 Hello,
 
-You have been invited to book an appointment with ${employeeName}. Use the link below to complete your appointment booking.
+You have been invited to book an appointment with ${employeeName} at ${companyName}. Use the link below to complete your appointment booking.
 
 Appointment Details:
 - Meeting With: ${employeeName}
+- Company: ${companyName}
 - Link Expires: ${formattedExpiryDate}
 
 Book Appointment: ${bookingUrl}
@@ -99,8 +121,6 @@ Secure Link: This is a secure, one-time use link. Once you book an appointment, 
 If you have any questions, please contact us.
 
 Best regards,
-SafeIn Security Management Team
+${companyName} Team
   `.trim();
 }
-
-

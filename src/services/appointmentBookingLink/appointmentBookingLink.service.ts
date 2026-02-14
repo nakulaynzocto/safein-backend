@@ -1,14 +1,17 @@
 import { AppointmentBookingLink } from '../../models/appointmentBookingLink/appointmentBookingLink.model';
 import { Employee } from '../../models/employee/employee.model';
 import { Visitor } from '../../models/visitor/visitor.model';
+import { User } from '../../models/user/user.model';
 import { EmailService } from '../email/email.service';
 import { AppointmentService } from '../appointment/appointment.service';
+import { EmployeeUtil } from '../../utils/employee.util';
 import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import * as crypto from 'crypto';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
 import { ICreateAppointmentDTO } from '../../types/appointment/appointment.types';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 
 interface ICreateAppointmentLinkDTO {
   visitorEmail: string;
@@ -42,14 +45,18 @@ export class AppointmentBookingLinkService {
     }
 
     // Check if visitor exists by email
+    // Visitors belong to admin, so check by admin's userId, not employee's userId
     const normalizedEmail = visitorEmail.toLowerCase().trim();
-    const createdByObjectId = toObjectId(createdBy);
     let visitorId: any = null;
 
-    if (createdByObjectId) {
+    // Get admin's userId (if createdBy is employee, get their admin's ID)
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
+    const adminUserIdObjectId = toObjectId(adminUserId);
+
+    if (adminUserIdObjectId) {
       const existingVisitor = await Visitor.findOne({
         email: normalizedEmail,
-        createdBy: createdByObjectId,
+        createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
         isDeleted: false,
       })
         .select('_id')
@@ -74,9 +81,12 @@ export class AppointmentBookingLinkService {
 
     // Calculate expiration date
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+    expiresAt.setTime(expiresAt.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
 
     // Create appointment booking link
+    // Note: createdBy can be employee's userId or admin's userId
+    // We store it as-is for tracking who created the link
+    const createdByObjectId = toObjectId(createdBy);
     const appointmentLink = new AppointmentBookingLink({
       visitorEmail: normalizedEmail,
       employeeId: toObjectId(employeeId),
@@ -92,13 +102,24 @@ export class AppointmentBookingLinkService {
     const baseUrl = this.getBaseUrl();
     const link = `${baseUrl}/book-appointment/${token}`;
 
+    // Get company name from user (createdBy) for email fromName
+    let companyName: string | undefined;
+    try {
+      const user = await User.findById(createdBy).select('companyName').lean();
+      companyName = user?.companyName;
+    } catch (error) {
+      // If user not found or error, companyName will remain undefined
+      console.warn('Failed to fetch company name for email fromName:', error);
+    }
+
     // Send email to visitor
     try {
       await EmailService.sendAppointmentLinkEmail(
         visitorEmail,
         (employee as any).name || 'Employee',
         link,
-        expiresAt
+        expiresAt,
+        companyName
       );
     } catch (error: any) {
       // Continue even if email fails
@@ -113,7 +134,7 @@ export class AppointmentBookingLinkService {
   static async getAppointmentLinkByToken(token: string): Promise<any> {
     const link = await AppointmentBookingLink.findOne({ secureToken: token })
       .populate('employeeId', 'name email phone department designation')
-      .populate('visitorId', 'name email phone company designation')
+      .populate('visitorId', 'name email phone')
       .populate('createdBy', 'companyName profilePicture')
       .lean();
 
@@ -157,7 +178,7 @@ export class AppointmentBookingLinkService {
           createdBy: createdByObjectId,
           isDeleted: false,
         })
-          .select('_id name email phone company designation')
+          .select('_id name email phone')
           .lean();
 
         if (visitor && visitor._id) {
@@ -193,7 +214,7 @@ export class AppointmentBookingLinkService {
    */
   static async getAllAppointmentLinks(
     query: IGetAllAppointmentLinksQuery,
-    createdBy: string
+    userId: string
   ): Promise<any> {
     const {
       page = 1,
@@ -204,9 +225,42 @@ export class AppointmentBookingLinkService {
       sortOrder = 'desc',
     } = query;
 
-    const filter: any = {
-      createdBy: toObjectId(createdBy),
-    };
+    // Resolve admin ID to check if user is admin or employee
+    // If user is employee, getAdminId returns their admin's ID
+    // If user is admin, getAdminId returns their own ID
+    const adminId = await EmployeeUtil.getAdminId(userId);
+
+    const filter: any = {};
+
+    // Check if current user is the admin
+    if (userId === adminId) {
+      // User is Admin: Show links created by Admin AND all their Employees
+
+      // 1. Get all employees created by this admin
+      // 1. Get all employees created by this admin
+      const employees = await Employee.find({
+        createdBy: toObjectId(adminId),
+        isDeleted: false
+      }).select('email');
+
+      const employeeEmails = employees.map(emp => emp.email);
+
+      // 2. Find User IDs for these employees
+      // Appointment links are created with User ID, not Employee ID
+      const employeeUsers = await User.find({
+        email: { $in: employeeEmails }
+      }).select('_id');
+
+      const employeeUserIds = employeeUsers.map(user => user._id);
+
+      // 3. Filter links created by Admin or any of their Employees (using User IDs)
+      filter.createdBy = {
+        $in: [toObjectId(adminId), ...employeeUserIds]
+      };
+    } else {
+      // User is Employee: Show only links created by this Employee
+      filter.createdBy = toObjectId(userId);
+    }
 
     if (isBooked !== undefined) {
       filter.isBooked = isBooked;
@@ -227,7 +281,7 @@ export class AppointmentBookingLinkService {
     const [links, totalLinks] = await Promise.all([
       AppointmentBookingLink.find(filter)
         .populate('employeeId', 'name email phone department')
-        .populate('visitorId', 'name email phone company')
+        .populate('visitorId', 'name email phone')
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -254,6 +308,42 @@ export class AppointmentBookingLinkService {
         hasPrevPage: page > 1,
       },
     };
+  }
+
+  /**
+   * Resend appointment link email
+   */
+  static async resendLink(id: string, userId: string): Promise<void> {
+    const link = await AppointmentBookingLink.findById(id).populate('employeeId');
+
+    if (!link) {
+      throw new AppError('Appointment link not found', ERROR_CODES.NOT_FOUND);
+    }
+
+    if (link.isBooked) {
+      throw new AppError('Appointment link has already been used', ERROR_CODES.BAD_REQUEST);
+    }
+
+    if (new Date(link.expiresAt) < new Date()) {
+      throw new AppError('Appointment link has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    const baseUrl = this.getBaseUrl();
+    const bookingUrl = `${baseUrl}/book-appointment/${link.secureToken}`;
+
+    // Get company name from Admin
+    const adminId = await EmployeeUtil.getAdminId(userId);
+    const adminUser = await User.findById(adminId).select('companyName').lean();
+    const companyName = adminUser?.companyName;
+
+    // Send email to visitor
+    await EmailService.sendAppointmentLinkEmail(
+      link.visitorEmail,
+      (link.employeeId as any).name || 'Employee',
+      bookingUrl,
+      link.expiresAt,
+      companyName
+    );
   }
 
   /**
@@ -302,6 +392,7 @@ export class AppointmentBookingLinkService {
     return createdByIdString;
   }
 
+
   /**
    * Update visitor ID in appointment link
    */
@@ -321,17 +412,27 @@ export class AppointmentBookingLinkService {
 
   /**
    * Check if visitor exists
+   * Checks by admin's userId (not employee's userId)
+   * Visitors belong to admin, so we check across all employees of that admin
    */
   static async checkVisitorExists(
     email: string,
     createdBy: string
   ): Promise<{ exists: boolean; visitor?: any }> {
+    // Get admin's userId (if createdBy is employee, get their admin's ID)
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
+    const adminUserIdObjectId = toObjectId(adminUserId);
+
+    if (!adminUserIdObjectId) {
+      return { exists: false, visitor: undefined };
+    }
+
     const visitor = await Visitor.findOne({
       email: email.toLowerCase().trim(),
-      createdBy: toObjectId(createdBy),
+      createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
       isDeleted: false,
     })
-      .select('name email phone company designation')
+      .select('name email phone')
       .lean();
 
     return {
@@ -367,27 +468,33 @@ export class AppointmentBookingLinkService {
     let visitorIdString = this.getVisitorIdString(link.visitorId);
 
     // If visitorId is not set, try to find visitor by email and update the link
+    // Visitors belong to admin, so check by admin's userId, not employee's userId
     if (!visitorIdString && link.visitorEmail && link.createdBy) {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
-      const createdByObjectId = toObjectId(createdByIdString || undefined);
-      if (createdByObjectId) {
-        const visitor = await Visitor.findOne({
-          email: link.visitorEmail.toLowerCase().trim(),
-          createdBy: createdByObjectId,
-          isDeleted: false,
-        })
-          .select('_id')
-          .lean();
+      if (createdByIdString) {
+        // Get admin's userId (if createdBy is employee, get their admin's ID)
+        const adminUserId = await EmployeeUtil.getAdminId(createdByIdString);
+        const adminUserIdObjectId = toObjectId(adminUserId);
 
-        if (visitor && visitor._id) {
-          const visitorObjectId = toObjectId(visitor._id.toString());
-          if (visitorObjectId) {
-            // Update the link document with visitorId
-            const linkDocument = await AppointmentBookingLink.findById(link._id);
-            if (linkDocument) {
-              linkDocument.visitorId = visitorObjectId;
-              await linkDocument.save();
-              visitorIdString = visitor._id.toString();
+        if (adminUserIdObjectId) {
+          const visitor = await Visitor.findOne({
+            email: link.visitorEmail.toLowerCase().trim(),
+            createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
+            isDeleted: false,
+          })
+            .select('_id')
+            .lean();
+
+          if (visitor && visitor._id) {
+            const visitorObjectId = toObjectId(visitor._id.toString());
+            if (visitorObjectId) {
+              // Update the link document with visitorId
+              const linkDocument = await AppointmentBookingLink.findById(link._id);
+              if (linkDocument) {
+                linkDocument.visitorId = visitorObjectId;
+                await linkDocument.save();
+                visitorIdString = visitor._id.toString();
+              }
             }
           }
         }
@@ -410,8 +517,29 @@ export class AppointmentBookingLinkService {
       throw new AppError('Invalid appointment link creator', ERROR_CODES.BAD_REQUEST);
     }
 
+    // Check if link was created by an employee
+    const user = await User.findById(createdBy).select('_id roles employeeId email').lean();
+    const isLinkCreatedByEmployee = user?.roles?.includes('employee') || false;
+
     // Create appointment
-    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, { sendNotifications: true });
+    // Get admin user ID (if createdBy is employee, use their admin's ID)
+    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
+
+    // Check admin's subscription limits (not employee's)
+    await UserSubscriptionService.checkPlanLimits(adminUserId, 'appointments');
+
+    // If link was created by employee, set status to 'approved' automatically
+    // Otherwise, status will be 'pending' (default)
+    if (isLinkCreatedByEmployee) {
+      appointmentPayload.status = 'approved';
+    }
+
+    // Visitor is creating appointment via link, so both admin and employee should be notified
+    const appointment = await AppointmentService.createAppointment(appointmentPayload, createdBy, {
+      sendNotifications: true,
+      createdByVisitor: true, // Flag to indicate visitor created via link
+      adminUserId: adminUserId // Pass admin user ID for notifications
+    });
 
     // Mark link as booked
     await this.markAsBooked(token);
@@ -473,7 +601,7 @@ export class AppointmentBookingLinkService {
    * Helper: Get base URL for appointment links
    */
   private static getBaseUrl(): string {
-    const url = process.env.APPROVAL_LINK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const url = process.env.FRONTEND_URL || 'http://localhost:3000';
     const cleanUrl = url.replace(/\/$/, '');
 
     if (!cleanUrl || cleanUrl === '') {

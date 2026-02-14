@@ -2,19 +2,23 @@ import { Router } from 'express';
 import { AppointmentBookingLinkController } from '../../controllers/appointmentBookingLink/appointmentBookingLink.controller';
 import { verifyToken } from '../../middlewares/auth.middleware';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
-import { publicActionLimiter } from '../../middlewares';
+import { publicActionLimiter, validateRequest } from '../../middlewares';
+import { checkSubscriptionStatus } from '../../middlewares/checkSubscriptionStatus.middleware';
+import { getAppointmentBookingLinksValidation } from '../../validations/appointment/appointment.validation';
 
 const router = Router();
 
 router.post(
   '/',
   verifyToken,
+  checkSubscriptionStatus,
   asyncWrapper(AppointmentBookingLinkController.createAppointmentLink)
 );
 
 router.get(
   '/',
   verifyToken,
+  validateRequest(getAppointmentBookingLinksValidation),
   asyncWrapper(AppointmentBookingLinkController.getAllAppointmentLinks)
 );
 
@@ -45,6 +49,12 @@ router.post(
   '/public/:token/create-appointment',
   publicActionLimiter,
   asyncWrapper(AppointmentBookingLinkController.createAppointmentThroughLink)
+);
+
+router.post(
+  '/resend/:id',
+  verifyToken,
+  asyncWrapper(AppointmentBookingLinkController.resendLink)
 );
 
 router.delete(

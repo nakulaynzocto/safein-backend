@@ -17,11 +17,21 @@ export interface IVisitor extends Document {
     name: string;
     email: string;
     phone: string;
-    company: string;
-    designation: string;
+    gender?: 'male' | 'female' | 'other';
     address: IAddress;
     idProof: IIdProof;
     photo?: string;
+
+    // Safety & Categorization
+    blacklisted: boolean;
+    blacklistReason?: string;
+    tags?: string[];
+    emergencyContacts?: Array<{
+        name: string;
+        countryCode: string;
+        phone: string; // Must total exactly 15 digits with country code
+    }>;
+
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the visitor
     isDeleted: boolean;
     deletedAt?: Date;
@@ -36,7 +46,7 @@ const addressSchema = new Schema<IAddress>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -74,7 +84,7 @@ const idProofSchema = new Schema<IIdProof>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -88,7 +98,7 @@ const idProofSchema = new Schema<IIdProof>({
         required: false,
         trim: true,
         validate: {
-            validator: function(value: string) {
+            validator: function (value: string) {
                 if (!value || value.trim().length === 0) return true;
                 return value.trim().length >= 2;
             },
@@ -125,6 +135,13 @@ const visitorSchema = new Schema<IVisitor>({
         trim: true,
         match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
     },
+    gender: {
+        type: String,
+        enum: {
+            values: ['male', 'female', 'other'],
+            message: 'Gender must be one of: male, female, other'
+        }
+    },
     address: {
         type: addressSchema,
         required: [true, 'Address is required']
@@ -138,6 +155,53 @@ const visitorSchema = new Schema<IVisitor>({
         trim: true,
         maxlength: [500, 'Photo URL cannot exceed 500 characters']
     },
+    blacklisted: {
+        type: Boolean,
+        default: false
+    },
+    blacklistReason: {
+        type: String,
+        trim: true
+    },
+    tags: [{
+        type: String,
+        trim: true
+    }],
+    emergencyContacts: [{
+        name: {
+            type: String,
+            required: [true, 'Emergency contact name is required'],
+            trim: true,
+            minlength: [2, 'Emergency contact name must be at least 2 characters'],
+            maxlength: [100, 'Emergency contact name cannot exceed 100 characters']
+        },
+        countryCode: {
+            type: String,
+            required: [true, 'Country code is required'],
+            trim: true,
+            match: [/^\+\d{1,4}$/, 'Country code must start with + and contain 1-4 digits (e.g., +91, +1)']
+        },
+        phone: {
+            type: String,
+            required: [true, 'Emergency contact phone is required'],
+            trim: true,
+            validate: {
+                validator: function (value: string) {
+                    // Phone number should contain only digits
+                    if (!/^\d+$/.test(value)) return false;
+
+                    // Get the country code from the same document
+                    const countryCode = (this as any).countryCode || '';
+                    const countryCodeDigits = countryCode.replace(/^\+/, ''); // Remove + sign
+
+                    // Total digits (country code + phone) must be exactly 15
+                    const totalDigits = countryCodeDigits.length + value.length;
+                    return totalDigits === 15;
+                },
+                message: 'Total phone number (country code + phone) must be exactly 15 digits'
+            }
+        }
+    }],
     createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'User',
@@ -164,7 +228,6 @@ const visitorSchema = new Schema<IVisitor>({
 
 visitorSchema.index({ email: 1 });
 visitorSchema.index({ phone: 1 });
-visitorSchema.index({ company: 1 });
 visitorSchema.index({ 'address.city': 1 });
 visitorSchema.index({ 'address.state': 1 });
 visitorSchema.index({ 'address.country': 1 });

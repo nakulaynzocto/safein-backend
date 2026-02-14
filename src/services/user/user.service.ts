@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import { User } from '../../models/user/user.model';
+import { Employee } from '../../models/employee/employee.model';
+import { EmployeeUtil } from '../../utils/employee.util';
 import {
   ICreateUserDTO,
   IUpdateUserDTO,
@@ -14,9 +17,25 @@ import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import { EmailService } from '../email/email.service';
 import { RedisOtpService } from '../redis/redisOtp.service';
+import { getRedisClient } from '../../config/redis.config';
+import { SubscriptionPlan } from '../../models/subscription/subscription.model';
+import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
+import { toObjectId } from '../../utils/idExtractor.util';
 import * as crypto from 'crypto';
 
 export class UserService {
+  /**
+   * Helper to populate employeeId on user profile if user is an employee
+   */
+  private static async populateEmployeeId(user: any, userProfile: IUserResponse): Promise<void> {
+    if (user.roles && user.roles.includes('employee')) {
+      // Only use the direct link present on the User model
+      if (user.employeeId) {
+        userProfile.employeeId = user.employeeId.toString();
+      }
+    }
+  }
+
   /**
    * Generate a 6-digit OTP
    */
@@ -31,7 +50,7 @@ export class UserService {
     try {
       await EmailService.sendOtpEmail(email, otp, companyName);
     } catch (error: any) {
-      if (process.env.NODE_ENV === 'development') {
+      if (CONSTANTS.NODE_ENV === 'development') {
         return;
       }
       throw new AppError('Failed to send OTP email', ERROR_CODES.INTERNAL_SERVER_ERROR);
@@ -87,9 +106,34 @@ export class UserService {
     const user = new User(otpData.userData);
     await user.save({ session });
 
-    // According to documentation: After OTP verification, subscription_status should be "pending"
-    // Do NOT create any subscription automatically. User must select a plan and complete payment first.
-    // Subscription will be created only after successful payment via Stripe webhook.
+    // Auto-assign free trial subscription on registration
+    // Find active free plan and create subscription
+    const freePlan = await SubscriptionPlan.findOne({
+      planType: 'free',
+      isActive: true,
+      isDeleted: false
+    }).session(session);
+
+    if (freePlan) {
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + (freePlan.trialDays || 3));
+
+      const subscription = new UserSubscription({
+        userId: user._id,
+        planType: 'free',
+        startDate,
+        endDate,
+        isActive: true,
+        paymentStatus: 'succeeded',
+        trialDays: freePlan.trialDays || 3,
+      });
+      await subscription.save({ session });
+
+      // Update user's activeSubscriptionId
+      user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
+      await user.save({ session });
+    }
 
     // Delete OTP from Redis after successful verification
     await RedisOtpService.deleteOtp(email);
@@ -159,18 +203,48 @@ export class UserService {
     options: { session?: any } = {}
   ): Promise<{ user: IUserResponse; token: string }> {
     const { session } = options;
-    const user = await User.findOne({ email: loginData.email, isDeleted: false }).select('+password').session(session);
 
-    if (!user) {
+    // Multi-tenancy: Same email can exist for multiple users (employees from different admins)
+    // Priority: Employee accounts > Admin accounts
+    // For multiple employees with same email, use the most recently created one
+    const users = await User.find({
+      email: loginData.email,
+      isDeleted: false
+    })
+      .select('+password')
+      .sort({ createdAt: -1 }) // Most recent first
+      .session(session);
+
+    if (!users || users.length === 0) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (!user.isActive) {
+    // Priority 1: Find active employee account with valid password
+    let user = users.find(u =>
+      u.isActive &&
+      u.roles.includes('employee')
+    );
+
+    // Priority 2: If no active employee, try admin account
+    if (!user) {
+      user = users.find(u =>
+        u.isActive &&
+        u.roles.includes('admin')
+      );
+    }
+
+    // Priority 3: If still no active user, check any active user
+    if (!user) {
+      user = users.find(u => u.isActive);
+    }
+
+    // No active user found
+    if (!user) {
       throw new AppError(ERROR_MESSAGES.ACCOUNT_DISABLED, ERROR_CODES.UNAUTHORIZED);
     }
 
+    // Verify password
     const isPasswordValid = await user.comparePassword(loginData.password);
-
     if (!isPasswordValid) {
       throw new AppError(ERROR_MESSAGES.INVALID_CREDENTIALS, ERROR_CODES.UNAUTHORIZED);
     }
@@ -186,8 +260,14 @@ export class UserService {
       email: user.email,
     });
 
+    // Get public profile
+    const userProfile = user.getPublicProfile() as any;
+
+    // If user is an employee, find their employeeId from Employee model
+    await this.populateEmployeeId(user, userProfile);
+
     return {
-      user: user.getPublicProfile(),
+      user: userProfile,
       token,
     };
   }
@@ -200,15 +280,38 @@ export class UserService {
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
-    return user.getPublicProfile();
+
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
+    return userProfile;
   }
 
   /**
    * Update user profile
+   * If admin updates company details, also update all employee accounts
    */
   @Transaction('Failed to update user')
   static async updateUser(userId: string, updateData: IUpdateUserDTO, options: { session?: any } = {}): Promise<IUserResponse> {
     const { session } = options;
+
+    // Check if user is an employee
+    const currentUser = await User.findOne({ _id: userId, isDeleted: false }).session(session);
+    if (!currentUser) {
+      throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    const isEmployee = await EmployeeUtil.isEmployee(currentUser);
+
+    // Employees cannot update company-related fields
+    if (isEmployee && (updateData.companyName !== undefined || updateData.profilePicture !== undefined || updateData.companyId !== undefined)) {
+      throw new AppError(
+        "Employees cannot update company settings. Please contact your administrator.",
+        ERROR_CODES.FORBIDDEN
+      );
+    }
 
     const safeUpdateData: Partial<IUpdateUserDTO> = {};
 
@@ -221,8 +324,8 @@ export class UserService {
     if (updateData.companyId !== undefined) {
       safeUpdateData.companyId = updateData.companyId;
     }
-    if (updateData.role !== undefined) {
-      safeUpdateData.role = updateData.role;
+    if (updateData.roles !== undefined) {
+      safeUpdateData.roles = updateData.roles;
     }
     if (updateData.department !== undefined) {
       safeUpdateData.department = updateData.department;
@@ -230,9 +333,25 @@ export class UserService {
     if (updateData.designation !== undefined) {
       safeUpdateData.designation = updateData.designation;
     }
+    if (updateData.mobileNumber !== undefined) {
+      safeUpdateData.mobileNumber = updateData.mobileNumber;
+    }
+    if (updateData.isActive !== undefined) {
+      safeUpdateData.isActive = updateData.isActive;
+    }
+    if (updateData.bio !== undefined) {
+      safeUpdateData.bio = updateData.bio;
+    }
+    if (updateData.address !== undefined) {
+      safeUpdateData.address = updateData.address;
+    }
+    if (updateData.socialLinks !== undefined) {
+      safeUpdateData.socialLinks = updateData.socialLinks;
+    }
 
     delete (safeUpdateData as any).session;
 
+    // Update user
     const user = await User.findOneAndUpdate(
       { _id: userId, isDeleted: false },
       safeUpdateData,
@@ -241,6 +360,48 @@ export class UserService {
 
     if (!user) {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    // If admin updates company details (companyName, profilePicture, companyId),
+    // also update all employee accounts created by this admin
+    const isAdmin = user.roles && user.roles.includes('admin');
+    const hasCompanyUpdate = updateData.companyName !== undefined ||
+      updateData.profilePicture !== undefined ||
+      updateData.companyId !== undefined;
+
+    if (isAdmin && hasCompanyUpdate) {
+      // Prepare employee update data (only company-related fields)
+      const employeeUpdateData: any = {};
+      if (updateData.companyName !== undefined) {
+        employeeUpdateData.companyName = updateData.companyName;
+      }
+      if (updateData.profilePicture !== undefined) {
+        employeeUpdateData.profilePicture = updateData.profilePicture;
+      }
+      if (updateData.companyId !== undefined) {
+        employeeUpdateData.companyId = updateData.companyId;
+      }
+
+      // Update all employee user accounts created by this admin
+      try {
+        await User.updateMany(
+          {
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false
+          },
+          { $set: employeeUpdateData },
+          { session }
+        );
+
+      } catch (employeeUpdateError: any) {
+        // Log error but don't fail the main update
+        console.error('[User Service] Failed to sync company details to employee accounts:', {
+          adminUserId: userId,
+          error: employeeUpdateError.message,
+          stack: employeeUpdateError.stack
+        });
+      }
     }
 
     return user.getPublicProfile();
@@ -271,29 +432,109 @@ export class UserService {
   /**
    * Get all users (admin function)
    */
-  static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false): Promise<{
-    users: IUserResponse[];
+  /**
+   * Get all users (admin function) - with Today's Appointment Count
+   */
+  static async getAllUsers(page: number = 1, limit: number = 10, includeDeleted: boolean = false, createdBy?: string): Promise<{
+    users: (IUserResponse & { appointmentsTodayCount: number })[];
     total: number;
     page: number;
     totalPages: number;
   }> {
     const skip = (page - 1) * limit;
-    const filter = includeDeleted ? {} : { isDeleted: false };
+    const matchStage: any = includeDeleted ? {} : { isDeleted: false };
+
+    // Multi-tenancy: Filter by createdBy if provided
+    if (createdBy) {
+      const createdByObjectId = toObjectId(createdBy);
+      if (createdByObjectId) {
+        matchStage.$or = [
+          { _id: createdByObjectId }, // Include themselves
+          { createdBy: createdByObjectId } // Include users they created (sub-admins/employees)
+        ];
+      }
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const pipeline: any[] = [
+      { $match: matchStage },
+      // Lookup today's appointments for each user
+      {
+        $lookup: {
+          from: 'appointments',
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$createdBy', '$$userId'] },
+                'appointmentDetails.scheduledDate': {
+                  $gte: startOfDay,
+                  $lte: endOfDay
+                },
+                isDeleted: false
+              }
+            },
+            { $count: 'count' }
+          ],
+          as: 'todayAppointments'
+        }
+      },
+      {
+        $addFields: {
+          appointmentsTodayCount: {
+            $ifNull: [{ $arrayElemAt: ['$todayAppointments.count', 0] }, 0]
+          }
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "users",
+          localField: "deletedBy",
+          foreignField: "_id",
+          as: "deletedBy",
+        },
+      },
+      {
+        $unwind: {
+          path: "$deletedBy",
+          preserveNullAndEmptyArrays: true,
+        },
+      }
+    ];
 
     const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('-password')
-        .populate('deletedBy', 'companyName email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      User.countDocuments(filter)
+      User.aggregate(pipeline),
+      User.countDocuments(matchStage) // Total count for pagination remains same
     ]);
 
-    const usersWithoutPassword = users.map(user => user.getPublicProfile());
+    const usersFormatted = users.map(u => {
+      // Reconstruct minimal expected public profile + count
+      return {
+        _id: u._id,
+        companyName: u.companyName,
+        email: u.email,
+        profilePicture: u.profilePicture || "",
+        isActive: u.isActive,
+        isEmailVerified: u.isEmailVerified,
+
+        ...u,
+        password: undefined,
+        passwordResetToken: undefined,
+        resetPasswordExpires: undefined,
+        todayAppointments: undefined, // cleanup temp field
+        activeSubscriptionId: u.activeSubscriptionId ? { endDate: u.activeSubscriptionId.endDate /* we need to lookup subscription too if needed */ } : undefined
+      };
+    });
 
     return {
-      users: usersWithoutPassword,
+      users: usersFormatted, // returning as-is with cleanup
       total,
       page,
       totalPages: Math.ceil(total / limit),
@@ -302,6 +543,7 @@ export class UserService {
 
   /**
    * Soft delete user (admin function)
+   * If admin is deleted, also disable all employee accounts created by this admin
    */
   @Transaction('Failed to delete user')
   static async deleteUser(userId: string, deletedBy: string, options: { session?: any } = {}): Promise<void> {
@@ -312,11 +554,48 @@ export class UserService {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
 
+    const isAdmin = user.roles && user.roles.includes('admin');
+
+    // Soft delete the user
     await (user as any).softDelete(deletedBy);
+
+    // If admin is deleted, disable all employee accounts created by this admin
+    if (isAdmin) {
+      try {
+        // Disable all employee user accounts created by this admin
+        await User.updateMany(
+          {
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false
+          },
+          {
+            $set: { isActive: false }
+          },
+          { session }
+        );
+
+        // Also soft delete all employees created by this admin
+        await Employee.updateMany(
+          {
+            createdBy: user._id,
+            isDeleted: false
+          },
+          {
+            $set: { isDeleted: true, deletedAt: new Date(), deletedBy: toObjectId(deletedBy) }
+          },
+          { session }
+        );
+      } catch (employeeCleanupError: any) {
+        // Log error but don't fail admin deletion
+        console.error(`[User Service] Failed to cleanup employee accounts after admin deletion:`, employeeCleanupError);
+      }
+    }
   }
 
   /**
    * Restore user from trash (admin function)
+   * If admin is restored, also restore all employee accounts and employees created by this admin
    */
   @Transaction('Failed to restore user')
   static async restoreUser(userId: string, options: { session?: any } = {}): Promise<IUserResponse> {
@@ -327,7 +606,45 @@ export class UserService {
       throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
     }
 
+    const isAdmin = user.roles && user.roles.includes('admin');
+
+    // Restore the user
     await (user as any).restore();
+
+    // If admin is restored, also restore all employee accounts and employees
+    if (isAdmin) {
+      try {
+        // Restore all employee user accounts created by this admin
+        await User.updateMany(
+          {
+            createdBy: user._id,
+            roles: { $in: ['employee'] },
+            isDeleted: false,
+            isActive: false
+          },
+          {
+            $set: { isActive: true }
+          },
+          { session }
+        );
+
+        // Also restore all employees created by this admin
+        await Employee.updateMany(
+          {
+            createdBy: user._id,
+            isDeleted: true
+          },
+          {
+            $set: { isDeleted: false, deletedAt: null, deletedBy: null }
+          },
+          { session }
+        );
+      } catch (employeeRestoreError: any) {
+        // Log error but don't fail admin restoration
+        console.error(`[User Service] Failed to restore employee accounts after admin restoration:`, employeeRestoreError);
+      }
+    }
+
     return user.getPublicProfile();
   }
 
@@ -374,8 +691,8 @@ export class UserService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL - Use APPROVAL_LINK_BASE_URL (same as approve/reject links) or fallback to FRONTEND_URL
-    const baseUrl = CONSTANTS.APPROVAL_LINK_BASE_URL || CONSTANTS.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
+    // Create reset URL - Use FRONTEND_URL for password reset links
+    const baseUrl = CONSTANTS.FRONTEND_URL;
     const resetUrl = `${baseUrl.replace(/\/$/, '')}/reset-password?token=${resetToken}`;
 
     try {
@@ -387,7 +704,7 @@ export class UserService {
       user.resetPasswordExpires = undefined;
       await user.save({ validateBeforeSave: false });
 
-      if (process.env.NODE_ENV === 'development') {
+      if (CONSTANTS.NODE_ENV === 'development') {
         console.error('Failed to send password reset email:', error.message);
         return { message: 'Password reset email could not be sent. Please try again later.' };
       }
@@ -425,12 +742,119 @@ export class UserService {
     user.resetPasswordExpires = undefined;
     await user.save({ session });
 
-    // Optionally send confirmation email
+    // Send confirmation email
     try {
       await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
     } catch (error) {
-      // Don't fail the reset if email fails
-      console.error('Failed to send password reset confirmation email:', error);
+      console.warn('Failed to send password reset confirmation email:', error);
     }
+  }
+
+  /**
+   * Setup employee password using token (activates account and returns login credentials)
+   */
+  @Transaction('Failed to setup employee password')
+  static async setupEmployeePassword(setupPasswordData: IResetPasswordDTO, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+    const { token, newPassword } = setupPasswordData;
+    const { session } = options;
+
+    // Hash the token to compare with stored token
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token and not expired
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() },
+      isDeleted: false
+    }).select('+passwordResetToken +resetPasswordExpires +password').session(session);
+
+    if (!user) {
+      throw new AppError('Setup token is invalid or has expired', ERROR_CODES.BAD_REQUEST);
+    }
+
+    // Check if user is an employee
+    if (!user.roles || !user.roles.includes('employee')) {
+      throw new AppError('This setup link is only for employees', ERROR_CODES.FORBIDDEN);
+    }
+
+    // Check associate employee status before activation
+    if (user.employeeId) {
+      const employee = await Employee.findById(user.employeeId).session(session);
+      if (employee && employee.status === 'Inactive') {
+        throw new AppError('Your account has been deactivated by the administrator. Please contact your company admin.', ERROR_CODES.FORBIDDEN);
+      }
+    }
+
+    // Update password, activate account, and clear reset token
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.isActive = true; // Activate the account
+    user.isEmailVerified = true; // Mark email as verified since they clicked the link
+    await user.save({ session });
+
+    // Send confirmation email
+    try {
+      await EmailService.sendPasswordResetConfirmationEmail(user.email, user.companyName);
+    } catch (error) {
+      console.warn('Failed to send password setup confirmation email:', error);
+    }
+
+    // Generate login token
+    const loginToken = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email
+    });
+
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
+    return {
+      user: userProfile,
+      token: loginToken
+    };
+  }
+  // Exchange Impersonation Token
+  static async exchangeImpersonationToken(code: string): Promise<{ user: IUserResponse; token: string }> {
+    const redisClient = getRedisClient();
+    const redisKey = `impersonate_code:${code}`;
+
+    // 1. Get userId from Redis
+    const userId = await redisClient.get(redisKey);
+
+    if (!userId) {
+      throw new AppError('Invalid or expired impersonation code', ERROR_CODES.UNAUTHORIZED);
+    }
+
+    // 2. DELETE key immediately (Burn after reading)
+    await redisClient.del(redisKey);
+
+    // 3. Find User
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError(ERROR_MESSAGES.USER_NOT_FOUND, ERROR_CODES.NOT_FOUND);
+    }
+
+    if (!user.isActive) {
+      throw new AppError('User account is disabled', ERROR_CODES.UNAUTHORIZED);
+    }
+
+    // 4. Generate Session Token
+    const token = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email
+    });
+
+    const userProfile = user.getPublicProfile();
+
+    // Populate employeeId if user is an employee
+    await this.populateEmployeeId(user, userProfile);
+
+    return {
+      user: userProfile,
+      token
+    };
   }
 }

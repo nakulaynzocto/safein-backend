@@ -6,6 +6,7 @@ export interface IEmployee extends Document {
     phone: string;
     department: string;
     designation?: string;
+    photo?: string;
     status: 'Active' | 'Inactive';
     createdBy: mongoose.Types.ObjectId; // Reference to User who created the employee
     isDeleted: boolean;
@@ -13,6 +14,9 @@ export interface IEmployee extends Document {
     deletedBy?: mongoose.Types.ObjectId; // Reference to User who deleted the employee
     createdAt: Date;
     updatedAt: Date;
+    isVerified: boolean;
+    verificationOtp?: string;
+    verificationOtpExpires?: Date;
 }
 
 const employeeSchema = new Schema<IEmployee>({
@@ -50,10 +54,14 @@ const employeeSchema = new Schema<IEmployee>({
         maxlength: [100, 'Position cannot exceed 100 characters'],
         default: '',
     },
+    photo: {
+        type: String,
+        default: '',
+    },
     status: {
         type: String,
         enum: ['Active', 'Inactive'],
-        default: 'Active'
+        default: 'Inactive'
     },
     createdBy: {
         type: Schema.Types.ObjectId,
@@ -72,6 +80,18 @@ const employeeSchema = new Schema<IEmployee>({
         type: Schema.Types.ObjectId,
         ref: 'User',
         default: null
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationOtp: {
+        type: String,
+        select: false // Hide from default queries for security
+    },
+    verificationOtpExpires: {
+        type: Date,
+        select: false
     }
 }, {
     timestamps: true,
@@ -84,6 +104,13 @@ employeeSchema.index({ status: 1 });
 employeeSchema.index({ isDeleted: 1 });
 employeeSchema.index({ deletedAt: 1 });
 employeeSchema.index({ createdBy: 1 });
+
+employeeSchema.index({ createdBy: 1, isDeleted: 1, status: 1 }); // Optimize employee listing default with deleted
+employeeSchema.index({ createdBy: 1, status: 1, isDeleted: 1, createdAt: -1 }); // Optimize active employee listing with sort
+employeeSchema.index({ isDeleted: 1, status: 1 }); // Optimize general active/deleted filters
+
+// Text Index for full-text search (MUCH FASTER than regex for large data)
+employeeSchema.index({ name: 'text', email: 'text', department: 'text', designation: 'text' });
 
 employeeSchema.index({ createdBy: 1, email: 1 }, { unique: true });
 

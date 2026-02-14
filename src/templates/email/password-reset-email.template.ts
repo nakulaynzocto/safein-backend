@@ -6,13 +6,21 @@ import { getBaseEmailTemplate } from './base-email.template';
  */
 export function getPasswordResetEmailTemplate(resetUrl: string, companyName: string): string {
   const content = `
-            <div class="greeting">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="display: inline-block; width: 100px; height: 100px; background-color: #fef2f2; border-radius: 50%; padding: 20px; box-sizing: border-box; margin: 0 auto;">
+                    <div style="width: 100%; height: 100%; background-color: #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <span style="font-size: 40px;">🔐</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="greeting" style="text-align: center;">
                 Password Reset Request
             </div>
             
             <div class="message">
-                Hello ${companyName},<br><br>
-                We received a request to reset the password for your SafeIn account. If you made this request, please click the button below to create a new password. If you didn't request this, you can safely ignore this email.
+                Hello <strong>${companyName}</strong>,<br><br>
+                We received a request to reset the password for your <strong>${companyName}</strong> account. If you made this request, please click the button below to create a new password. If you didn't request this, you can safely ignore this email.
             </div>
             
             <div style="text-align: center; margin: 35px 0;">
@@ -27,26 +35,18 @@ export function getPasswordResetEmailTemplate(resetUrl: string, companyName: str
             <div class="security-note security-warning">
                 <strong>⏱️ Expiration Notice:</strong> This password reset link will expire in <strong>1 hour</strong> for security reasons. If the link expires, you can request a new password reset from the login page.
             </div>
-            
-            <div class="security-note">
-                <strong>🔒 Security Reminders:</strong><br>
-                • Never share your password reset link with anyone<br>
-                • SafeIn staff will never ask for your password or reset link<br>
-                • If you didn't request this reset, your account remains secure<br>
-                • If you continue to receive unexpected reset emails, please contact our support team immediately
-            </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Reset Your Password - SafeIn');
+
+  return getBaseEmailTemplate(content, `Reset Your Password - ${companyName}`, companyName);
 }
 
 export function getPasswordResetEmailText(resetUrl: string, companyName: string): string {
   return `
-Reset Your Password - SafeIn
+Reset Your Password - ${companyName}
 
 Hello ${companyName},
 
-You requested to reset your password for your SafeIn account.
+You requested to reset your password for your ${companyName} account.
 
 Click the link below to reset your password:
 ${resetUrl}
@@ -62,17 +62,14 @@ Important Security Notes:
 If you have any questions or need assistance, please contact our support team.
 
 Best regards,
-SafeIn Security Team
+${companyName} Team
 
 This is an automated message. Please do not reply to this email.
 
-SafeIn Security Management System
+${companyName} Security Management System
 Professional Visitor Management Solutions
   `;
 }
-
-
-
 
 
 

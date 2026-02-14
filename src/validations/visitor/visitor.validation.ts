@@ -200,27 +200,16 @@ export const getVisitorsValidation = Joi.object({
         }),
     search: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
             'string.max': 'Search term cannot exceed 100 characters'
         }),
-    company: Joi.string()
-        .optional()
-        .trim()
-        .max(100)
-        .messages({
-            'string.max': 'Company filter cannot exceed 100 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .max(100)
-        .messages({
-            'string.max': 'Designation filter cannot exceed 100 characters'
-        }),
+
     city: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -228,6 +217,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     state: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -235,6 +225,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     country: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(100)
         .messages({
@@ -242,6 +233,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     idProofType: Joi.string()
         .optional()
+        .allow('', null)
         .trim()
         .max(50)
         .messages({
@@ -249,7 +241,7 @@ export const getVisitorsValidation = Joi.object({
         }),
     sortBy: Joi.string()
         .optional()
-        .valid('name', 'email', 'company', 'designation', 'createdAt', 'updatedAt')
+        .valid('name', 'email', 'createdAt', 'updatedAt')
         .default('createdAt')
         .messages({
             'any.only': 'Invalid sort field'
@@ -274,24 +266,7 @@ export const bulkUpdateVisitorsValidation = Joi.object({
             'array.max': 'Cannot update more than 50 visitors at once',
             'string.pattern.base': 'Invalid visitor ID format'
         }),
-    company: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Company must be at least 2 characters long',
-            'string.max': 'Company cannot exceed 100 characters'
-        }),
-    designation: Joi.string()
-        .optional()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'string.min': 'Designation must be at least 2 characters long',
-            'string.max': 'Designation cannot exceed 100 characters'
-        })
+
 });
 
 export const visitorSearchValidation = Joi.object({

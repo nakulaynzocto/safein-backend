@@ -11,7 +11,8 @@ export {
   uploadLimiter,
   publicActionLimiter,
   userLimiter,
-  createUserRateLimiter
+  createUserRateLimiter,
+  supportInquiryLimiter
 } from './rateLimiter.enhanced';
 
 // Brute Force Protection

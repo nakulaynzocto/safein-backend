@@ -5,13 +5,21 @@ import { getBaseEmailTemplate } from './base-email.template';
  * Sent after successful registration
  */
 export function getWelcomeEmailTemplate(companyName: string): string {
-  const content = `
-            <div class="greeting">
-                Welcome to SafeIn, ${companyName}!
+    const content = `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="display: inline-block; width: 100px; height: 100px; background-color: #e3f2fd; border-radius: 50%; padding: 20px; box-sizing: border-box; margin: 0 auto;">
+                    <div style="width: 100%; height: 100%; background-color: #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <span style="font-size: 40px;">👋</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="greeting" style="text-align: center;">
+                Welcome to ${companyName}!
             </div>
             
             <div class="message">
-                We're thrilled to have you on board! Your SafeIn account has been successfully created and verified. You now have access to a comprehensive visitor management system designed to enhance security and streamline your operations.
+                We're thrilled to have you on board! Your <strong>${companyName}</strong> account has been successfully created and verified.
             </div>
             
             <div class="highlight-box">
@@ -39,20 +47,20 @@ export function getWelcomeEmailTemplate(companyName: string): string {
             </div>
             
             <div class="security-note security-success">
-                <strong>💡 Pro Tip:</strong> Our support team is available 24/7 to help you get started. If you have any questions or need assistance setting up your account, don't hesitate to reach out to us at <a href="mailto:support@safein.com" style="color: #1A73E8; text-decoration: none;">support@safein.com</a>
+                <strong>💡 Pro Tip:</strong> Our support team is available 24/7 to help you get started. If you have any questions or need assistance setting up your account, don't hesitate to reach out to our support team.
             </div>
   `;
-  
-  return getBaseEmailTemplate(content, 'Welcome to SafeIn');
+
+    return getBaseEmailTemplate(content, `Welcome to ${companyName}`, companyName);
 }
 
 export function getWelcomeEmailText(companyName: string): string {
-  return `
-Welcome to SafeIn!
+    return `
+Welcome to ${companyName}!
 
 Hello ${companyName},
 
-Congratulations! Your SafeIn Security Management System account is now active and ready to use.
+Congratulations! Your ${companyName} Security Management System account is now active and ready to use.
 
 What's Next?
 - Log in to your dashboard to start managing visitors
@@ -70,12 +78,9 @@ Your account includes:
 If you have any questions or need assistance getting started, our support team is here to help.
 
 Best regards,
-SafeIn Security Team
+${companyName} Team
 
-Need help? Contact us at support@safein.com
-
-SafeIn Security Management System
+${companyName} Security Management System
 Professional Visitor Management Solutions
   `;
 }
-

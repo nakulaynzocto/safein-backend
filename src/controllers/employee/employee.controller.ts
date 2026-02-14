@@ -5,14 +5,13 @@ import { ResponseUtil } from '../../utils';
 import {
     ICreateEmployeeDTO,
     IUpdateEmployeeDTO,
-    IGetEmployeesQuery,
-    IUpdateEmployeeStatusDTO,
-    IBulkUpdateEmployeesDTO
+    IGetEmployeesQuery
 } from '../../types/employee/employee.types';
 import { ERROR_CODES } from '../../utils/constants';
 import { TryCatch } from '../../decorators';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/errorHandler';
+import { EmployeeUtil } from '../../utils/employee.util';
 import * as XLSX from 'xlsx';
 
 export class EmployeeController {
@@ -34,39 +33,93 @@ export class EmployeeController {
     /**
      * Get all employees with pagination and filtering (user-specific)
      * GET /api/employees
+     * - Admin: sees only THEIR OWN employees (created by them)
+     * - Employee: sees only their own record
      */
     @TryCatch('Failed to get employees')
     static async getAllEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const query: IGetEmployeesQuery = req.query;
         const userId = req.user._id.toString();
-        const result = await EmployeeService.getAllEmployees(query, userId);
+        const userEmail = req.user.email;
+        const userEmployeeId = req.user.employeeId;
+
+        // Check if user is an employee
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        // SECURITY FIX: Always pass userId to filter by admin's createdBy
+        // - For admin: shows employees created by this admin (their own data)
+        // - For employee: shows only their own employee record
+        // Prepare filters for employee-specific view
+        const employeeEmail = isEmployee ? userEmail : undefined;
+        const employeeRefId = isEmployee ? userEmployeeId : undefined;
+
+        const result = await EmployeeService.getAllEmployees(
+            query,
+            userId,
+            employeeEmail,
+            employeeRefId
+        );
         ResponseUtil.success(res, 'Employees retrieved successfully', result);
+    }
+
+    /**
+     * Get employee count (optimized for dashboard)
+     * GET /api/employees/count
+     * Returns counts by status without fetching full employee data
+     */
+    @TryCatch('Failed to get employee count')
+    static async getEmployeeCount(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const userId = req.user._id.toString();
+        const isEmployee = await EmployeeUtil.isEmployee(req.user);
+
+        const count = await EmployeeService.getEmployeeCount(
+            userId,
+            isEmployee ? req.user.email : undefined
+        );
+
+        ResponseUtil.success(res, 'Employee count retrieved successfully', count);
     }
 
     /**
      * Get employee by ID (user-specific)
      * GET /api/employees/:id
+     * Allows employees to access their own record even if created by admin
      */
     @TryCatch('Failed to get employee')
     static async getEmployeeById(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const userId = req.user._id.toString();
-        
+
         const employee = await EmployeeService.getEmployeeById(id);
-        
+
         const employeeRecord = await Employee.findById(id);
-        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+        if (!employeeRecord) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
         }
-        
+
+        // Allow access if:
+        // 1. User created the employee (admin case)
+        // 2. User is the employee themselves (employee accessing their own record)
+        const isCreator = employeeRecord.createdBy.toString() === userId;
+        const isEmployeeSelf = req.user.employeeId === id ||
+            (req.user.email && employeeRecord.email?.toLowerCase().trim() === req.user.email.toLowerCase().trim());
+
+        if (!isCreator && !isEmployeeSelf) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
         ResponseUtil.success(res, 'Employee retrieved successfully', employee);
     }
 
@@ -79,16 +132,16 @@ export class EmployeeController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const updateData: IUpdateEmployeeDTO = req.body;
         const userId = req.user._id.toString();
-        
+
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
         }
-        
+
         const employee = await EmployeeService.updateEmployee(id, updateData);
         ResponseUtil.success(res, 'Employee updated successfully', employee);
     }
@@ -102,105 +155,20 @@ export class EmployeeController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
-        
+
         const { id } = req.params;
         const userId = req.user._id.toString();
-        
+
         const employeeRecord = await Employee.findById(id);
         if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
             throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
         }
-        
+
         const deletedBy = req.user._id.toString();
         await EmployeeService.deleteEmployee(id, deletedBy);
         ResponseUtil.success(res, 'Employee deleted successfully');
     }
 
-    /**
-     * Check if employee has appointments
-     * GET /api/employees/:id/has-appointments
-     */
-    @TryCatch('Failed to check employee appointments')
-    static async hasAppointments(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const { id } = req.params;
-        const userId = req.user._id.toString();
-        
-        const employeeRecord = await Employee.findById(id);
-        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
-            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const result = await EmployeeService.hasAppointments(id);
-        ResponseUtil.success(res, 'Appointment check completed', result);
-    }
-
-    /**
-     * Update employee status (user-specific)
-     * PUT /api/employees/:id/status
-     */
-    @TryCatch('Failed to update employee status')
-    static async updateEmployeeStatus(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const { id } = req.params;
-        const statusData: IUpdateEmployeeStatusDTO = req.body;
-        const userId = req.user._id.toString();
-        
-        const employeeRecord = await Employee.findById(id);
-        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
-            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const employee = await EmployeeService.updateEmployeeStatus(id, statusData);
-        ResponseUtil.success(res, 'Employee status updated successfully', employee);
-    }
-
-    /**
-     * Bulk update employees (user-specific)
-     * PUT /api/employees/bulk-update
-     */
-    @TryCatch('Failed to bulk update employees')
-    static async bulkUpdateEmployees(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const bulkData: IBulkUpdateEmployeesDTO = req.body;
-        const userId = req.user._id.toString();
-        
-        const employees = await Employee.find({ 
-            _id: { $in: bulkData.employeeIds },
-            createdBy: userId 
-        });
-        
-        if (employees.length !== bulkData.employeeIds.length) {
-            throw new AppError('Some employees not found or access denied', ERROR_CODES.NOT_FOUND);
-        }
-        
-        const result = await EmployeeService.bulkUpdateEmployees(bulkData);
-        ResponseUtil.success(res, 'Employees updated successfully', result);
-    }
-
-    /**
-     * Get employee statistics (user-specific)
-     * GET /api/employees/stats
-     */
-    @TryCatch('Failed to get employee statistics')
-    static async getEmployeeStats(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        if (!req.user) {
-            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
-        }
-        
-        const userId = req.user._id.toString();
-        const stats = await EmployeeService.getEmployeeStats(userId);
-        ResponseUtil.success(res, 'Employee statistics retrieved successfully', stats);
-    }
 
     /**
      * Download Excel template for bulk import
@@ -214,15 +182,14 @@ export class EmployeeController {
 
         // Create workbook and worksheet
         const workbook = XLSX.utils.book_new();
-        
+
         // Define headers
         const headers = [
             'Name',
             'Email',
             'Phone',
             'Department',
-            'Designation',
-            'Status'
+            'Designation'
         ];
 
         // Create sample data row
@@ -232,8 +199,7 @@ export class EmployeeController {
                 'john.doe@example.com',
                 '1234567890',
                 'Engineering',
-                'Software Engineer',
-                'Active'
+                'Software Engineer'
             ]
         ];
 
@@ -246,8 +212,7 @@ export class EmployeeController {
             { wch: 30 }, // Email
             { wch: 15 }, // Phone
             { wch: 20 }, // Department
-            { wch: 25 }, // Designation
-            { wch: 12 }  // Status
+            { wch: 25 }  // Designation
         ];
 
         // Add worksheet to workbook
@@ -259,7 +224,7 @@ export class EmployeeController {
         // Set response headers
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=employee-import-template.xlsx');
-        
+
         // Send file
         res.send(buffer);
     }
@@ -279,23 +244,21 @@ export class EmployeeController {
         }
 
         const createdBy = req.user._id.toString();
-        
+
         try {
             // Read Excel file
             const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            
+
             // Convert to JSON - map headers to lowercase keys
-            const data = XLSX.utils.sheet_to_json(worksheet, { 
+            const data = XLSX.utils.sheet_to_json(worksheet, {
                 defval: '', // Default value for empty cells
                 raw: false // Convert all values to strings
             });
 
             // Validate and transform data - optimized with helper function
             const employees: ICreateEmployeeDTO[] = [];
-            const VALID_STATUSES = ['Active', 'Inactive'] as const;
-            
             // Helper function to get value by case-insensitive key
             const getValue = (row: any, key: string): string => {
                 const keys = Object.keys(row);
@@ -305,13 +268,12 @@ export class EmployeeController {
 
             for (let i = 0; i < data.length; i++) {
                 const row = data[i] as any;
-                
+
                 const name = getValue(row, 'name');
                 const email = getValue(row, 'email');
                 const phone = getValue(row, 'phone');
                 const department = getValue(row, 'department');
                 const designation = getValue(row, 'designation');
-                const status = getValue(row, 'status');
 
                 // Skip empty rows
                 if (!name && !email && !phone) {
@@ -325,9 +287,7 @@ export class EmployeeController {
                     phone,
                     department,
                     designation: designation || undefined,
-                    status: (status && VALID_STATUSES.includes(status as typeof VALID_STATUSES[number]))
-                        ? status as 'Active' | 'Inactive'
-                        : 'Active'
+                    status: 'Inactive' // Enforce Inactive status for bulk import
                 };
 
                 employees.push(employee);
@@ -354,5 +314,53 @@ export class EmployeeController {
             }
             throw new AppError(`Failed to process Excel file: ${error.message}`, ERROR_CODES.BAD_REQUEST);
         }
+    }
+    /**
+     * Send Verification OTP
+     * POST /api/employees/:id/send-otp
+     */
+    @TryCatch('Failed to send OTP')
+    static async sendOtp(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        const userId = req.user._id.toString();
+
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        await EmployeeService.sendVerificationOtp(id);
+        ResponseUtil.success(res, 'Verification OTP sent successfully');
+    }
+
+    /**
+     * Verify OTP
+     * POST /api/employees/:id/verify-otp
+     */
+    @TryCatch('Failed to verify OTP')
+    static async verifyOtp(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { id } = req.params;
+        const { otp } = req.body;
+        const userId = req.user._id.toString();
+
+        if (!otp) {
+            throw new AppError('OTP is required', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const employeeRecord = await Employee.findById(id);
+        if (!employeeRecord || employeeRecord.createdBy.toString() !== userId) {
+            throw new AppError('Employee not found or access denied', ERROR_CODES.NOT_FOUND);
+        }
+
+        await EmployeeService.verifyEmployeeOtp(id, otp);
+        ResponseUtil.success(res, 'Employee verified and setup successfully');
     }
 }

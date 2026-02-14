@@ -11,7 +11,7 @@ const defaultPlans = [
         name: "3 Day Trial",
         description: "Experience full SafeIn features for 3 days",
         planType: 'free',
-        amount: 200, // ₹2 (200 paise) for card verification
+        amount: 0, // Free - no card verification required
         currency: 'inr',
         features: [
             "Full SafeIn features access",
@@ -29,13 +29,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: 5,
+            visitors: 5,
+            appointments: 5
         }
     },
     {
         name: "Premium - 1 Month",
-        description: "Monthly billing at ₹6,999/month",
+        description: "Monthly billing at ₹5,999/month",
         planType: 'monthly',
-        amount: 699900, // ₹6,999.00 in paise
+        amount: 5999, // ₹5,999.00
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -55,13 +60,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     },
     {
         name: "Premium - 3 Months",
         description: "Save 5% with 3-month billing",
         planType: 'quarterly',
-        amount: 1991700, // ₹19,917.00 in paise (3 * 6999 * 0.95 = 19,917)
+        amount: 17097.15, // ₹17,097.15
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -81,13 +91,18 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     },
     {
         name: "Premium - 12 Months",
         description: "Save 10% with annual billing - Best value!",
         planType: 'yearly',
-        amount: 7558900, // ₹75,589.00 in paise (12 * 6999 * 0.90 = 75,589)
+        amount: 64789.20, // ₹64,789.20
         currency: 'inr',
         features: [
             'Unlimited visitor tracking',
@@ -107,6 +122,11 @@ const defaultPlans = [
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
+        },
+        limits: {
+            employees: -1,
+            visitors: -1,
+            appointments: -1
         }
     }
 ];
@@ -114,7 +134,6 @@ const defaultPlans = [
 async function seedSubscriptionPlans() {
     try {
         console.log('🌱 Starting subscription plans seeding...');
-        
         // Connect to database
         await connectDatabase();
         console.log('✅ Connected to database');
@@ -145,7 +164,7 @@ async function seedSubscriptionPlans() {
             console.log('ℹ️  All subscription plans already exist. No new plans to insert.');
             console.log('\n📋 Existing Subscription Plans:');
             existingPlans.forEach((plan, index) => {
-                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${plan.amount.toFixed(2)}`);
             });
         } else {
             // Insert only new plans (no duplicates)
@@ -155,7 +174,7 @@ async function seedSubscriptionPlans() {
             // Display inserted plans
             console.log('\n📋 Newly Inserted Subscription Plans:');
             insertedPlans.forEach((plan, index) => {
-                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${(plan.amount / 100).toFixed(2)}`);
+                console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${plan.amount.toFixed(2)}`);
             });
 
             // Display skipped (duplicate) plans
@@ -174,7 +193,6 @@ async function seedSubscriptionPlans() {
         }
 
         console.log('\n🎉 Subscription plans seeding completed successfully!');
-        
     } catch (error) {
         console.error('❌ Error seeding subscription plans:', error);
         process.exit(1);

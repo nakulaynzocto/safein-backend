@@ -1,5 +1,5 @@
-import jwt, { SignOptions } from 'jsonwebtoken';
-import { CONSTANTS } from './constants';
+import jwt, { SignOptions } from "jsonwebtoken";
+import { CONSTANTS } from "./constants";
 
 export interface JwtPayload {
     userId: string;
@@ -28,7 +28,6 @@ export class JwtUtil {
         return jwt.sign(payload, CONSTANTS.JWT_SECRET, { expiresIn: CONSTANTS.JWT_EXPIRATION } as any);
     }
 
-
     /**
      * Verify JWT token
      */
@@ -36,7 +35,7 @@ export class JwtUtil {
         try {
             return jwt.verify(token, CONSTANTS.JWT_SECRET) as JwtPayload;
         } catch (error) {
-            throw new Error('Invalid or expired token');
+            throw new Error("Invalid or expired token");
         }
     }
 
@@ -45,7 +44,7 @@ export class JwtUtil {
      */
     static generateRefreshToken(payload: { userId: string; email: string }): string {
         const options: SignOptions = {
-            expiresIn: '7d', // Refresh token expires in 7 days
+            expiresIn: "7d", // Refresh token expires in 7 days
         };
         return jwt.sign(payload, CONSTANTS.JWT_SECRET, options);
     }
@@ -54,8 +53,8 @@ export class JwtUtil {
      * Extract token from Authorization header
      */
     static extractTokenFromHeader(authHeader: string | undefined): string {
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            throw new Error('Invalid authorization header');
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            throw new Error("Invalid authorization header");
         }
         return authHeader.substring(7); // Remove 'Bearer ' prefix
     }

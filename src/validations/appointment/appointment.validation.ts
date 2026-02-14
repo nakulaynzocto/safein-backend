@@ -64,7 +64,7 @@ const appointmentDetailsValidation = Joi.object({
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(value.getFullYear(), value.getMonth(), value.getDate());
-                
+
                 if (selectedDate < today) {
                     return helpers.error('date.min');
                 }
@@ -78,11 +78,11 @@ const appointmentDetailsValidation = Joi.object({
                 if (isNaN(date.getTime())) {
                     return helpers.error('date.invalid');
                 }
-                
+
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                
+
                 if (selectedDate < today) {
                     return helpers.error('date.min');
                 }
@@ -107,11 +107,11 @@ const appointmentDetailsValidation = Joi.object({
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const selectedDate = new Date(scheduledDate);
                 const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-                
+
                 if (selectedDateOnly.getTime() === today.getTime()) {
                     const [hours, minutes] = value.split(':').map(Number);
                     const selectedDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
-                    
+
                     if (selectedDateTime <= now) {
                         return helpers.error('time.min');
                     }
@@ -301,12 +301,11 @@ export const getAppointmentsValidation = Joi.object({
     limit: Joi.number()
         .integer()
         .min(1)
-        // Dashboard may request higher limits to compute accurate stats client-side.
-        // Keep a reasonable upper bound to protect the API.
-        .max(5000)
-        .default(10),
+        .max(200) // Reduced from 5000 to 200 for better performance with large datasets
+        .default(50), // Increased default from 10 to 50 for better UX
     search: Joi.string()
         .optional()
+        .allow('', null)
         .trim(),
     employeeId: Joi.string()
         .optional()
@@ -360,12 +359,10 @@ export const bulkUpdateAppointmentsValidation = Joi.object({
 
 export const appointmentSearchValidation = Joi.object({
     query: Joi.string()
-        .required()
+        .allow('', null)
         .trim()
-        .min(1)
         .messages({
-            'any.required': 'Search query is required',
-            'string.min': 'Search query cannot be empty'
+            'any.required': 'Search query is required'
         }),
     type: Joi.string()
         .valid('visitor_name', 'visitor_phone', 'visitor_email', 'appointment_id', 'employee_name')
@@ -400,14 +397,28 @@ export const calendarValidation = Joi.object({
         })
 });
 
-export const employeeIdParamsValidation = Joi.object({
-    employeeId: Joi.string()
-        .required()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .messages({
-            'string.pattern.base': 'Invalid employee ID format',
-            'any.required': 'Employee ID is required'
-        })
+export const getAppointmentBookingLinksValidation = Joi.object({
+    page: Joi.number()
+        .integer()
+        .min(1)
+        .default(1),
+    limit: Joi.number()
+        .integer()
+        .min(1)
+        .max(100)
+        .default(10),
+    search: Joi.string()
+        .optional()
+        .allow('', null)
+        .trim(),
+    isBooked: Joi.boolean()
+        .optional(),
+    sortBy: Joi.string()
+        .valid('createdAt', 'expiresAt', 'visitorEmail')
+        .default('createdAt'),
+    sortOrder: Joi.string()
+        .valid('asc', 'desc')
+        .default('desc')
 });
 
 export const dateRangeValidation = Joi.object({

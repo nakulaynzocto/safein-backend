@@ -1,12 +1,12 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 export class LogRotation {
     private logDir: string;
     private maxFileSize: number; // in bytes
     private maxFiles: number;
 
-    constructor(logDir: string = 'logs', maxFileSize: number = 10 * 1024 * 1024, maxFiles: number = 5) {
+    constructor(logDir: string = "logs", maxFileSize: number = 10 * 1024 * 1024, maxFiles: number = 5) {
         this.logDir = logDir;
         this.maxFileSize = maxFileSize; // 10MB default
         this.maxFiles = maxFiles; // Keep 5 files max
@@ -26,7 +26,7 @@ export class LogRotation {
                 this.rotateLog(logFile);
             }
         } catch (error) {
-            console.error('Error checking log rotation:', error);
+            console.error("Error checking log rotation:", error);
         }
     }
 
@@ -35,7 +35,7 @@ export class LogRotation {
      */
     private rotateLog(logFile: string): void {
         try {
-            const baseName = path.basename(logFile, '.log');
+            const baseName = path.basename(logFile, ".log");
             const dirName = path.dirname(logFile);
 
             const oldestFile = path.join(dirName, `${baseName}.${this.maxFiles - 1}.log`);
@@ -57,7 +57,7 @@ export class LogRotation {
 
             console.log(`Log rotated: ${logFile} -> ${rotatedFile}`);
         } catch (error) {
-            console.error('Error rotating log file:', error);
+            console.error("Error rotating log file:", error);
         }
     }
 
@@ -71,7 +71,7 @@ export class LogRotation {
             }
 
             const files = fs.readdirSync(this.logDir);
-            const logFiles = files.filter(file => file.endsWith('.log'));
+            const logFiles = files.filter((file) => file.endsWith(".log"));
 
             for (const file of logFiles) {
                 const filePath = path.join(this.logDir, file);
@@ -84,7 +84,7 @@ export class LogRotation {
                 }
             }
         } catch (error) {
-            console.error('Error cleaning old logs:', error);
+            console.error("Error cleaning old logs:", error);
         }
     }
 
@@ -100,7 +100,7 @@ export class LogRotation {
             const stats = fs.statSync(logFile);
             return stats.size / (1024 * 1024); // Convert to MB
         } catch (error) {
-            console.error('Error getting log file size:', error);
+            console.error("Error getting log file size:", error);
             return 0;
         }
     }
@@ -109,7 +109,7 @@ export class LogRotation {
      * Get log file info
      */
     public getLogInfo(): { [key: string]: any } {
-        const logFiles = ['api.log', 'access.log', 'error.log'];
+        const logFiles = ["api.log", "access.log", "error.log"];
         const info: { [key: string]: any } = {};
 
         for (const logFile of logFiles) {
@@ -119,7 +119,7 @@ export class LogRotation {
                 info[logFile] = {
                     size: `${(stats.size / (1024 * 1024)).toFixed(2)} MB`,
                     lastModified: stats.mtime.toISOString(),
-                    needsRotation: stats.size > this.maxFileSize
+                    needsRotation: stats.size > this.maxFileSize,
                 };
             }
         }

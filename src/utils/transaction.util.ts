@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 export class TransactionUtil {
     /**
@@ -6,21 +6,16 @@ export class TransactionUtil {
      * @param operations - Array of operations to execute within the transaction
      * @returns Promise with the results of all operations
      */
-    static async executeTransaction<T>(
-        operations: (session: mongoose.ClientSession) => Promise<T>
-    ): Promise<T> {
+    static async executeTransaction<T>(operations: (session: mongoose.ClientSession) => Promise<T>): Promise<T> {
         const session = await mongoose.startSession();
 
         try {
-            session.startTransaction();
-
-            const result = await operations(session);
-
-            await session.commitTransaction();
-            return result;
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
+            let result: T;
+            await session.withTransaction(async (session) => {
+                result = await operations(session);
+                return result;
+            });
+            return result!;
         } finally {
             session.endSession();
         }
@@ -32,24 +27,22 @@ export class TransactionUtil {
      * @returns Promise with array of results
      */
     static async executeMultipleOperations<T>(
-        operations: Array<(session: mongoose.ClientSession) => Promise<T>>
+        operations: Array<(session: mongoose.ClientSession) => Promise<T>>,
     ): Promise<T[]> {
         const session = await mongoose.startSession();
 
         try {
-            session.startTransaction();
-
-            const results: T[] = [];
-            for (const operation of operations) {
-                const result = await operation(session);
-                results.push(result);
-            }
-
-            await session.commitTransaction();
+            let results: T[] = [];
+            await session.withTransaction(async (session) => {
+                const batchResults: T[] = [];
+                for (const operation of operations) {
+                    const result = await operation(session);
+                    batchResults.push(result);
+                }
+                results = batchResults;
+                return results;
+            });
             return results;
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
         } finally {
             session.endSession();
         }

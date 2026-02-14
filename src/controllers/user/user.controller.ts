@@ -4,7 +4,6 @@ import { ResponseUtil, ERROR_CODES } from '../../utils';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { TryCatch } from '../../decorators';
 import { AppError } from '../../middlewares/errorHandler';
-
 export class UserController {
   /**
    * Register a new user (sends OTP)
@@ -41,7 +40,14 @@ export class UserController {
    */
   @TryCatch('Failed to login user')
   static async login(req: Request, res: Response, _next: NextFunction): Promise<void> {
-    const loginData = req.body;
+    // const loginData = req.body;
+    let { email, password } = req.body;
+
+    // create login object
+    const loginData = {
+      email: email,
+      password: password,
+    };
 
     try {
       const result = await UserService.loginUser(loginData);
@@ -106,7 +112,7 @@ export class UserController {
     }
 
     const currentUserId = req.user._id.toString();
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.roles.includes('admin');
 
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only access your own profile.', ERROR_CODES.FORBIDDEN);
@@ -125,7 +131,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 
@@ -133,7 +139,8 @@ export class UserController {
     const result = await UserService.getAllUsers(
       parseInt(page as string),
       parseInt(limit as string),
-      includeDeleted === 'true'
+      includeDeleted === 'true',
+      req.user._id.toString()
     );
     ResponseUtil.success(res, 'Users retrieved successfully', result);
   }
@@ -150,7 +157,7 @@ export class UserController {
     }
 
     const currentUserId = req.user._id.toString();
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.roles.includes('admin');
 
     if (id !== currentUserId && !isAdmin) {
       throw new AppError('Access denied. You can only update your own profile.', ERROR_CODES.FORBIDDEN);
@@ -170,7 +177,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 
@@ -189,7 +196,7 @@ export class UserController {
       throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
     }
 
-    if (req.user.role !== 'admin') {
+    if (!req.user.roles.includes('admin')) {
       throw new AppError('Access denied. Admin role required.', ERROR_CODES.FORBIDDEN);
     }
 
@@ -228,8 +235,29 @@ export class UserController {
     ResponseUtil.success(res, 'Password reset successfully');
   }
 
+  /**
+   * Setup employee password (activates account and returns login credentials)
+   * POST /api/v1/users/setup-employee-password
+   */
+  @TryCatch('Failed to setup employee password')
+  static async setupEmployeePassword(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const setupPasswordData = req.body;
+    const result = await UserService.setupEmployeePassword(setupPasswordData);
+    ResponseUtil.success(res, 'Employee password setup successful. Account activated.', result);
+  }
+
   @TryCatch('Failed to logout')
   static async logout(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
     ResponseUtil.success(res, 'Logout successful');
+  }
+
+  /**
+   * Exchange Impersonation Token
+   */
+  @TryCatch('Failed to exchange impersonation token')
+  static async exchangeImpersonationToken(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { code } = req.body;
+    const result = await UserService.exchangeImpersonationToken(code);
+    ResponseUtil.success(res, 'Impersonation secure exchange successful', result);
   }
 }

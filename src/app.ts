@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 import express, { Express } from 'express';
 import { createServer } from 'http';
@@ -25,6 +24,7 @@ import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
 import { webhookRouter } from './routes/userSubscription/userSubscription.routes';
 import { socketService } from './services/socket/socket.service';
+import superAdminRoutes from './routes/internal/superAdmin.routes';
 
 const app: Express = express();
 // Trust proxy (required for correct IP detection behind proxies/load balancers)
@@ -81,11 +81,13 @@ app.use(generalLimiter);
 app.use('/api/v1/user-subscriptions', webhookRouter);
 
 // Request size limits (security best practice)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Prevent HTTP Parameter Pollution (HPP)
 app.use(hpp());
+
+app.use('/internal/super-admin', superAdminRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -97,11 +99,23 @@ app.use(errorHandler);
 app.use(notFoundHandler);
 
 const PORT = CONSTANTS.PORT;
-httpServer.listen(PORT, () => {
-  if (CONSTANTS.NODE_ENV === 'development') {
-    console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
-    console.log(`📡 WebSocket server ready for connections`);
-  }
+const server = httpServer.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} (${CONSTANTS.NODE_ENV})`);
+});
+
+// Avoid Server Crashing on Unhandled Errors
+process.on('unhandledRejection', (err: any) => {
+  console.error('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.error(err.name, err.message);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  console.error(err.name, err.message);
+  process.exit(1);
 });
 
 export default app;

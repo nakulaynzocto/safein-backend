@@ -1,10 +1,12 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
+
+import { CONSTANTS } from "../utils/constants";
 
 export interface LogEntry {
     timestamp: string;
-    level: 'INFO' | 'ERROR' | 'WARN' | 'DEBUG';
-    type: 'REQUEST' | 'RESPONSE' | 'ERROR';
+    level: "INFO" | "ERROR" | "WARN" | "DEBUG";
+    type: "REQUEST" | "RESPONSE" | "ERROR";
     method: string;
     url: string;
     statusCode?: number;
@@ -26,10 +28,10 @@ class Logger {
     private accessLogFile: string;
 
     constructor() {
-        this.logDir = path.join(process.cwd(), 'logs');
-        this.logFile = path.join(this.logDir, 'api.log');
-        this.errorLogFile = path.join(this.logDir, 'error.log');
-        this.accessLogFile = path.join(this.logDir, 'access.log');
+        this.logDir = path.join(process.cwd(), "logs");
+        this.logFile = path.join(this.logDir, "api.log");
+        this.errorLogFile = path.join(this.logDir, "error.log");
+        this.accessLogFile = path.join(this.logDir, "access.log");
 
         this.ensureLogDirectory();
     }
@@ -41,11 +43,11 @@ class Logger {
                 console.log(`📁 Created logs directory: ${this.logDir}`);
             }
         } catch (error) {
-            console.error('Failed to create logs directory:', error);
+            console.error("Failed to create logs directory:", error);
             this.logDir = process.cwd();
-            this.logFile = path.join(this.logDir, 'api.log');
-            this.errorLogFile = path.join(this.logDir, 'error.log');
-            this.accessLogFile = path.join(this.logDir, 'access.log');
+            this.logFile = path.join(this.logDir, "api.log");
+            this.errorLogFile = path.join(this.logDir, "error.log");
+            this.accessLogFile = path.join(this.logDir, "access.log");
         }
     }
 
@@ -58,21 +60,21 @@ class Logger {
             url: entry.url,
             requestId: entry.requestId,
             ip: entry.ip,
-            userAgent: entry.userAgent
+            userAgent: entry.userAgent,
         };
 
-        if (entry.type === 'REQUEST') {
+        if (entry.type === "REQUEST") {
             logData.requestPayload = entry.requestPayload;
-        } else if (entry.type === 'RESPONSE') {
+        } else if (entry.type === "RESPONSE") {
             logData.statusCode = entry.statusCode;
             logData.responsePayload = entry.responsePayload;
             logData.responseTime = entry.responseTime ? `${entry.responseTime}ms` : undefined;
-        } else if (entry.type === 'ERROR') {
+        } else if (entry.type === "ERROR") {
             logData.statusCode = entry.statusCode;
             logData.error = entry.error;
             logData.message = entry.message;
             logData.responseTime = entry.responseTime ? `${entry.responseTime}ms` : undefined;
-            if (process.env.NODE_ENV === 'development') {
+            if (CONSTANTS.NODE_ENV === "development") {
                 logData.stack = entry.stack;
             }
         }
@@ -88,18 +90,18 @@ class Logger {
                 console.log(`📁 Recreated logs directory: ${dir}`);
             }
 
-            fs.appendFileSync(filename, message + '\n');
+            fs.appendFileSync(filename, message + "\n");
         } catch (error) {
-            console.error('Failed to write to log file:', error);
-            console.log('LOG:', message);
+            console.error("Failed to write to log file:", error);
+            console.log("LOG:", message);
         }
     }
 
-    public logRequest(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
+    public logRequest(entry: Omit<LogEntry, "level" | "timestamp">): void {
         const logEntry: LogEntry = {
             ...entry,
-            level: 'INFO',
-            timestamp: new Date().toISOString()
+            level: "INFO",
+            timestamp: new Date().toISOString(),
         };
 
         const message = this.formatLogEntry(logEntry);
@@ -107,11 +109,11 @@ class Logger {
         this.writeToFile(this.accessLogFile, message);
     }
 
-    public logResponse(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
+    public logResponse(entry: Omit<LogEntry, "level" | "timestamp">): void {
         const logEntry: LogEntry = {
             ...entry,
-            level: 'INFO',
-            timestamp: new Date().toISOString()
+            level: "INFO",
+            timestamp: new Date().toISOString(),
         };
 
         const message = this.formatLogEntry(logEntry);
@@ -119,11 +121,11 @@ class Logger {
         this.writeToFile(this.accessLogFile, message);
     }
 
-    public logError(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
+    public logError(entry: Omit<LogEntry, "level" | "timestamp">): void {
         const logEntry: LogEntry = {
             ...entry,
-            level: 'ERROR',
-            timestamp: new Date().toISOString()
+            level: "ERROR",
+            timestamp: new Date().toISOString(),
         };
 
         const message = this.formatLogEntry(logEntry);
@@ -131,23 +133,23 @@ class Logger {
         this.writeToFile(this.logFile, message); // Also write to main log
     }
 
-    public logWarning(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
+    public logWarning(entry: Omit<LogEntry, "level" | "timestamp">): void {
         const logEntry: LogEntry = {
             ...entry,
-            level: 'WARN',
-            timestamp: new Date().toISOString()
+            level: "WARN",
+            timestamp: new Date().toISOString(),
         };
 
         const message = this.formatLogEntry(logEntry);
         this.writeToFile(this.logFile, message);
     }
 
-    public logDebug(entry: Omit<LogEntry, 'level' | 'timestamp'>): void {
-        if (process.env.NODE_ENV === 'development') {
+    public logDebug(entry: Omit<LogEntry, "level" | "timestamp">): void {
+        if (CONSTANTS.NODE_ENV === "development") {
             const logEntry: LogEntry = {
                 ...entry,
-                level: 'DEBUG',
-                timestamp: new Date().toISOString()
+                level: "DEBUG",
+                timestamp: new Date().toISOString(),
             };
 
             const message = this.formatLogEntry(logEntry);
@@ -156,26 +158,26 @@ class Logger {
     }
 
     public sanitizePayload(payload: any, visited = new WeakSet()): any {
-        if (!payload || typeof payload !== 'object') {
+        if (!payload || typeof payload !== "object") {
             return payload;
         }
 
         if (visited.has(payload)) {
-            return '[Circular Reference]';
+            return "[Circular Reference]";
         }
         visited.add(payload);
 
-        const sensitiveFields = ['password', 'token', 'authorization', 'secret', 'key', 'jwt'];
+        const sensitiveFields = ["password", "token", "authorization", "secret", "key", "jwt"];
         const sanitized = { ...payload };
 
         for (const field of sensitiveFields) {
             if (sanitized[field]) {
-                sanitized[field] = '[REDACTED]';
+                sanitized[field] = "[REDACTED]";
             }
         }
 
         for (const key in sanitized) {
-            if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+            if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
                 sanitized[key] = this.sanitizePayload(sanitized[key], visited);
             }
         }
@@ -188,7 +190,7 @@ class Logger {
             apiLog: this.logFile,
             errorLog: this.errorLogFile,
             accessLog: this.accessLogFile,
-            logDir: this.logDir
+            logDir: this.logDir,
         };
     }
 

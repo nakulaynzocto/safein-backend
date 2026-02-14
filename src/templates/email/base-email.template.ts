@@ -1,21 +1,21 @@
 /**
  * Base Email Template
- * Provides the common Cloudinary-style structure for all emails
+ * Modern, Professional, and User-Friendly Design
  */
 
 export interface EmailContent {
-  greeting?: string;
-  message: string;
-  actionButton?: {
-    text: string;
-    url: string;
-    color?: string;
-  };
-  additionalInfo?: string;
+    greeting?: string;
+    message: string;
+    actionButton?: {
+        text: string;
+        url: string;
+        color?: string;
+    };
+    additionalInfo?: string;
 }
 
-export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'): string {
-  return `
+export function getBaseEmailTemplate(content: string, title: string = 'SafeIn', companyName: string = 'SafeIn', _companyLogo?: string): string {
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -33,263 +33,349 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
                 margin: 0;
                 padding: 0;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                background-color: #f5f7fa;
+                background-color: #e9eff6;
                 -webkit-font-smoothing: antialiased;
                 -moz-osx-font-smoothing: grayscale;
             }
             .email-wrapper {
                 width: 100%;
-                background-color: #f5f7fa;
+                background-color: #e9eff6;
                 padding: 40px 20px;
             }
             .email-container {
-                max-width: 600px;
+                max-width: 640px;
                 margin: 0 auto;
                 background-color: #ffffff;
-                border-radius: 8px;
+                border-radius: 12px;
                 overflow: hidden;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             }
             .header {
-                background: linear-gradient(135deg, #1A73E8 0%, #0d47a1 100%);
-                padding: 40px 30px;
-                text-align: center;
+                display: none;
             }
-            .logo {
-                color: #ffffff;
-                font-size: 32px;
-                font-weight: 700;
-                letter-spacing: 1px;
-                margin: 0;
-                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            .logo-tagline {
-                color: #e3f2fd;
-                font-size: 14px;
-                margin-top: 8px;
-                font-weight: 400;
+            .logo,
+            .logo-tagline,
+            .company-logo,
+            .icon-container,
+            .icon-circle,
+            .icon-symbol {
+                display: none;
             }
             .content-wrapper {
-                padding: 50px 40px;
-            }
-            .icon-container {
-                text-align: center;
-                margin-bottom: 30px;
-            }
-            .icon-circle {
-                width: 100px;
-                height: 100px;
-                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-                border-radius: 50%;
-                margin: 0 auto;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
-            }
-            .icon-symbol {
-                font-size: 48px;
-                color: #1A73E8;
-                font-weight: 300;
+                padding: 40px;
             }
             .greeting {
-                font-size: 20px;
-                color: #1a1a1a;
-                margin: 0 0 25px 0;
-                font-weight: 600;
-                line-height: 1.4;
+                font-size: 28px;
+                color: #1e293b;
+                margin: 0 0 20px 0;
+                font-weight: 700;
+                line-height: 1.3;
+                letter-spacing: -0.5px;
             }
             .message {
                 font-size: 16px;
-                color: #4a4a4a;
-                margin: 20px 0;
-                line-height: 1.7;
+                color: #475569;
+                margin: 24px 0;
+                line-height: 1.75;
                 text-align: left;
+            }
+            .message strong {
+                color: #1e293b;
+                font-weight: 600;
             }
             .action-button {
                 display: inline-block;
-                padding: 16px 32px;
-                background: linear-gradient(135deg, #1A73E8 0%, #1565C0 100%);
+                padding: 16px 40px;
+                background: linear-gradient(135deg, #074463 0%, #3882a5 100%);
                 color: #ffffff !important;
                 text-decoration: none;
-                border-radius: 6px;
-                margin: 25px 0;
+                border-radius: 10px;
+                margin: 28px 0;
                 font-weight: 600;
                 font-size: 16px;
                 text-align: center;
-                box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+                box-shadow: 0 6px 20px rgba(7, 68, 99, 0.35);
                 transition: all 0.3s ease;
+                letter-spacing: 0.2px;
             }
             .action-button:hover {
-                background: linear-gradient(135deg, #1565C0 0%, #0d47a1 100%);
-                box-shadow: 0 6px 16px rgba(26, 115, 232, 0.4);
+                background: linear-gradient(135deg, #3882a5 0%, #074463 100%);
+                box-shadow: 0 8px 24px rgba(7, 68, 99, 0.45);
                 transform: translateY(-2px);
             }
+            .action-button-primary {
+                background: linear-gradient(135deg, #074463 0%, #3882a5 100%);
+                box-shadow: 0 6px 20px rgba(7, 68, 99, 0.35);
+            }
             .action-button-secondary {
-                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
-                box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
             }
             .action-button-secondary:hover {
-                background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
-                box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+                background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
             }
             .action-button-danger {
-                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-                box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
             }
             .action-button-danger:hover {
-                background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
-                box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
+                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+                box-shadow: 0 8px 24px rgba(239, 68, 68, 0.45);
             }
             .button-group {
                 text-align: center;
-                margin: 30px 0;
+                margin: 32px 0;
             }
             .button-group .action-button {
-                margin: 8px;
+                margin: 10px 8px;
             }
             .highlight-box {
-                background: linear-gradient(135deg, #e3f2fd 0%, #f5f9ff 100%);
-                padding: 25px;
-                border-radius: 8px;
-                margin: 25px 0;
+                background-color: #f8fafc;
+                padding: 24px;
+                border-radius: 12px;
+                margin: 28px 0;
                 text-align: left;
-                border-left: 4px solid #1A73E8;
+                border: 1px solid #e2e8f0;
             }
             .highlight-box h3 {
-                margin: 0 0 15px 0;
-                color: #1A73E8;
+                margin: 0 0 16px 0;
+                color: #074463;
                 font-size: 18px;
-                font-weight: 600;
+                font-weight: 700;
             }
             .highlight-box p {
                 margin: 8px 0;
-                color: #4a4a4a;
+                color: #475569;
                 font-size: 15px;
                 line-height: 1.6;
-            }
-            .highlight-box ul {
-                margin: 10px 0;
-                padding-left: 25px;
             }
             .highlight-box li {
                 margin: 8px 0;
-                color: #4a4a4a;
+                color: #475569;
                 font-size: 15px;
-                line-height: 1.6;
+            }
+            .info-card {
+                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                padding: 28px;
+                border-radius: 12px;
+                margin: 28px 0;
+                border-left: 5px solid #64748b;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            }
+            .info-card h3 {
+                margin: 0 0 20px 0;
+                color: #334155;
+                font-size: 20px;
+                font-weight: 700;
+                letter-spacing: -0.3px;
+            }
+            .info-card p {
+                margin: 12px 0;
+                color: #475569;
+                font-size: 15px;
+                line-height: 1.7;
+                display: flex;
+                align-items: flex-start;
+            }
+            .info-card p strong {
+                color: #1e293b;
+                font-weight: 600;
+                min-width: 100px;
+                margin-right: 12px;
+            }
+            .detail-row {
+                display: flex;
+                align-items: center;
+                margin: 14px 0;
+                padding: 12px 0;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            }
+            .detail-row:last-child {
+                border-bottom: none;
+            }
+            .detail-icon {
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(135deg, #98c7dd 0%, #e9eff6 100%);
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 16px;
+                flex-shrink: 0;
+                font-size: 20px;
+            }
+            .detail-content {
+                flex: 1;
+            }
+            .detail-label {
+                font-size: 13px;
+                color: #64748b;
+                font-weight: 500;
+                margin-bottom: 4px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .detail-value {
+                font-size: 16px;
+                color: #1e293b;
+                font-weight: 600;
+                word-break: break-word;
+            }
+            .detail-value a {
+                color: #074463;
+                text-decoration: none;
+            }
+            .detail-value a:hover {
+                text-decoration: underline;
             }
             .security-note {
                 font-size: 14px;
-                color: #666666;
-                margin: 25px 0;
-                padding: 18px;
-                background-color: #f8f9fa;
+                color: #475569;
+                margin: 24px 0;
+                padding: 16px;
+                background-color: #f1f5f9;
                 border-radius: 8px;
-                border-left: 4px solid #6c757d;
+                border-left: 4px solid #3882a5;
                 line-height: 1.6;
             }
             .security-note strong {
-                color: #333333;
-                font-weight: 600;
+                color: #074463;
             }
             .security-warning {
-                background-color: #fff3cd;
-                border-left-color: #ffc107;
+                background-color: #fff1f2;
+                border-left-color: #e11d48;
+                color: #9f1239;
             }
             .security-success {
-                background-color: #d4edda;
-                border-left-color: #28a745;
+                background-color: #f0fdf4;
+                border-left-color: #10b981;
+                color: #166534;
             }
             .info-box {
-                background-color: #f8f9fa;
-                padding: 20px;
-                border-radius: 8px;
-                margin: 25px 0;
+                background-color: #f8fafc;
+                padding: 24px;
+                border-radius: 10px;
+                margin: 28px 0;
                 font-size: 14px;
-                color: #666666;
-                line-height: 1.6;
+                color: #64748b;
+                line-height: 1.7;
+                border: 1px solid #e2e8f0;
             }
             .info-box strong {
-                color: #333333;
+                color: #1e293b;
                 font-weight: 600;
             }
             .info-box a {
-                color: #1A73E8;
+                color: #074463;
                 word-break: break-all;
                 text-decoration: none;
+                font-weight: 500;
             }
             .info-box a:hover {
                 text-decoration: underline;
             }
             .footer {
-                background-color: #f8f9fa;
-                padding: 40px 40px 30px;
+                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                padding: 48px 40px 32px;
                 text-align: center;
-                border-top: 1px solid #e9ecef;
-            }
-            .footer-text {
-                font-size: 15px;
-                color: #6c757d;
-                margin: 0 0 20px 0;
-                line-height: 1.6;
+                border-top: 1px solid #e2e8f0;
             }
             .footer-signature {
-                font-size: 16px;
-                color: #4a4a4a;
-                margin: 0 0 10px 0;
-                font-weight: 600;
+                font-size: 18px;
+                color: #1e293b;
+                margin: 0 0 8px 0;
+                font-weight: 700;
             }
             .footer-company {
-                font-size: 14px;
-                color: #6c757d;
-                margin: 15px 0 5px 0;
+                font-size: 16px;
+                color: #475569;
+                margin: 0 0 24px 0;
                 font-weight: 500;
             }
             .footer-tagline {
-                font-size: 13px;
-                color: #999999;
-                margin: 5px 0 20px 0;
+                font-size: 14px;
+                color: #64748b;
+                margin: 0 0 28px 0;
             }
             .footer-links {
-                margin: 20px 0;
-                padding-top: 20px;
-                border-top: 1px solid #e9ecef;
+                margin: 28px 0;
+                padding-top: 28px;
+                border-top: 1px solid #e2e8f0;
             }
             .footer-links a {
-                color: #1A73E8;
+                color: #074463;
                 text-decoration: none;
                 font-size: 14px;
-                margin: 0 15px;
+                margin: 0 16px;
+                font-weight: 500;
             }
             .footer-links a:hover {
                 text-decoration: underline;
             }
+            .footer-text {
+                font-size: 14px;
+                color: #64748b;
+                margin: 24px 0 0 0;
+                line-height: 1.7;
+            }
             .footer-copyright {
                 font-size: 12px;
-                color: #999999;
-                margin-top: 20px;
-                padding-top: 20px;
-                border-top: 1px solid #e9ecef;
+                color: #94a3b8;
+                margin-top: 28px;
+                padding-top: 28px;
+                border-top: 1px solid #e2e8f0;
             }
-            @media only screen and (max-width: 600px) {
+            @media only screen and (max-width: 640px) {
                 .email-wrapper {
-                    padding: 20px 10px;
+                    padding: 20px 12px;
                 }
                 .content-wrapper {
-                    padding: 30px 20px;
+                    padding: 32px 24px;
                 }
                 .header {
-                    padding: 30px 20px;
+                    padding: 36px 24px;
                 }
                 .logo {
-                    font-size: 28px;
+                    font-size: 32px;
+                }
+                .logo-tagline {
+                    font-size: 14px;
+                }
+                .icon-circle {
+                    width: 96px;
+                    height: 96px;
+                }
+                .icon-symbol {
+                    font-size: 48px;
+                }
+                .greeting {
+                    font-size: 24px;
+                }
+                .highlight-box,
+                .info-card {
+                    padding: 20px;
+                }
+                .detail-row {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .detail-icon {
+                    margin-bottom: 8px;
+                    margin-right: 0;
                 }
                 .footer {
-                    padding: 30px 20px 20px;
+                    padding: 32px 24px 24px;
                 }
                 .button-group .action-button {
                     display: block;
-                    margin: 10px 0;
+                    margin: 12px 0;
+                    width: 100%;
+                }
+                .action-button {
+                    padding: 14px 32px;
+                    font-size: 15px;
                 }
             }
         </style>
@@ -297,46 +383,17 @@ export function getBaseEmailTemplate(content: string, title: string = 'SafeIn'):
     <body>
         <div class="email-wrapper">
             <div class="email-container">
-                <div class="header">
-                    <div class="logo">SafeIn</div>
-                    <div class="logo-tagline">Professional Visitor Management System</div>
-                </div>
-                
                 <div class="content-wrapper">
-                    <div class="icon-container">
-                        <div class="icon-circle">
-                            <div class="icon-symbol">🔒</div>
-                        </div>
-                    </div>
-                    
                     ${content}
                 </div>
                 
-                <div class="footer">
-                    <div class="footer-signature">Best Regards,</div>
-                    <div class="footer-company">SafeIn Security Team</div>
-                    <div class="footer-tagline">Professional Visitor Management Solutions</div>
-                    
-                    <div class="footer-links">
-                        <a href="mailto:support@safein.com">Support</a>
-                        <a href="#">Help Center</a>
-                        <a href="#">Privacy Policy</a>
-                    </div>
-                    
-                    <div class="footer-text">
-                        If you have any questions or need assistance, please don't hesitate to contact our support team at 
-                        <a href="mailto:support@safein.com" style="color: #1A73E8; text-decoration: none;">support@safein.com</a>
-                    </div>
-                    
-                    <div class="footer-copyright">
-                        © ${new Date().getFullYear()} SafeIn. All rights reserved.<br>
-                        This is an automated message. Please do not reply to this email.
-                    </div>
+                <div class="footer" style="padding: 20px;">
+                    <div class="footer-signature" style="margin-bottom: 4px;">Best Regards,</div>
+                    <div class="footer-company" style="margin-bottom: 0;">${companyName} Team</div>
                 </div>
             </div>
         </div>
     </body>
     </html>
-  `;
+    `;
 }
-
