@@ -46,7 +46,7 @@ const getRedisStore = () => {
  */
 export const generalLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 1000 : 100, // requests per window
+  max: isDevelopment ? 5000 : 1000, // Increased from 100 to 1000 for production
   store: getRedisStore(),
   message: {
     success: false,
@@ -73,7 +73,7 @@ export const generalLimiter: RateLimitRequestHandler = rateLimit({
  */
 export const authLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Set to 5 for both dev and prod as requested
+  max: 100, // Increased from 5 to 100 to prevent lockout during testing/high usage
   store: getRedisStore(),
   message: {
     success: false,
@@ -146,7 +146,7 @@ export const uploadLimiter: RateLimitRequestHandler = rateLimit({
  */
 export const publicActionLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 40,
+  max: 1000, // Increased from 40 to 1000 for public actions (booking, etc)
   store: getRedisStore(),
   keyGenerator: (req: any): string => {
     return req.params?.token || req.query?.token || req.ip || 'unknown';
@@ -168,7 +168,7 @@ export const publicActionLimiter: RateLimitRequestHandler = rateLimit({
 export const createUserRateLimiter = (): RateLimitRequestHandler => {
   return rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: isDevelopment ? 2000 : 200,
+    max: isDevelopment ? 10000 : 2000, // Increased from 200 to 2000 for production authenticated users
     store: getRedisStore(),
     keyGenerator: (req: any) => {
       // Use user ID if authenticated, otherwise fall back to IP
