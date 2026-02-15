@@ -655,6 +655,23 @@ export class EmployeeService {
             throw new AppError('OTP has expired', ERROR_CODES.BAD_REQUEST);
         }
 
+        // Check if user already exists - Perform this check BEFORE verifying employee to prevent invalid state
+        const existingUser = await User.findOne({
+            email: employee.email.toLowerCase().trim(),
+            isDeleted: false
+        }).session(session);
+
+        if (existingUser) {
+            // Check if the existing user belongs to a different company
+            if (existingUser.createdBy?.toString() !== employee.createdBy.toString()) {
+                throw new AppError(
+                    `This email is already registered with another company. Employee cannot be verified.`,
+                    ERROR_CODES.BAD_REQUEST
+                );
+            }
+            console.log(`User for verified employee ${employee.email} already exists in the same company.`);
+        }
+
         // OTP Verified
         employee.isVerified = true;
         employee.status = 'Active'; // Activate employee upon verification
@@ -668,12 +685,6 @@ export class EmployeeService {
         const companyName = adminUser?.companyName || 'SafeIn';
 
         try {
-            // Check if user already exists
-            const existingUser = await User.findOne({
-                email: employee.email.toLowerCase().trim(),
-                isDeleted: false
-            }).session(session);
-
             if (!existingUser) {
                 // Generate password
                 const password = this.generateTempPassword();
@@ -701,17 +712,16 @@ export class EmployeeService {
 
                 // Send Credentials Email
                 await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName, employee.name);
-
-            } else {
-                // If user exists, link it? Or throw error?
-                // Original logic threw error if user existed under different admin
-                // For now, we assume if it exists, we might just need to link or update status
-                // But typically, createEmployee checked this. verify should strictly create.
-                console.warn(`User for verified employee ${employee.email} already exists.`);
             }
 
         } catch (error: any) {
             console.error('Failed to create user after verification:', error);
+
+            // Re-throw AppError as-is
+            if (error.name === 'AppError') {
+                throw error;
+            }
+
             throw new AppError('Verification succeeded but user creation failed', ERROR_CODES.INTERNAL_SERVER_ERROR);
         }
     }

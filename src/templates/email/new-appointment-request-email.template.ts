@@ -1,18 +1,16 @@
-import { getBaseEmailTemplate } from './base-email.template';
+import { getBaseEmailTemplate, formatTo12Hour } from './base-email.template';
 
 /**
  * Get the base URL for email action links
- * Uses FRONTEND_URL environment variable
  */
 function getEmailActionBaseUrl(): string {
     const url = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return url.replace(/\/$/, ''); // Remove trailing slash
+    return url.replace(/\/$/, '');
 }
 
 /**
  * New Appointment Request Email Template
  * Sent to employee when a new appointment is requested
- * Modern, Professional, and User-Friendly Design
  */
 export function getNewAppointmentRequestEmailTemplate(
     employeeName: string,
@@ -30,6 +28,7 @@ export function getNewAppointmentRequestEmailTemplate(
         month: 'long',
         day: 'numeric'
     });
+    const formattedTime = formatTo12Hour(scheduledTime);
 
     const baseUrl = getEmailActionBaseUrl();
     const verifyUrl = `${baseUrl}/verify/${approvalToken}`;
@@ -40,48 +39,40 @@ export function getNewAppointmentRequestEmailTemplate(
             </div>
             
             <div class="message">
-                Hello ${employeeName},<br><br>
-                You have received a new appointment request for ${companyName}. Please review the details below.
+                Hello <strong>${employeeName}</strong>,<br><br>
+                You have received a new appointment request for <strong>${companyName}</strong>. Please review the details below and take action.
             </div>
             
             <div class="highlight-box">
-                <h3>Appointment Details</h3>
+                <h3 style="font-size: 16px; margin-bottom: 12px;">Appointment Details:</h3>
                 <div class="detail-row">
-                    <div class="detail-icon">📅</div>
-                    <div class="detail-content">
-                        <div class="detail-label">Date & Time</div>
-                        <div class="detail-value">${formattedDate} at ${scheduledTime}</div>
-                    </div>
+                    <div class="detail-label">Visitor</div>
+                    <div class="detail-value">${visitorDetails.name}</div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-icon">👤</div>
-                    <div class="detail-content">
-                        <div class="detail-label">Visitor</div>
-                        <div class="detail-value">${visitorDetails.name}</div>
-                    </div>
+                    <div class="detail-label">Date</div>
+                    <div class="detail-value">${formattedDate}</div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-icon">📋</div>
-                    <div class="detail-content">
-                        <div class="detail-label">Purpose</div>
-                        <div class="detail-value">${purpose}</div>
-                    </div>
+                    <div class="detail-label">Time</div>
+                    <div class="detail-value">${formattedTime}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Purpose</div>
+                    <div class="detail-value">${purpose}</div>
                 </div>
             </div>
             
-            <div class="button-group">
-                <a href="${verifyUrl}" class="action-button action-button-primary">
-                    View Details & Take Action
-                </a>
+            <div class="action-button-container">
+                <a href="${verifyUrl}" class="action-button">View Request</a>
             </div>
             
-            <div class="security-note">
-                <strong>⏰ Action Required:</strong> Click the button above to view full details and approve or reject this appointment.
+            <div class="security-note" style="text-align: center;">
+                Click the button above to approve or decline this request.
             </div>
   `;
 
-
-    return getBaseEmailTemplate(content, `New Appointment Request - ${companyName}`, companyName, companyLogo);
+    return getBaseEmailTemplate(content, `New Appointment Request`, companyName, companyLogo);
 }
 
 export function getNewAppointmentRequestEmailText(
@@ -99,6 +90,7 @@ export function getNewAppointmentRequestEmailText(
         month: 'long',
         day: 'numeric'
     });
+    const formattedTime = formatTo12Hour(scheduledTime);
 
     const baseUrl = getEmailActionBaseUrl();
     const verifyUrl = `${baseUrl}/verify/${approvalToken}`;
@@ -108,27 +100,20 @@ New Appointment Request
 
 Hello ${employeeName},
 
-You have a new appointment request for ${companyName}! Please review the details below and take action.
+You have a new appointment request for ${companyName}.
 
-Appointment Details:
+Details:
+- Visitor: ${visitorDetails.name}
 - Date: ${formattedDate}
-- Time: ${scheduledTime}
+- Time: ${formattedTime}
 - Purpose: ${purpose}
 
-Visitor Information:
-- Name: ${visitorDetails.name}
-- Email: ${visitorDetails.email}
-- Phone: ${visitorDetails.phone}
-${visitorDetails._id ? `- Visitor ID: ${visitorDetails._id}` : ''}
-
-To view full details and approve/reject this appointment, click:
+To view and take action, click here:
 ${verifyUrl}
-
-Or visit your dashboard: ${baseUrl}/appointment/list
-
-Important: Please respond to this request as soon as possible. The link is secure and will expire after use.
 
 Best regards,
 ${companyName} Team
   `;
 }
+
+
