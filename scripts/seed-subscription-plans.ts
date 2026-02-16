@@ -8,22 +8,21 @@ import { connectDatabase } from '../src/config/database.config';
 // Default subscription plans data
 const defaultPlans = [
     {
-        name: "3 Day Trial",
-        description: "Experience full SafeIn features for 3 days",
+        name: "Free Subscription",
+        description: "Perfect for individuals and testing",
         planType: 'free',
-        amount: 0, // Free - no card verification required
+        amount: 0,
         currency: 'inr',
         features: [
-            "Full SafeIn features access",
-            "Test visitor tracking",
-            "Photo capture & ID verification",
-            "Real-time notifications",
-            "Create only 5 appointments",
-            "3 days trial period"
+            "Up to 10 Appointments/month",
+            "Manage 5 Employees",
+            "Basic Visitor Tracking",
+            "Real-time Notifications",
+            "Email Support"
         ],
         isActive: true,
         isPopular: false,
-        trialDays: 3,
+        trialDays: 0,
         sortOrder: 1,
         discountPercentage: 0,
         metadata: {
@@ -32,25 +31,23 @@ const defaultPlans = [
         },
         limits: {
             employees: 5,
-            visitors: 5,
-            appointments: 5
+            visitors: -1, // Unlimited visitors (or set a limit if preferred)
+            appointments: 10
         }
     },
     {
-        name: "Premium - 1 Month",
-        description: "Monthly billing at ₹5,999/month",
+        name: "Starter",
+        description: "For small offices and startups",
         planType: 'monthly',
-        amount: 5999, // ₹5,999.00
+        amount: 1999,
         currency: 'inr',
         features: [
-            'Unlimited visitor tracking',
-            'Aadhaar & ID verification',
-            'Real-time email & SMS alerts',
-            'Photo capture & smart logs',
-            'Secure cloud storage',
-            '24/7 priority support',
-            'Advanced analytics & reporting',
-            'Custom branding options',
+            "150 Appointments/month",
+            "Manage 20 Active Employees",
+            "Visitor Photo Capture",
+            "Digital Check-in/out",
+            "Basic Reports",
+            "Email & Chat Support"
         ],
         isActive: true,
         isPopular: false,
@@ -62,71 +59,96 @@ const defaultPlans = [
             stripeProductId: ''
         },
         limits: {
-            employees: -1,
+            employees: 20,
             visitors: -1,
-            appointments: -1
+            appointments: 150
         }
     },
     {
-        name: "Premium - 3 Months",
-        description: "Save 5% with 3-month billing",
-        planType: 'quarterly',
-        amount: 17097.15, // ₹17,097.15
+        name: "Growth",
+        description: "For growing teams and businesses",
+        planType: 'monthly',
+        amount: 3499,
         currency: 'inr',
         features: [
-            'Unlimited visitor tracking',
-            'Aadhaar & ID verification',
-            'Real-time email & SMS alerts',
-            'Photo capture & smart logs',
-            'Secure cloud storage',
-            '24/7 priority support',
-            'Advanced analytics & reporting',
-            'Custom branding options',
+            "250 Appointments/month",
+            "Manage 30 Active Employees",
+            "Everything in Starter",
+            "Advanced Visitor Badge Printing",
+            "Custom Branding",
+            "Priority Support"
         ],
         isActive: true,
-        isPopular: true,
+        isPopular: false,
         trialDays: 0,
         sortOrder: 3,
-        discountPercentage: 5,
+        discountPercentage: 0,
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
         },
         limits: {
-            employees: -1,
+            employees: 30,
             visitors: -1,
-            appointments: -1
+            appointments: 250
         }
     },
     {
-        name: "Premium - 12 Months",
-        description: "Save 10% with annual billing - Best value!",
-        planType: 'yearly',
-        amount: 64789.20, // ₹64,789.20
+        name: "Business",
+        description: "For busy corporate hubs",
+        planType: 'monthly',
+        amount: 5499,
         currency: 'inr',
         features: [
-            'Unlimited visitor tracking',
-            'Aadhaar & ID verification',
-            'Real-time email & SMS alerts',
-            'Photo capture & smart logs',
-            'Secure cloud storage',
-            '24/7 priority support',
-            'Advanced analytics & reporting',
-            'Custom branding options',
+            "400 Appointments/month",
+            "Manage 40 Active Employees",
+            "Everything in Growth",
+            "Advanced Analytics",
+            "Dedicated Account Manager",
+            "SLA Support"
         ],
         isActive: true,
         isPopular: false,
         trialDays: 0,
         sortOrder: 4,
-        discountPercentage: 10,
+        discountPercentage: 0,
         metadata: {
             stripePriceId: '',
             stripeProductId: ''
         },
         limits: {
-            employees: -1,
+            employees: 40,
             visitors: -1,
-            appointments: -1
+            appointments: 400
+        }
+    },
+    {
+        name: "Enterprise",
+        description: "For large organizations with high volume",
+        planType: 'monthly',
+        amount: 7999,
+        currency: 'inr',
+        features: [
+            "Unlimited Appointments",
+            "Manage 100 Active Employees",
+            "Everything in Business",
+            "Custom Integration Support",
+            "On-Premise Options",
+            "24/7 Premium Support"
+        ],
+        isActive: true,
+        isPopular: true,
+        trialDays: 0,
+        sortOrder: 5,
+        discountPercentage: 0,
+        metadata: {
+            stripePriceId: '',
+            stripeProductId: ''
+        },
+        limits: {
+            employees: 100,
+            visitors: -1,
+            appointments: -1 // Unlimited
         }
     }
 ];
@@ -150,18 +172,17 @@ async function seedSubscriptionPlans() {
 
         // Check for existing plans and prevent duplicates
         const existingPlans = await SubscriptionPlan.find({});
-        const existingPlanTypes = new Set(existingPlans.map(p => p.planType as string));
+        // We now check primarily by NAME because we have multiple monthly plans
         const existingNames = new Set(existingPlans.map(p => p.name));
 
-        // Filter out plans that already exist (by planType or name)
+        // Filter out plans that already exist (by name)
         const plansToInsert = defaultPlans.filter(plan => {
-            const existsByType = existingPlanTypes.has(plan.planType as string);
             const existsByName = existingNames.has(plan.name);
-            return !existsByType && !existsByName;
+            return !existsByName;
         });
 
         if (plansToInsert.length === 0) {
-            console.log('ℹ️  All subscription plans already exist. No new plans to insert.');
+            console.log('ℹ️  All subscription plans already exist (by name). No new plans to insert.');
             console.log('\n📋 Existing Subscription Plans:');
             existingPlans.forEach((plan, index) => {
                 console.log(`${index + 1}. ${plan.name} (${plan.planType}) - ₹${plan.amount.toFixed(2)}`);
@@ -179,9 +200,8 @@ async function seedSubscriptionPlans() {
 
             // Display skipped (duplicate) plans
             const skippedPlans = defaultPlans.filter(plan => {
-                const existsByType = existingPlanTypes.has(plan.planType as string);
                 const existsByName = existingNames.has(plan.name);
-                return existsByType || existsByName;
+                return existsByName;
             });
 
             if (skippedPlans.length > 0) {
