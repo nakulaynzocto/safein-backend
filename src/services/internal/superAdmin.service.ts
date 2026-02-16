@@ -6,6 +6,7 @@ import { UserSubscription } from '../../models/userSubscription/userSubscription
 import { SubscriptionHistory } from '../../models/subscriptionHistory/subscriptionHistory.model';
 import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
+import { Employee } from '../../models/employee/employee.model';
 
 import { EmailService } from '../../services/email/email.service';
 import { AppError } from '../../middlewares/errorHandler';
@@ -28,12 +29,12 @@ export class SuperAdminService {
         const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
 
 
-        const totalUsers = await User.countDocuments({ isDeleted: false, roles: { $ne: 'superadmin' } });
-        const activeUsers = await User.countDocuments({ isDeleted: false, isActive: true, roles: { $ne: 'superadmin' } });
-        const activeSubs = await User.countDocuments({ isDeleted: false, activeSubscriptionId: { $ne: null }, roles: { $ne: 'superadmin' } });
+        const totalUsers = await User.countDocuments({ isDeleted: false, roles: 'admin' });
+        const activeUsers = await User.countDocuments({ isDeleted: false, isActive: true, roles: 'admin' });
+        const activeSubs = await User.countDocuments({ isDeleted: false, activeSubscriptionId: { $ne: null }, roles: 'admin' });
         const newUsersToday = await User.countDocuments({
             isDeleted: false,
-            roles: { $ne: 'superadmin' },
+            roles: 'admin',
             createdAt: { $gte: today }
         });
 
@@ -92,7 +93,7 @@ export class SuperAdminService {
                 $match: {
                     createdAt: { $gte: twelveMonthsAgo },
                     isDeleted: false,
-                    roles: { $ne: 'superadmin' }
+                    roles: 'admin'
                 }
             },
             {
@@ -236,7 +237,7 @@ export class SuperAdminService {
 
     static async getAllUsers(page: number, limit: number, search?: string) {
         const skip = (page - 1) * limit;
-        const query: any = { roles: { $ne: 'superadmin' }, isDeleted: false };
+        const query: any = { roles: 'admin', isDeleted: false };
 
         if (search) {
             const searchRegex = new RegExp(search, 'i');
@@ -608,4 +609,33 @@ export class SuperAdminService {
     }
 
 
+    static async getEmployeesByAdminId(adminId: string, page: number = 1, limit: number = 10, search?: string) {
+        const skip = (page - 1) * limit;
+        const query: any = { createdBy: adminId, isDeleted: false }; // Query employees created by this admin
+
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            query.$or = [
+                { name: searchRegex },
+                { email: searchRegex },
+                { department: searchRegex }
+            ];
+        }
+
+        const total = await Employee.countDocuments(query);
+        const employees = await Employee.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        return {
+            employees,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+    }
 }

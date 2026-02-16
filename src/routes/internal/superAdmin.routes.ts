@@ -25,6 +25,7 @@ router.get('/dashboard-summary', controller.getDashboardStats);
 // User Management
 router.get('/users', controller.getAllUsers);
 router.get('/users/:id', controller.getUserById);
+router.get('/users/:id/employees', controller.getEmployeesByAdminId);
 router.post('/users', controller.createUser);
 router.put('/users/:id/profile', controller.updateUserProfile);
 router.post('/users/:id/subscription', controller.assignSubscription);

@@ -123,4 +123,13 @@ export class SuperAdminController {
     }
 
     // Support Inquiries
+    // Get Employees By Admin ID
+    @TryCatch('Failed to fetch employees')
+    public async getEmployeesByAdminId(req: Request, res: Response, _next: NextFunction) {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const search = req.query.search as string;
+        const result = await SuperAdminService.getEmployeesByAdminId(req.params.id, page, limit, search);
+        ResponseUtil.success(res, 'Employees fetched successfully', result);
+    }
 }
