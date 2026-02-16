@@ -4,6 +4,7 @@ import { ResponseUtil, ERROR_CODES } from '../../utils';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware';
 import { TryCatch } from '../../decorators';
 import { AppError } from '../../middlewares/errorHandler';
+import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 
 export class ChatController {
     /**
@@ -42,6 +43,9 @@ export class ChatController {
     static async initiateChat(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
 
+        // Check messaging module access
+        await UserSubscriptionService.checkModuleAccess(req.user._id.toString(), 'message');
+
         const { targetUserId } = req.body;
         if (!targetUserId) throw new AppError('Target user ID is required', ERROR_CODES.BAD_REQUEST);
 
@@ -55,6 +59,9 @@ export class ChatController {
     @TryCatch('Failed to create group')
     static async createGroup(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+
+        // Check messaging module access
+        await UserSubscriptionService.checkModuleAccess(req.user._id.toString(), 'message');
 
         const { participantIds, groupName, groupPicture } = req.body;
         if (!participantIds || !Array.isArray(participantIds)) throw new AppError('Participant IDs are required', ERROR_CODES.BAD_REQUEST);
@@ -82,6 +89,9 @@ export class ChatController {
     @TryCatch('Failed to send message')
     static async sendMessage(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
         if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+
+        // Check messaging module access
+        await UserSubscriptionService.checkModuleAccess(req.user._id.toString(), 'message');
 
         const { chatId } = req.params;
         const { text, files } = req.body;

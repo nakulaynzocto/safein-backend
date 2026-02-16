@@ -368,7 +368,9 @@ export class SubscriptionPlanService {
             monthlyEquivalent: plan.monthlyEquivalent,
             savingsPercentage: plan.savingsPercentage,
             createdAt: plan.createdAt,
-            updatedAt: plan.updatedAt
+            updatedAt: plan.updatedAt,
+            limits: plan.limits || { employees: -1, visitors: -1, appointments: -1, spotPasses: 0 },
+            modules: plan.modules || { visitorInvite: false, message: false }
         };
     }
 }

@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { SpotPassService } from '../../services/spotPass/spotPass.service';
+import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 import { ResponseUtil } from '../../utils';
 import {
     ICreateSpotPassDTO,
@@ -22,6 +23,10 @@ export class SpotPassController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
+
+        // Check plan limits
+        await UserSubscriptionService.checkPlanLimits(req.user._id.toString(), 'spotPasses');
+
         const data: ICreateSpotPassDTO = req.body;
         const createdBy = req.user._id.toString();
 

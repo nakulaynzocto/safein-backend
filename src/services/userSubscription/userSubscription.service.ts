@@ -4,6 +4,7 @@ import { User } from '../../models/user/user.model';
 import { Employee } from '../../models/employee/employee.model';
 import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
+import { SpotPass } from '../../models/spotPass/spotPass.model';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
 import { ICreateUserSubscriptionDTO, IGetUserSubscriptionsQuery, IUserSubscription, IUserSubscriptionResponse, IUpdateUserSubscriptionDTO, IUserSubscriptionListResponse, IUserSubscriptionStats, ITrialLimitsStatus } from '../../types/userSubscription/userSubscription.types';
@@ -529,6 +530,7 @@ export class UserSubscriptionService {
         employees: number;
         visitors: number;
         appointments: number;
+        spotPasses: number;
     }> {
         // Resolve admin ID - employees share admin's limits
         const adminId = await EmployeeUtil.getAdminId(userId);
@@ -601,7 +603,7 @@ export class UserSubscriptionService {
         // 2. Created by employees of this user (employeeId in employeeIds)
         // 3. Created within current month (based on subscription cycle)
         // This ensures all appointments (admin + employees) count towards admin's monthly subscription limit
-        const [employeeCount, visitorCount, appointmentCount] = await Promise.all([
+        const [employeeCount, visitorCount, appointmentCount, spotPassesCount] = await Promise.all([
             Employee.countDocuments({ createdBy: userObjectId, isDeleted: false }),
             Visitor.countDocuments({ createdBy: userObjectId, isDeleted: false }),
             Appointment.countDocuments({
@@ -615,12 +617,14 @@ export class UserSubscriptionService {
                     ...(employeeIds.length > 0 ? [{ employeeId: { $in: employeeIds } }] : []) // Created for admin's employees
                 ]
             }),
+            SpotPass.countDocuments({ businessId: userObjectId, isDeleted: false })
         ]);
 
         return {
             employees: employeeCount,
             visitors: visitorCount,
             appointments: appointmentCount,
+            spotPasses: spotPassesCount
         };
     }
 
@@ -660,7 +664,13 @@ export class UserSubscriptionService {
         const subscriptionStatus = formattedSub ? formattedSub.subscriptionStatus || 'none' : 'none';
         const isExpired = !isActive;
 
-        const checkCreationLimit = (type: 'employees' | 'visitors' | 'appointments') => {
+        // Modules check
+        const modules = {
+            visitorInvite: planDoc?.modules?.visitorInvite ?? false,
+            message: planDoc?.modules?.message ?? false
+        };
+
+        const checkCreationLimit = (type: 'employees' | 'visitors' | 'appointments' | 'spotPasses') => {
             // Default to -1 (unlimited) if plan not found
             // If plan found, use its limit. If limit is undefined in DB, default to -1.
             const limit = planDoc?.limits?.[type] ?? -1;
@@ -688,19 +698,12 @@ export class UserSubscriptionService {
                 employees: checkCreationLimit('employees'),
                 visitors: checkCreationLimit('visitors'),
                 appointments: checkCreationLimit('appointments'),
-            }
+                spotPasses: checkCreationLimit('spotPasses'),
+            },
+            modules
         };
     }
 
-    /**
-     * Check if a user can create another resource based on their plan limits
-     * This applies to both trial and paid subscriptions
-     * 
-     * Key points:
-     * - Employee creation counts against the subscription owner's (createdBy) employee limit
-     * - Employee's user account does NOT count as a separate subscription
-     * - Employees share the subscription of the user who created them
-     */
     /**
      * Check if a user can create another resource based on their plan limits
      * This applies to both trial and paid subscriptions
@@ -709,7 +712,7 @@ export class UserSubscriptionService {
      * @param type - Resource type to check
      * @param isEmployeeContext - Optional: true if called from employee context (for better error messages)
      */
-    static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments', isEmployeeContext: boolean = false): Promise<void> {
+    static async checkPlanLimits(userId: string, type: 'employees' | 'visitors' | 'appointments' | 'spotPasses', isEmployeeContext: boolean = false): Promise<void> {
         const status = await this.getSubscriptionStatus(userId);
 
         // Use detected employee context from status if not provided
@@ -775,6 +778,32 @@ export class UserSubscriptionService {
         }
     }
 
+
+    /**
+     * Check if a user has access to a specific module
+     */
+    static async checkModuleAccess(userId: string, module: 'visitorInvite' | 'message'): Promise<void> {
+        // Resolve admin ID
+        const adminId = await EmployeeUtil.getAdminId(userId);
+        const adminObjectId = toObjectId(adminId);
+
+        const subDoc = await UserSubscription.findOne({
+            userId: adminObjectId,
+            isDeleted: false
+        }).sort({ createdAt: -1 });
+
+        const formattedSub = subDoc ? this.formatUserSubscriptionResponse(subDoc) : null;
+        const planType = formattedSub ? formattedSub.planType : 'free';
+
+        const planDoc = await SubscriptionPlan.findOne({ planType: planType });
+
+        // Default to false (no access) if not allowed
+        const hasAccess = planDoc?.modules?.[module] ?? false;
+
+        if (!hasAccess) {
+            throw new AppError(`Your plan does not include the ${module === 'visitorInvite' ? 'Visitor Invite' : 'Messaging'} module. Please upgrade to access this feature.`, ERROR_CODES.FORBIDDEN);
+        }
+    }
 
     /**
      * Get subscription history for a user (all successful purchases)

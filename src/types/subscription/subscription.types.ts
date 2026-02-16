@@ -23,6 +23,16 @@ export interface ISubscriptionPlan extends Document {
     deletedBy?: string;
     createdAt: Date;
     updatedAt: Date;
+    limits?: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+        spotPasses: number;
+    };
+    modules?: {
+        visitorInvite: boolean;
+        message: boolean;
+    };
 }
 
 export interface ICreateSubscriptionPlanDTO {
@@ -38,6 +48,16 @@ export interface ICreateSubscriptionPlanDTO {
     trialDays?: number;
     sortOrder?: number;
     metadata?: IMetadata;
+    limits?: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+        spotPasses: number;
+    };
+    modules?: {
+        visitorInvite: boolean;
+        message: boolean;
+    };
 }
 
 export interface IUpdateSubscriptionPlanDTO {
@@ -53,6 +73,16 @@ export interface IUpdateSubscriptionPlanDTO {
     trialDays?: number;
     sortOrder?: number;
     metadata?: IMetadata;
+    limits?: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+        spotPasses: number;
+    };
+    modules?: {
+        visitorInvite: boolean;
+        message: boolean;
+    };
 }
 
 export interface ISubscriptionPlanResponse {
@@ -79,6 +109,16 @@ export interface ISubscriptionPlanResponse {
     savingsPercentage: number;
     createdAt: Date;
     updatedAt: Date;
+    limits: {
+        employees: number;
+        visitors: number;
+        appointments: number;
+        spotPasses: number;
+    };
+    modules: {
+        visitorInvite: boolean;
+        message: boolean;
+    };
 }
 
 export interface IGetSubscriptionPlansQuery {

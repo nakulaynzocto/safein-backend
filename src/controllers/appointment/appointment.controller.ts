@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppointmentService } from '../../services/appointment/appointment.service';
+import { UserSubscriptionService } from '../../services/userSubscription/userSubscription.service';
 import { Appointment } from '../../models/appointment/appointment.model';
 import { ResponseUtil } from '../../utils';
 import {
@@ -52,6 +53,10 @@ export class AppointmentController {
         if (!req.user) {
             throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
         }
+
+        // Check if user has access to create appointments (Visitor Invite module)
+        await UserSubscriptionService.checkModuleAccess(req.user._id.toString(), 'visitorInvite');
+
         const appointmentData: ICreateAppointmentDTO = req.body;
         const createdBy = req.user._id.toString();
         // Pass sendNotifications: true to enable socket notifications and real-time updates

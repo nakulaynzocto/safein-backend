@@ -32,7 +32,12 @@ const defaultPlans = [
         limits: {
             employees: 5,
             visitors: -1, // Unlimited visitors (or set a limit if preferred)
-            appointments: 10
+            appointments: 10,
+            spotPasses: 0
+        },
+        modules: {
+            visitorInvite: false,
+            message: false
         }
     },
     {
@@ -61,7 +66,12 @@ const defaultPlans = [
         limits: {
             employees: 20,
             visitors: -1,
-            appointments: 150
+            appointments: 150,
+            spotPasses: 10
+        },
+        modules: {
+            visitorInvite: true,
+            message: false
         }
     },
     {
@@ -90,7 +100,12 @@ const defaultPlans = [
         limits: {
             employees: 30,
             visitors: -1,
-            appointments: 250
+            appointments: 250,
+            spotPasses: 50
+        },
+        modules: {
+            visitorInvite: true,
+            message: true
         }
     },
     {
@@ -119,7 +134,12 @@ const defaultPlans = [
         limits: {
             employees: 40,
             visitors: -1,
-            appointments: 400
+            appointments: 400,
+            spotPasses: 100
+        },
+        modules: {
+            visitorInvite: true,
+            message: true
         }
     },
     {
@@ -148,7 +168,12 @@ const defaultPlans = [
         limits: {
             employees: 100,
             visitors: -1,
-            appointments: -1 // Unlimited
+            appointments: -1, // Unlimited
+            spotPasses: -1 // Unlimited
+        },
+        modules: {
+            visitorInvite: true,
+            message: true
         }
     }
 ];

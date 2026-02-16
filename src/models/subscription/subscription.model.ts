@@ -29,6 +29,11 @@ export interface ISubscriptionPlan extends Document {
         employees: number;
         visitors: number;
         appointments: number;
+        spotPasses: number;
+    };
+    modules: {
+        visitorInvite: boolean;
+        message: boolean;
     };
 }
 
@@ -136,6 +141,20 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
             appointments: {
                 type: Number,
                 default: -1,
+            },
+            spotPasses: {
+                type: Number,
+                default: 0,
+            },
+        },
+        modules: {
+            visitorInvite: {
+                type: Boolean,
+                default: false,
+            },
+            message: {
+                type: Boolean,
+                default: false,
             },
         },
     },
