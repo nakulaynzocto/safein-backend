@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+
 
 /**
  * Common subscription history response mapper
@@ -6,10 +6,10 @@ import mongoose from 'mongoose';
  */
 export const mapSubscriptionHistoryItem = (item: any) => {
     return {
-        _id: (item._id as mongoose.Types.ObjectId).toString(),
-        subscriptionId: item.subscriptionId.toString(),
+        _id: item._id?.toString(),
+        subscriptionId: item.subscriptionId?.toString() || '',
         planType: item.planType,
-        planName: (item.planId as any)?.name || `${item.planType} Plan`,
+        planName: (item.planId as any)?.name || `${item.planType || 'Unknown'} Plan`,
         invoiceNumber: item.invoiceNumber,
         purchaseDate: item.purchaseDate,
         startDate: item.startDate,

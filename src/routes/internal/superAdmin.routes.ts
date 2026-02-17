@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { SuperAdminController } from '../../controllers/internal/superAdmin.controller';
 import { UploadController } from '../../controllers/upload/upload.controller';
+import { UserSubscriptionController } from '../../controllers/userSubscription/userSubscription.controller';
 import { verifyMasterToken } from '../../middlewares/auth/masterToken.middleware';
 import { validateFileUpload, fileSizeLimit } from '../../middlewares/security';
 import { asyncWrapper } from '../../middlewares/asyncWrapper';
@@ -45,6 +46,12 @@ router.get('/audit-logs', controller.getAuditLogs);
 
 // Controls
 router.post('/feature-toggle', controller.toggleFeature);
+
+// Extra Limits (Admin Action)
+router.post(
+    '/user-subscriptions/addons/extra-limits',
+    asyncWrapper(UserSubscriptionController.addExtraLimits)
+);
 
 
 

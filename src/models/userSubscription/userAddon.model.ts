@@ -2,13 +2,15 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUserAddon extends Document {
     userId: mongoose.Types.ObjectId;
-    addonId: mongoose.Types.ObjectId;
-    addonType: 'employee' | 'appointment' | 'spotPass';
+    addonId?: mongoose.Types.ObjectId;
+    addonType: 'employee' | 'appointment' | 'spotPass' | 'visitor';
     quantity: number; // The logic: purchased unitQuantity * number of times bought
     paymentStatus: 'pending' | 'succeeded' | 'failed' | 'cancelled';
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     isActive: boolean;
+    source: 'system' | 'admin' | 'purchase';
+    notes?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -24,11 +26,11 @@ const userAddonSchema = new Schema<IUserAddon>(
         addonId: {
             type: Schema.Types.ObjectId,
             ref: 'SubscriptionAddon',
-            required: true,
+            required: false,
         },
         addonType: {
             type: String,
-            enum: ['employee', 'appointment', 'spotPass'],
+            enum: ['employee', 'appointment', 'spotPass', 'visitor'],
             required: true,
         },
         quantity: {
@@ -52,6 +54,14 @@ const userAddonSchema = new Schema<IUserAddon>(
         isActive: {
             type: Boolean,
             default: true,
+        },
+        source: {
+            type: String,
+            enum: ['system', 'admin', 'purchase'],
+            default: 'purchase',
+        },
+        notes: {
+            type: String,
         },
     },
     {

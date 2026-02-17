@@ -454,4 +454,21 @@ export class UserSubscriptionController {
             // Don't throw - webhook should still return 200
         }
     }
+
+    /**
+     * Admin only: Add extra limits
+     * POST /api/v1/user-subscriptions/extra-limits
+     */
+    @TryCatch('Failed to add extra limits')
+    static async addExtraLimits(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        const { userId, type, quantity, notes } = req.body;
+
+        if (!userId || !type || !quantity) {
+            throw new AppError('Missing required fields: userId, type, quantity', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const addon = await UserSubscriptionService.addExtraLimits(userId, type, quantity, 'admin', notes);
+
+        ResponseUtil.success(res, 'Extra limits added successfully', addon, ERROR_CODES.CREATED);
+    }
 }

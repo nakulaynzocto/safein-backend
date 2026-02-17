@@ -72,6 +72,11 @@ router.post(
     asyncWrapper(UserSubscriptionController.verifyAddonPayment)
 );
 
+router.post(
+    '/addons/extra-limits',
+    asyncWrapper(UserSubscriptionController.addExtraLimits)
+);
+
 router.get(
     '/',
     validateRequest(getUserSubscriptionsValidation),

@@ -726,6 +726,7 @@ export class UserSubscriptionService {
             if (addon.addonType === 'employee') extraLimits.employees += addon.quantity;
             if (addon.addonType === 'appointment') extraLimits.appointments += addon.quantity;
             if (addon.addonType === 'spotPass') extraLimits.spotPasses += addon.quantity;
+            if (addon.addonType === 'visitor') extraLimits.visitors += addon.quantity;
         });
 
         // Get counts with subscription start date for monthly limit calculation
@@ -1025,5 +1026,27 @@ export class UserSubscriptionService {
             hasActiveSubscription,
             subscriptionStatus,
         };
+    }
+
+    /**
+     * Admin only: Add extra limits directly (creates a system/admin UserAddon)
+     */
+    static async addExtraLimits(
+        userId: string,
+        type: 'employee' | 'appointment' | 'spotPass' | 'visitor',
+        quantity: number,
+        source: 'system' | 'admin' | 'purchase' = 'admin',
+        notes?: string
+    ): Promise<any> {
+        return UserAddon.create({
+            userId: toObjectId(userId),
+            addonType: type,
+            quantity: quantity,
+            paymentStatus: 'succeeded',
+            isActive: true,
+            source: source,
+            notes: notes,
+            // addonId is optional now, we intentionally omit it
+        });
     }
 }
