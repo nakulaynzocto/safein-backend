@@ -15,21 +15,39 @@ import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 import { generateInvoiceNumber } from '../../utils/invoiceNumber.util';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { EmployeeUtil } from '../../utils/employee.util';
+import { UserAddon } from '../../models/userSubscription/userAddon.model';
+import { SubscriptionAddon } from '../../models/subscription/subscriptionAddon.model';
 
 
 export class UserSubscriptionService {
 
     /**
      * Get user's active subscription
+     * Modified to find the currently applicable subscription based on date range
      */
     static async getUserActiveSubscription(userId: string): Promise<IUserSubscriptionResponse | null> {
         try {
+            const now = new Date();
+            // Find subscription where today is between start and end date
             const subscription = await UserSubscription.findOne({
                 userId: toObjectId(userId),
                 isDeleted: false,
-            }).sort({ createdAt: -1 });
+                startDate: { $lte: now },
+                endDate: { $gte: now },
+                isActive: true
+            }).sort({ endDate: -1 }); // Pick the one ending latest if overlap (shouldn't happen ideally)
 
             if (!subscription) {
+                // Fallback: Check if there's any active subscription slightly in future or just expired?
+                // Or just return the latest created one as fallback behavior for UI to show "Upcoming" or "Expired"
+                const latestSub = await UserSubscription.findOne({
+                    userId: toObjectId(userId),
+                    isDeleted: false,
+                }).sort({ createdAt: -1 });
+
+                if (latestSub) {
+                    return this.formatUserSubscriptionResponse(latestSub);
+                }
                 return null;
             }
 
@@ -41,8 +59,7 @@ export class UserSubscriptionService {
 
     /**
      * Common helper to create subscription history with invoice number
-     * Used by both user payment flow and admin assignment
-     * Made public so SuperAdminService can also use it
+     * ... (unchanged)
      */
     public static async createSubscriptionHistoryWithInvoice(params: {
         userId: string | mongoose.Types.ObjectId;
@@ -106,8 +123,7 @@ export class UserSubscriptionService {
 
     /**
      * Create or update paid subscription after successful Razorpay payment
-     * Updates existing subscription instead of creating new one (better approach)
-     * Includes idempotency check to prevent duplicate processing
+     * Updates: Now creates a NEW subscription for extensions (upgrades/renewals) instead of updating current.
      */
     static async createPaidSubscriptionFromPlan(
         userId: string,
@@ -118,7 +134,7 @@ export class UserSubscriptionService {
         const session = await mongoose.startSession();
         session.startTransaction();
         try {
-            // IDEMPOTENCY CHECK: If paymentId exists, check if subscription already created for this payment
+            // IDEMPOTENCY CHECK
             if (razorpayPaymentId) {
                 const existingSubscription = await UserSubscription.findOne({
                     razorpayPaymentId: razorpayPaymentId,
@@ -127,7 +143,7 @@ export class UserSubscriptionService {
 
                 if (existingSubscription) {
                     await session.abortTransaction();
-                    return existingSubscription; // Return existing subscription (idempotent)
+                    return existingSubscription;
                 }
             }
 
@@ -141,7 +157,7 @@ export class UserSubscriptionService {
                 throw new AppError('Subscription plan not found or inactive', ERROR_CODES.NOT_FOUND);
             }
 
-            // Find existing subscription and update it instead of creating new
+            // Find existing active/latest subscription
             const existingSubscription = await UserSubscription.findOne({
                 userId: toObjectId(userId),
                 isDeleted: false,
@@ -163,20 +179,13 @@ export class UserSubscriptionService {
             const endDate = new Date(baseEndDate);
             endDate.setDate(endDate.getDate() - 1);
 
-            // NOTE: We don't add remaining days anymore because we are chaining the dates sequentially.
-
             let subscription: IUserSubscription & Document;
 
-            if (existingSubscription) {
-                // UPDATE existing subscription instead of creating new
+            if (existingSubscription && !isExtension) {
+                // UPDATE existing subscription ONLY if it is NOT currently active/future (e.g. it expired)
+                // This keeps the user on the same ID if they just let it lapse.
                 existingSubscription.planType = plan.planType;
-
-                // Only update start date if we are resetting/overwriting (not extending)
-                if (!isExtension) {
-                    existingSubscription.startDate = segmentStart;
-                }
-
-                // End date is always extended to the new segment end
+                existingSubscription.startDate = segmentStart;
                 existingSubscription.endDate = endDate;
                 existingSubscription.isActive = true;
                 existingSubscription.paymentStatus = 'succeeded';
@@ -188,7 +197,10 @@ export class UserSubscriptionService {
                 await existingSubscription.save({ session });
                 subscription = existingSubscription;
             } else {
-                // Create new only if no existing subscription found
+                // CREATE NEW subscription
+                // This covers:
+                // 1. isExtension = true (Future start)
+                // 2. No existing subscription
                 subscription = new UserSubscription({
                     userId: toObjectId(userId),
                     planType: plan.planType,
@@ -228,10 +240,19 @@ export class UserSubscriptionService {
             });
 
             // Update user's activeSubscriptionId
+            // Only update if this new subscription is Active NOW.
+            // If it starts in future, we might arguably NOT update it yet, but finding "Active" checks dates anyway.
+            // Updating it to the latest created is fine if getting by ID isn't the only way.
+            // But strictly, let's keep it pointing to the "Currently Active" one or "Latest".
             const user = await User.findById(userId).session(session);
             if (user) {
-                user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
-                await user.save({ session });
+                // If the new subscription is currently valid (starts now), update ID.
+                // If it starts in future, we probably shouldn't break the pointer to current one?
+                // But `activeSubscriptionId` name suggests "Current".
+                if (segmentStart <= now) {
+                    user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
+                    await user.save({ session });
+                }
             }
 
             await session.commitTransaction();
@@ -598,14 +619,18 @@ export class UserSubscriptionService {
             monthEnd.setHours(23, 59, 59, 999);
         }
 
-        // Count appointments for current month only:
-        // 1. Directly created by user (createdBy = userId)
-        // 2. Created by employees of this user (employeeId in employeeIds)
-        // 3. Created within current month (based on subscription cycle)
-        // This ensures all appointments (admin + employees) count towards admin's monthly subscription limit
+        // Count appointments, visitors, and spot passes for current month only (Monthly Limits)
+        // Employees are counted as Total Active (Seats Limit)
         const [employeeCount, visitorCount, appointmentCount, spotPassesCount] = await Promise.all([
-            Employee.countDocuments({ createdBy: userObjectId, isDeleted: false }),
-            Visitor.countDocuments({ createdBy: userObjectId, isDeleted: false }),
+            Employee.countDocuments({ createdBy: userObjectId, isDeleted: false, status: 'Active' }),
+            Visitor.countDocuments({
+                createdBy: userObjectId,
+                isDeleted: false,
+                createdAt: {
+                    $gte: monthStart,
+                    $lte: monthEnd
+                }
+            }),
             Appointment.countDocuments({
                 isDeleted: false,
                 createdAt: {
@@ -617,7 +642,14 @@ export class UserSubscriptionService {
                     ...(employeeIds.length > 0 ? [{ employeeId: { $in: employeeIds } }] : []) // Created for admin's employees
                 ]
             }),
-            SpotPass.countDocuments({ businessId: userObjectId, isDeleted: false })
+            SpotPass.countDocuments({
+                businessId: userObjectId,
+                isDeleted: false,
+                createdAt: {
+                    $gte: monthStart,
+                    $lte: monthEnd
+                }
+            })
         ]);
 
         return {
@@ -638,12 +670,63 @@ export class UserSubscriptionService {
         const isEmployee = adminId !== userId;
 
         // Fetch necessary data in parallel
+        // Fetch necessary data in parallel
+        // Find CURRENTLY ACTIVE subscription (based on date)
+        // If overlap, sort by endDate desc to pick the one that covers longest/latest
+        const now = new Date();
         const subDocPromise = UserSubscription.findOne({
             userId: adminObjectId,
-            isDeleted: false
-        }).sort({ createdAt: -1 });
+            isDeleted: false,
+            startDate: { $lte: now },
+            endDate: { $gte: now },
+            isActive: true
+        }).sort({ endDate: -1 });
 
-        const [subDoc] = await Promise.all([subDocPromise]);
+        // If no active subscription found, we might want to fetch the LATEST one (e.g. expired or future)
+        // to show status appropriately. BUT for LIMITS, we should only use the active one.
+        // If result is null, limits default to free/none in the logic below.
+
+        // Fetch ALL addons for user (remove status filters from query)
+        const addonsPromise = UserAddon.find({
+            userId: adminObjectId
+        });
+
+        const [subDoc, allUserAddons] = await Promise.all([subDocPromise, addonsPromise]);
+
+        // Filter valid addons in memory
+        // This is more robust against DB minor mismatches and allows debugging
+        const validAddons = allUserAddons.filter(addon => {
+            const isValidStatus = addon.paymentStatus === 'succeeded' &&
+                (addon.isActive === true || addon.isActive === undefined);
+
+            if (!isValidStatus) return false;
+
+            // Strict date check: Addon must have been created within the current subscription window
+            // This ensures addons expire with the plan
+            if (subDoc) {
+                const addonDate = new Date(addon.createdAt || (addon as any)._id.getTimestamp());
+                // Addon date must be >= subscription start date (allowing for small clock skew, say 1 min buffer?)
+                // Actually, strict >= is usually fine.
+                // And definitely <= subscription end date.
+                return addonDate >= subDoc.startDate && addonDate <= subDoc.endDate;
+            }
+
+            return true;
+        });
+
+        // Calculate extra limits from add-ons
+        const extraLimits = {
+            employees: 0,
+            visitors: 0,
+            appointments: 0,
+            spotPasses: 0
+        };
+
+        validAddons.forEach(addon => {
+            if (addon.addonType === 'employee') extraLimits.employees += addon.quantity;
+            if (addon.addonType === 'appointment') extraLimits.appointments += addon.quantity;
+            if (addon.addonType === 'spotPass') extraLimits.spotPasses += addon.quantity;
+        });
 
         // Get counts with subscription start date for monthly limit calculation
         const subscriptionStartDate = subDoc?.startDate;
@@ -673,18 +756,24 @@ export class UserSubscriptionService {
         const checkCreationLimit = (type: 'employees' | 'visitors' | 'appointments' | 'spotPasses') => {
             // Default to -1 (unlimited) if plan not found
             // If plan found, use its limit. If limit is undefined in DB, default to -1.
-            const limit = planDoc?.limits?.[type] ?? -1;
+            const baseLimit = planDoc?.limits?.[type] ?? -1;
+            const extra = extraLimits[type] || 0;
             const current = counts[type];
 
+            let total = baseLimit;
+            if (baseLimit !== -1) {
+                total = baseLimit + extra;
+            }
+
             // If limit is -1, it's unlimited.
-            if (limit === -1) {
+            if (baseLimit === -1) {
                 const reached = isExpired; // Only reached if expired
-                return { limit, current, reached, canCreate: !isExpired };
+                return { limit: baseLimit, extra, total, current, reached, canCreate: !isExpired };
             }
 
             // If limit is set (> -1)
-            const reached = isExpired || current >= limit;
-            return { limit, current, reached, canCreate: !isExpired && !reached };
+            const reached = isExpired || current >= total;
+            return { limit: baseLimit, extra, total, current, reached, canCreate: !isExpired && !reached };
         };
 
         return {
@@ -732,7 +821,7 @@ export class UserSubscriptionService {
         // Unlimited plans have limit = -1, so they will never reach the limit
         // The limitInfo.reached already accounts for both expired and limit reached scenarios
         if (limitInfo.reached) {
-            const limitText = limitInfo.limit === -1 ? 'unlimited' : limitInfo.limit.toString();
+            const limitText = limitInfo.total === -1 ? 'unlimited' : limitInfo.total.toString();
             const currentText = limitInfo.current.toString();
 
             let message: string;
@@ -746,7 +835,7 @@ export class UserSubscriptionService {
                 if (status.isTrial) {
                     message = `Your free ${type} limit (${limitText}) has been reached. You currently have ${currentText} ${type}. Please upgrade to continue.`;
                 } else {
-                    message = `You have reached your plan's ${type} limit (${limitText}). You currently have ${currentText} ${type}. Please upgrade to a higher plan to create more ${type}.`;
+                    message = `You have reached your plan's ${type} limit (${limitText}). You currently have ${currentText} ${type}. Please upgrade to a higher plan or buy add-ons to create more ${type}.`;
                 }
             }
 
@@ -787,10 +876,19 @@ export class UserSubscriptionService {
         const adminId = await EmployeeUtil.getAdminId(userId);
         const adminObjectId = toObjectId(adminId);
 
+        const now = new Date();
         const subDoc = await UserSubscription.findOne({
             userId: adminObjectId,
-            isDeleted: false
-        }).sort({ createdAt: -1 });
+            isDeleted: false,
+            startDate: { $lte: now },
+            endDate: { $gte: now },
+            isActive: true
+        }).sort({ endDate: -1 });
+
+        // Fallback: If no active subscription found, check if there is an expired one to at least determine plan type
+        // However, for ACCESS check, strictly requiring active subscription is safer.
+        // If subDoc is null, formattedSub will be null -> 'free' plan -> limited access.
+        // If user has Future subscription only, they should NOT have access yet. Correct.
 
         const formattedSub = subDoc ? this.formatUserSubscriptionResponse(subDoc) : null;
         const planType = formattedSub ? formattedSub.planType : 'free';
@@ -821,6 +919,54 @@ export class UserSubscriptionService {
                 .exec();
 
             return history.map(mapSubscriptionHistoryItem);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Get all available active subscription addons
+     */
+    static async getAvailableAddons(): Promise<any[]> {
+        return SubscriptionAddon.find({
+            isActive: true,
+            isDeleted: false
+        }).sort({ sortOrder: 1 }).lean();
+    }
+
+    /**
+     * Create and activate a user addon after successful payment
+     */
+    static async createAddonSubscription(
+        userId: string,
+        addonId: string,
+        razorpayOrderId: string,
+        razorpayPaymentId: string
+    ): Promise<any> {
+        try {
+            const addon = await SubscriptionAddon.findById(addonId);
+            if (!addon) {
+                throw new AppError('Addon not found', ERROR_CODES.NOT_FOUND);
+            }
+
+            // Check if this payment was already processed (idempotency)
+            const existingAddon = await UserAddon.findOne({ razorpayPaymentId });
+            if (existingAddon) {
+                return existingAddon;
+            }
+
+            const newUserAddon = await UserAddon.create({
+                userId: toObjectId(userId),
+                addonId: toObjectId(addonId),
+                addonType: addon.type,
+                quantity: addon.unitQuantity,
+                paymentStatus: 'succeeded',
+                razorpayOrderId,
+                razorpayPaymentId,
+                isActive: true
+            });
+
+            return newUserAddon;
         } catch (error) {
             throw error;
         }

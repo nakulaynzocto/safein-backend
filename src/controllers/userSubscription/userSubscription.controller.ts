@@ -146,6 +146,68 @@ export class UserSubscriptionController {
     }
 
     /**
+     * Get available addons
+     * GET /api/v1/user-subscriptions/addons/available
+     */
+    @TryCatch('Failed to get available addons')
+    static async getAvailableAddons(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        const addons = await UserSubscriptionService.getAvailableAddons();
+        ResponseUtil.success(res, 'Available addons retrieved successfully', addons);
+    }
+
+    /**
+     * Create Razorpay order for addon
+     * POST /api/v1/user-subscriptions/addons/razorpay/checkout
+     */
+    @TryCatch('Failed to create addon checkout session')
+    static async createAddonRazorpayCheckout(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { addonId } = req.body;
+        if (!addonId) {
+            throw new AppError('Addon ID is required', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const order = await RazorpayService.createAddonOrder(addonId, req.user._id.toString());
+        ResponseUtil.success(res, 'Addon checkout session created successfully', order, ERROR_CODES.CREATED);
+    }
+
+    /**
+     * Verify Razorpay payment and activate addon
+     * POST /api/v1/user-subscriptions/addons/razorpay/verify
+     */
+    @TryCatch('Failed to verify addon payment')
+    static async verifyAddonPayment(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        if (!req.user) {
+            throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+        }
+
+        const { orderId, paymentId, signature, addonId } = req.body;
+
+        const isValid = RazorpayService.verifyPaymentSignature({
+            razorpayOrderId: orderId,
+            razorpayPaymentId: paymentId,
+            razorpaySignature: signature,
+        });
+
+        if (!isValid) {
+            throw new AppError('Invalid Razorpay signature', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const addon = await UserSubscriptionService.createAddonSubscription(
+            req.user._id.toString(),
+            addonId,
+            orderId,
+            paymentId
+        );
+
+        ResponseUtil.success(res, 'Addon payment verified and activated', addon, ERROR_CODES.CREATED);
+    }
+
+
+    /**
      * Get all user subscriptions with pagination
      * GET /api/v1/user-subscriptions
      */

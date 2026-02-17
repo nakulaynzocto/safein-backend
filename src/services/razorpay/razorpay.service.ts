@@ -4,6 +4,7 @@ import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES } from '../../utils/constants';
 import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { User } from '../../models/user/user.model';
+import { SubscriptionAddon } from '../../models/subscription/subscriptionAddon.model';
 
 export interface IRazorpayOrderRequest {
     planId: string;
@@ -93,6 +94,62 @@ export class RazorpayService {
             throw new AppError(
                 `Failed to create Razorpay order: ${error?.error?.description || error.message
                 }`,
+                ERROR_CODES.INTERNAL_SERVER_ERROR
+            );
+        }
+    }
+
+    static async createAddonOrder(addonId: string, userId: string): Promise<IRazorpayOrderResponse> {
+        const addon = await SubscriptionAddon.findById(addonId).where({
+            isDeleted: false,
+            isActive: true,
+        });
+
+        if (!addon) {
+            throw new AppError('Subscription addon not found or inactive', ERROR_CODES.NOT_FOUND);
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new AppError('User not found', ERROR_CODES.NOT_FOUND);
+        }
+        if (!user.email) {
+            throw new AppError('User must have an email for payment', ERROR_CODES.BAD_REQUEST);
+        }
+
+        const amountInSubUnits = Math.round((addon.amount || 0) * 100);
+
+        try {
+            const receipt = `addon_${addonId.slice(-10)}_${Date.now()
+                .toString()
+                .slice(-6)}`;
+
+            const order = await this.getClient().orders.create({
+                amount: amountInSubUnits,
+                currency: addon.currency?.toUpperCase() || 'INR',
+                receipt,
+                payment_capture: true,
+                notes: {
+                    addonId: addonId,
+                    userId,
+                    email: user.email,
+                    addonType: addon.type
+                },
+            } as any);
+
+            return {
+                orderId: (order as any).id,
+                amount: Number((order as any).amount),
+                currency: (order as any).currency,
+                keyId: razorpayConfig.keyId,
+                planId: addonId, // Reusing planId field for addonId to minimize frontend changes
+                userEmail: user.email,
+            };
+
+        } catch (error: any) {
+            console.error('Razorpay addon order creation failed:', error);
+            throw new AppError(
+                `Failed to create Razorpay addon order: ${error?.error?.description || error.message}`,
                 ERROR_CODES.INTERNAL_SERVER_ERROR
             );
         }

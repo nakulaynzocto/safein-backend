@@ -115,22 +115,40 @@ export interface ITrialLimitsStatus {
     limits: {
         employees: {
             limit: number;
+            extra: number;
+            total: number;
             current: number;
             reached: boolean;
             canCreate: boolean;
         };
         visitors: {
             limit: number;
+            extra: number;
+            total: number;
             current: number;
             reached: boolean;
             canCreate: boolean;
         };
         appointments: {
             limit: number;
+            extra: number;
+            total: number;
             current: number;
             reached: boolean;
             canCreate: boolean;
         };
+        spotPasses: {
+            limit: number;
+            extra: number;
+            total: number;
+            current: number;
+            reached: boolean;
+            canCreate: boolean;
+        };
+    };
+    modules: {
+        visitorInvite: boolean;
+        message: boolean;
     };
 }
 

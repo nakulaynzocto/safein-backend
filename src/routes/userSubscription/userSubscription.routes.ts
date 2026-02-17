@@ -56,6 +56,22 @@ router.post(
     asyncWrapper(UserSubscriptionController.verifyRazorpayPayment)
 );
 
+// Addon Routes
+router.get(
+    '/addons/available',
+    asyncWrapper(UserSubscriptionController.getAvailableAddons)
+);
+
+router.post(
+    '/addons/razorpay/checkout',
+    asyncWrapper(UserSubscriptionController.createAddonRazorpayCheckout)
+);
+
+router.post(
+    '/addons/razorpay/verify',
+    asyncWrapper(UserSubscriptionController.verifyAddonPayment)
+);
+
 router.get(
     '/',
     validateRequest(getUserSubscriptionsValidation),

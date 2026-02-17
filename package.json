@@ -11,6 +11,8 @@
     "test": "jest",
     "seed:subscription-plans": "ts-node scripts/seed-subscription-plans.ts",
     "seed:subscription-plans:clear": "ts-node scripts/seed-subscription-plans.ts --clear",
+    "seed:subscription-addons": "ts-node scripts/seed-subscription-addons.ts",
+    "seed:subscription-addons:clear": "ts-node scripts/seed-subscription-addons.ts --clear",
     "fix:appointment-links-index": "ts-node scripts/fix-appointment-links-index.ts"
   },
   "dependencies": {

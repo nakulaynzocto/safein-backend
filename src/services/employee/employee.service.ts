@@ -17,6 +17,7 @@ import { toObjectId } from '../../utils/idExtractor.util';
 import { escapeRegex } from '../../utils/string.util';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
+import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 
 export class EmployeeService {
     /**
@@ -314,6 +315,16 @@ export class EmployeeService {
             }
         }
 
+        if (safeUpdateData.status === 'Active' && existingEmployee.status !== 'Active') {
+            const subscriptionStatus = await UserSubscriptionService.getSubscriptionStatus((existingEmployee.createdBy as any).toString());
+            if (subscriptionStatus.limits.employees.limit !== -1 && subscriptionStatus.limits.employees.reached) {
+                throw new AppError(
+                    `Employee limit of ${subscriptionStatus.limits.employees.limit} reached. Upgrade your plan to activate more employees.`,
+                    ERROR_CODES.FORBIDDEN
+                );
+            }
+        }
+
         const employee = await Employee.findByIdAndUpdate(
             employeeIdObjectId,
             safeUpdateData,
@@ -511,8 +522,8 @@ export class EmployeeService {
                     });
                 }
             } else {
-                // Queue for creation
-                employeesToCreate.push({ ...data, createdBy });
+                // Queue for creation - Force Inactive initially
+                employeesToCreate.push({ ...data, status: 'Inactive', createdBy });
             }
         }
 
@@ -551,6 +562,7 @@ export class EmployeeService {
             try {
                 employee.set({
                     ...data,
+                    status: 'Inactive', // Enforce Inactive on restore to respect limits
                     isDeleted: false,
                     deletedAt: null,
                     deletedBy: null
@@ -641,6 +653,15 @@ export class EmployeeService {
 
         if (employee.isVerified) {
             throw new AppError('Employee is already verified', ERROR_CODES.BAD_REQUEST);
+        }
+
+        // Check if employee limit is reached before activating (since verified employees become Active)
+        const subscriptionStatus = await UserSubscriptionService.getSubscriptionStatus((employee.createdBy as any).toString());
+        if (subscriptionStatus.limits.employees.limit !== -1 && subscriptionStatus.limits.employees.reached) {
+            throw new AppError(
+                `Employee limit of ${subscriptionStatus.limits.employees.limit} reached. Upgrade your plan to activate more employees.`,
+                ERROR_CODES.FORBIDDEN
+            );
         }
 
         if (!employee.verificationOtp || !employee.verificationOtpExpires) {
