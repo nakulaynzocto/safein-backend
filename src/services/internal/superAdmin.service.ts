@@ -17,6 +17,7 @@ import { UserSubscriptionService } from '../userSubscription/userSubscription.se
 import { AuditLog } from '../../models/auditLog/auditLog.model';
 import * as crypto from 'crypto';
 import { getRedisClient } from '../../config/redis.config';
+import { getTaxSplit, amountToWords } from '../../utils/invoiceHelpers';
 import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 
 export class SuperAdminService {
@@ -484,6 +485,19 @@ export class SuperAdminService {
         // Add history record for the specific purchased segment
         const taxPercentage = plan.taxPercentage || 0;
         const taxAmount = (plan.amount * taxPercentage) / 100;
+        const totalAmount = plan.amount + taxAmount;
+
+        // Fetch billing details and calculate tax split
+        const billingDetails = await UserSubscriptionService.getBillingDetailsFromSafeinProfile() as any;
+        const taxSplit = getTaxSplit(
+            taxAmount,
+            taxPercentage,
+            user.address,
+            billingDetails?.companyDetails?.state,
+            billingDetails?.companyDetails?.country
+        );
+
+        const amountInWords = amountToWords(Math.round(totalAmount));
 
         await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
             userId: user._id,
@@ -496,9 +510,11 @@ export class SuperAdminService {
             currency: 'INR',
             taxAmount,
             taxPercentage,
+            taxSplit,
+            amountInWords,
             paymentStatus: 'succeeded',
             source: 'admin',
-            billingDetails: payload.billingDetails
+            billingDetails: billingDetails
         });
 
         user.activeSubscriptionId = resultSubscriptionId as any;
@@ -540,6 +556,7 @@ export class SuperAdminService {
                 .skip(skip)
                 .limit(limit)
                 .populate('planId', 'name')
+                .populate('userId', 'address') // Important for on-the-fly tax calculation
                 .select('+billingDetails') // Explicitly include billingDetails
                 .lean(),
             SubscriptionHistory.countDocuments({ userId })

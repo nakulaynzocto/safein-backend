@@ -13,6 +13,7 @@ import { SubscriptionHistory } from '../../models/subscriptionHistory/subscripti
 import { SafeinProfileService } from '../safeinProfile/safeinProfile.service';
 import { mapSubscriptionHistoryItem } from '../../utils/subscriptionFormatters';
 import { generateInvoiceNumber } from '../../utils/invoiceNumber.util';
+import { getTaxSplit, amountToWords } from '../../utils/invoiceHelpers';
 import { toObjectId } from '../../utils/idExtractor.util';
 import { EmployeeUtil } from '../../utils/employee.util';
 import { UserAddon } from '../../models/userSubscription/userAddon.model';
@@ -77,6 +78,8 @@ export class UserSubscriptionService {
         razorpayPaymentId?: string;
         source: 'user' | 'admin';
         billingDetails?: any;
+        taxSplit?: any;
+        amountInWords?: string;
         session?: mongoose.ClientSession;
     }) {
         try {
@@ -109,6 +112,8 @@ export class UserSubscriptionService {
                 taxAmount: params.taxAmount || 0,
                 taxPercentage: params.taxPercentage || 0,
                 billingDetails,
+                taxSplit: params.taxSplit,
+                amountInWords: params.amountInWords,
                 isDeleted: false
             });
 
@@ -217,8 +222,25 @@ export class UserSubscriptionService {
             }
 
             // Store purchase history
+            const totalAmount = plan.totalAmount; // This is rounded to nearest rupee as per model virtual
             const taxPercentage = plan.taxPercentage || 0;
-            const taxAmount = (plan.amount * taxPercentage) / 100;
+            const taxAmount = totalAmount - plan.amount;
+
+            // Fetch user for address
+            const userForAddress = await User.findById(userId).session(session);
+
+            // Fetch billing details early to get company state
+            const billingDetails = await UserSubscriptionService.getBillingDetailsFromSafeinProfile() as any;
+
+            const calculatedTaxSplit = getTaxSplit(
+                taxAmount,
+                taxPercentage,
+                userForAddress?.address,
+                billingDetails?.companyDetails?.state,
+                billingDetails?.companyDetails?.country
+            );
+
+            const calculatedAmountInWords = amountToWords(Math.round(totalAmount));
 
             await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
                 userId,
@@ -231,11 +253,13 @@ export class UserSubscriptionService {
                 currency: plan.currency,
                 taxAmount,
                 taxPercentage,
+                taxSplit: calculatedTaxSplit,
+                amountInWords: calculatedAmountInWords,
                 paymentStatus: 'succeeded',
                 razorpayOrderId,
                 razorpayPaymentId,
                 source: 'user',
-                billingDetails: undefined,
+                billingDetails: billingDetails,
                 session
             });
 
@@ -363,7 +387,7 @@ export class UserSubscriptionService {
     /**
      * Helper to fetch billing details from SafeIn Profile
      */
-    private static async getBillingDetailsFromSafeinProfile() {
+    public static async getBillingDetailsFromSafeinProfile() {
         try {
             const profile = await SafeinProfileService.getSafeinProfile();
 
@@ -399,7 +423,11 @@ export class UserSubscriptionService {
             console.error('Error fetching SafeIn profile for billing details:', error);
             // Return correctly structured fallback
             return {
-                companyDetails: CONSTANTS.COMPANY_BILLING_DETAILS,
+                companyDetails: {
+                    ...CONSTANTS.COMPANY_BILLING_DETAILS,
+                    country: CONSTANTS.COMPANY_BILLING_DETAILS.address.country,
+                    state: CONSTANTS.COMPANY_BILLING_DETAILS.address.state,
+                },
                 bankDetails: {},
                 invoiceConfig: {
                     invoicePrefix: 'INV',
@@ -429,6 +457,23 @@ export class UserSubscriptionService {
                 try {
                     const plan = await SubscriptionPlan.findById(subscriptionData.planId);
                     if (plan) {
+                        const totalAmount = plan.totalAmount;
+                        const taxPercentage = plan.taxPercentage || 0;
+                        const taxAmount = totalAmount - plan.amount;
+
+                        const userForAddress = await User.findById(subscriptionData.userId);
+                        const billingDetails = await UserSubscriptionService.getBillingDetailsFromSafeinProfile() as any;
+
+                        const calculatedTaxSplit = getTaxSplit(
+                            taxAmount,
+                            taxPercentage,
+                            userForAddress?.address,
+                            billingDetails?.companyDetails?.state,
+                            billingDetails?.companyDetails?.country
+                        );
+
+                        const calculatedAmountInWords = amountToWords(Math.round(totalAmount));
+
                         await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
                             userId: subscriptionData.userId,
                             subscriptionId: newSubscription._id as mongoose.Types.ObjectId,
@@ -438,9 +483,13 @@ export class UserSubscriptionService {
                             endDate: newSubscription.endDate,
                             amount: plan.amount,
                             currency: plan.currency,
+                            taxAmount,
+                            taxPercentage,
+                            taxSplit: calculatedTaxSplit,
+                            amountInWords: calculatedAmountInWords,
                             paymentStatus: 'succeeded',
                             source: 'admin',
-                            billingDetails: undefined
+                            billingDetails: billingDetails
                         });
                     }
                 } catch (historyError) {

@@ -35,6 +35,10 @@ export interface ISubscriptionPlan extends Document {
         visitorInvite: boolean;
         message: boolean;
     };
+    // Virtuals
+    totalAmount: number;
+    formattedPrice: string;
+    duration: number;
 }
 
 const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
@@ -161,6 +165,8 @@ const subscriptionPlanSchema = new Schema<ISubscriptionPlan>(
     {
         timestamps: true,
         versionKey: false,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
     }
 );
 
@@ -171,19 +177,20 @@ subscriptionPlanSchema.index({ createdAt: -1 });
 subscriptionPlanSchema.index({ isPopular: 1 });
 
 subscriptionPlanSchema.virtual('formattedPrice').get(function () {
-    const price = this.amount.toFixed(2);
+    const price = typeof this.amount === 'number' ? this.amount.toFixed(2) : '0.00';
     return `₹${price}`;
 });
 
 subscriptionPlanSchema.virtual('monthlyEquivalent').get(function () {
+    const amount = this.amount || 0;
     if (this.planType === 'yearly') {
-        const monthlyPrice = this.amount / 12;
+        const monthlyPrice = amount / 12;
         return Math.round(monthlyPrice);
     } else if (this.planType === 'quarterly') {
-        const monthlyPrice = this.amount / 3;
+        const monthlyPrice = amount / 3;
         return Math.round(monthlyPrice);
     }
-    return this.amount;
+    return amount;
 });
 
 subscriptionPlanSchema.virtual('savingsPercentage').get(function () {
@@ -196,8 +203,9 @@ subscriptionPlanSchema.virtual('savingsPercentage').get(function () {
 });
 
 subscriptionPlanSchema.virtual('totalAmount').get(function () {
+    const amount = this.amount || 0;
     const tax = this.taxPercentage || 0;
-    const total = this.amount + (this.amount * tax) / 100;
+    const total = amount + (amount * tax) / 100;
     return Math.round(total);
 });
 

@@ -20,6 +20,7 @@ export interface ISafeinProfile extends Document {
         taxType?: string;
         registrationNumber?: string;
         website?: string;
+        bio?: string;
     };
     bankDetails?: {
         bankName?: string;
@@ -103,6 +104,7 @@ const SafeinProfileSchema = new Schema(
             taxType: { type: String },
             registrationNumber: { type: String },
             website: { type: String },
+            bio: { type: String },
         },
         bankDetails: {
             bankName: { type: String },

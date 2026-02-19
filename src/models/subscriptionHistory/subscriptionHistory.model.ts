@@ -19,6 +19,8 @@ export interface ISubscriptionHistory extends Document {
     source?: 'user' | 'admin' | 'system'; // Who initiated the subscription
     taxAmount?: number; // Tax amount included in the total
     taxPercentage?: number; // Tax percentage applied
+    taxSplit?: any; // Pre-calculated GST split (CGST/SGST/IGST)
+    amountInWords?: string; // Amount converted to words
     billingDetails?: any; // Flexible structure
     isDeleted: boolean; // For soft deletion
     deletedAt?: Date;
@@ -110,6 +112,14 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         taxPercentage: {
             type: Number,
             default: 0,
+        },
+        taxSplit: {
+            type: Schema.Types.Mixed,
+            default: null,
+        },
+        amountInWords: {
+            type: String,
+            default: null,
         },
         billingDetails: {
             type: Schema.Types.Mixed, // Allow flexible structure to avoid validation errors

@@ -11,6 +11,7 @@ import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
 import { Transaction } from '../../decorators';
 import mongoose from 'mongoose';
+import { getTaxSplit } from '../../utils/invoiceHelpers';
 
 export class SubscriptionPlanService {
     /**
@@ -72,18 +73,18 @@ export class SubscriptionPlanService {
             isPopular,
             isPublic,
             sortBy = 'sortOrder',
-            sortOrder = 'asc'
+            sortOrder = 'asc',
+            userId,
+            profileId
         } = query;
 
         const filter: any = { isDeleted: false };
 
-        // Handle Visibility Filter
+        // ... existing filters ...
         if (isPublic === 'all') {
-            // No filter on isPublic - show everything (for Super Admin)
         } else if (isPublic !== undefined) {
             filter.isPublic = isPublic;
         } else {
-            // Default: Show public + legacy (missing field)
             filter.isPublic = { $ne: false };
         }
 
@@ -91,13 +92,11 @@ export class SubscriptionPlanService {
             filter.planType = planType;
         }
 
-        // By default, only show active plans unless explicitly set to false
         if (isActive === 'all') {
-            // No active filter - show all
         } else if (isActive !== undefined) {
             filter.isActive = isActive;
         } else {
-            filter.isActive = true; // Default to active plans only
+            filter.isActive = true;
         }
 
         if (isPopular !== undefined) {
@@ -118,18 +117,49 @@ export class SubscriptionPlanService {
             SubscriptionPlan.countDocuments(filter)
         ]);
 
-        const formattedPlans = plans.map(plan => this.formatSubscriptionPlanResponse(plan));
+        // If userId provided, fetch user and profile for tax split
+        let user: any = null;
+        let profile: any = null;
+        if (userId) {
+            const UserModel = mongoose.model('User');
+            user = await UserModel.findById(userId);
+
+            if (profileId) {
+                const ProfileModel = mongoose.model('SafeinProfile');
+                profile = await ProfileModel.findById(profileId);
+            } else {
+                // Try to find any profile if none provided
+                const ProfileModel = mongoose.model('SafeinProfile');
+                profile = await ProfileModel.findOne() || await ProfileModel.findOne({ isDefault: true });
+            }
+        }
+
+        const formattedPlans = plans.map(plan => {
+            const res = this.formatSubscriptionPlanResponse(plan);
+
+            if (user && res.taxAmount > 0) {
+                res.taxSplit = getTaxSplit(
+                    res.taxAmount,
+                    res.taxPercentage,
+                    user.address,
+                    profile?.companyDetails?.state || 'Karnataka',
+                    profile?.companyDetails?.country || 'India'
+                );
+            }
+
+            return res;
+        });
 
         const totalPages = Math.ceil(totalPlans / limit);
 
         return {
             plans: formattedPlans,
             pagination: {
-                currentPage: page,
+                currentPage: Number(page),
                 totalPages,
                 totalPlans,
-                hasNextPage: page < totalPages,
-                hasPrevPage: page > 1
+                hasNextPage: Number(page) < totalPages,
+                hasPrevPage: Number(page) > 1
             }
         };
     }

@@ -119,6 +119,11 @@ export interface ISubscriptionPlanResponse {
         visitorInvite: boolean;
         message: boolean;
     };
+    taxSplit?: {
+        components: { label: string; rate: number; amount: number }[];
+        type: string;
+        isIntraState: boolean;
+    };
 }
 
 export interface IGetSubscriptionPlansQuery {
@@ -130,6 +135,8 @@ export interface IGetSubscriptionPlansQuery {
     isPublic?: boolean | 'all';
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    userId?: string;
+    profileId?: string;
 }
 
 export interface ISubscriptionPlanListResponse {

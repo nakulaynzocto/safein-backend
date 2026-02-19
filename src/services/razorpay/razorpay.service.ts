@@ -55,9 +55,8 @@ export class RazorpayService {
             throw new AppError('User must have an email for payment', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Razorpay expects amount in the smallest currency unit (paise for INR)
-        // plan.amount is stored in rupees, so multiply by 100 to convert to paise
-        const amountInSubUnits = Math.round((plan.amount || 0) * 100);
+        // plan.totalAmount is a virtual that includes GST and is rounded to nearest rupee
+        const amountInSubUnits = Math.round((plan.totalAmount || 0) * 100);
         const planId = (plan as any)._id ? (plan as any)._id.toString() : String(data.planId);
 
         try {
