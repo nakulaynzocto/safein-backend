@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { OAuth2Client } from 'google-auth-library';
 import { User } from '../../models/user/user.model';
 import { Employee } from '../../models/employee/employee.model';
 import { EmployeeUtil } from '../../utils/employee.util';
@@ -22,6 +23,9 @@ import { SubscriptionPlan } from '../../models/subscription/subscription.model';
 import { UserSubscription } from '../../models/userSubscription/userSubscription.model';
 import { toObjectId } from '../../utils/idExtractor.util';
 import * as crypto from 'crypto';
+
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 export class UserService {
   /**
@@ -855,6 +859,126 @@ export class UserService {
     return {
       user: userProfile,
       token
+    };
+  }
+
+  /**
+   * Google Login/Signup
+   */
+  @Transaction('Failed to login with Google')
+  static async googleLogin(googleToken: string, options: { session?: any } = {}): Promise<{ user: IUserResponse; token: string }> {
+    const { session } = options;
+    let email, id, name, avatar;
+
+    if (!GOOGLE_CLIENT_ID) {
+      throw new AppError('Google Client ID is not configured', ERROR_CODES.INTERNAL_SERVER_ERROR);
+    }
+
+    try {
+      // 1. Try as ID Token first
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: googleToken,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        if (payload) {
+          id = payload.sub;
+          email = payload.email;
+          name = payload.name;
+          avatar = payload.picture;
+        }
+      } catch (idTokenError) {
+        // 2. Fallback: Access Token
+        const tokenInfo = await googleClient.getTokenInfo(googleToken);
+        id = tokenInfo.sub;
+        email = tokenInfo.email;
+        name = email?.split('@')[0];
+      }
+    } catch (e) {
+      // 3. Profile API fallback
+      const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${googleToken}`);
+      const profile = (await response.json()) as any;
+      if (profile && profile.email) {
+        id = profile.sub;
+        email = profile.email;
+        name = profile.name;
+        avatar = profile.picture;
+      } else {
+        throw new AppError('Failed to verify Google token', ERROR_CODES.BAD_REQUEST);
+      }
+    }
+
+    if (!email) throw new AppError('Email not found in Google response', ERROR_CODES.BAD_REQUEST);
+
+    let user = await User.findOne({ email: email.toLowerCase(), isDeleted: false }).session(session);
+
+    if (!user) {
+      // Create new user (Admin by default)
+      user = new User({
+        email: email.toLowerCase(),
+        companyName: name || email.split('@')[0],
+        profilePicture: avatar || '',
+        isEmailVerified: true,
+        isActive: true,
+        roles: ['admin'],
+        googleId: id,
+        password: crypto.randomBytes(16).toString('hex') // Random password
+      });
+      await user.save({ session });
+
+      // Auto-assign free trial subscription
+      const freePlan = await SubscriptionPlan.findOne({
+        planType: 'free',
+        isActive: true,
+        isDeleted: false
+      }).session(session);
+
+      if (freePlan) {
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + (freePlan.trialDays || 3));
+
+        const subscription = new UserSubscription({
+          userId: user._id,
+          planType: 'free',
+          startDate,
+          endDate,
+          isActive: true,
+          paymentStatus: 'succeeded',
+          trialDays: freePlan.trialDays || 3,
+        });
+        await subscription.save({ session });
+
+        // Update user's activeSubscriptionId
+        user.activeSubscriptionId = subscription._id as mongoose.Types.ObjectId;
+        await user.save({ session });
+      }
+
+      try {
+        await EmailService.sendWelcomeEmail(user.email, user.companyName);
+      } catch (error) { }
+    } else {
+      // Update googleId if not present
+      if (!user.googleId) {
+        user.googleId = id;
+      }
+      // Update last login
+      user.lastLoginAt = new Date();
+      await user.save({ session });
+    }
+
+    const token = JwtUtil.generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+    });
+
+    const userProfile = user.getPublicProfile();
+    await this.populateEmployeeId(user, userProfile);
+
+    return {
+      user: userProfile,
+      token,
     };
   }
 }

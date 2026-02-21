@@ -42,6 +42,7 @@ export interface IUser extends Document {
     };
     passwordResetToken?: string;
     resetPasswordExpires?: Date;
+    googleId?: string;
 
     comparePassword(candidatePassword: string): Promise<boolean>;
     updateLastLogin(): Promise<IUser>;

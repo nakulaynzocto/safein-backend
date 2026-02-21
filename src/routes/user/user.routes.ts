@@ -47,6 +47,10 @@ router.post('/login',
     asyncWrapper(UserController.login)
 );
 
+router.post('/google-login',
+    asyncWrapper(UserController.googleLogin)
+);
+
 
 router.post('/forgot-password',
     passwordResetLimiter,

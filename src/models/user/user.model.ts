@@ -139,6 +139,12 @@ const userSchema = new Schema<IUser>(
             type: Date,
             default: null,
             select: false
+        },
+        googleId: {
+            type: String,
+            trim: true,
+            default: null,
+            sparse: true
         }
     },
     {

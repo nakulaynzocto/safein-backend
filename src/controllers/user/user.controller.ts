@@ -60,6 +60,16 @@ export class UserController {
   }
 
   /**
+   * Login with Google
+   */
+  @TryCatch('Failed to login with Google')
+  static async googleLogin(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    const { token } = req.body;
+    const result = await UserService.googleLogin(token);
+    ResponseUtil.success(res, 'Login successful', result);
+  }
+
+  /**
    * Get current user profile
    */
   @TryCatch('Failed to get user profile')
