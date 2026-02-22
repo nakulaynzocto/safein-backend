@@ -52,6 +52,32 @@ export class SuperAdminController {
         ResponseUtil.success(res, 'Subscription plan updated successfully', plan);
     }
 
+    // --- Subscription Addon Methods ---
+
+    @TryCatch('Failed to fetch subscription addons')
+    public async getSubscriptionAddons(_req: Request, res: Response, _next: NextFunction) {
+        const addons = await SuperAdminService.getSubscriptionAddons();
+        ResponseUtil.success(res, 'Subscription addons fetched successfully', addons);
+    }
+
+    @TryCatch('Failed to create subscription addon')
+    public async createSubscriptionAddon(req: Request, res: Response, _next: NextFunction) {
+        const addon = await SuperAdminService.createSubscriptionAddon(req.body);
+        ResponseUtil.created(res, 'Subscription addon created successfully', addon);
+    }
+
+    @TryCatch('Failed to update subscription addon')
+    public async updateSubscriptionAddon(req: Request, res: Response, _next: NextFunction) {
+        const addon = await SuperAdminService.updateSubscriptionAddon(req.params.id, req.body);
+        ResponseUtil.success(res, 'Subscription addon updated successfully', addon);
+    }
+
+    @TryCatch('Failed to delete subscription addon')
+    public async deleteSubscriptionAddon(req: Request, res: Response, _next: NextFunction) {
+        const result = await SuperAdminService.deleteSubscriptionAddon(req.params.id);
+        ResponseUtil.success(res, result, null);
+    }
+
     // Get Audit Logs
     @TryCatch('Failed to fetch audit logs')
     public async getAuditLogs(_req: Request, res: Response, _next: NextFunction) {

@@ -7,6 +7,7 @@ import { SubscriptionHistory } from '../../models/subscriptionHistory/subscripti
 import { Visitor } from '../../models/visitor/visitor.model';
 import { Appointment } from '../../models/appointment/appointment.model';
 import { Employee } from '../../models/employee/employee.model';
+import { SubscriptionAddon } from '../../models/subscription/subscriptionAddon.model';
 
 import { EmailService } from '../../services/email/email.service';
 import { AppError } from '../../middlewares/errorHandler';
@@ -325,6 +326,32 @@ export class SuperAdminService {
         }
 
         return plan;
+    }
+
+    // --- Subscription Addon Methods ---
+
+    static async getSubscriptionAddons() {
+        return await SubscriptionAddon.find({ isDeleted: false }).sort({ sortOrder: 1 });
+    }
+
+    static async createSubscriptionAddon(payload: any) {
+        return await SubscriptionAddon.create(payload);
+    }
+
+    static async updateSubscriptionAddon(id: string, payload: any) {
+        const addon = await SubscriptionAddon.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
+        if (!addon) {
+            throw new AppError('Subscription Addon not found', ERROR_CODES.NOT_FOUND);
+        }
+        return addon;
+    }
+
+    static async deleteSubscriptionAddon(id: string) {
+        const addon = await SubscriptionAddon.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+        if (!addon) {
+            throw new AppError('Subscription Addon not found', ERROR_CODES.NOT_FOUND);
+        }
+        return 'Addon deleted successfully';
     }
 
     // Get Audit Logs

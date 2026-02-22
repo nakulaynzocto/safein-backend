@@ -41,6 +41,12 @@ router.get('/subscriptions', controller.getSubscriptionPlans);
 router.post('/subscriptions', controller.createSubscriptionPlan);
 router.put('/subscriptions/:id', controller.updateSubscriptionPlan);
 
+// Subscription Addons
+router.get('/subscription-addons', controller.getSubscriptionAddons);
+router.post('/subscription-addons', controller.createSubscriptionAddon);
+router.put('/subscription-addons/:id', controller.updateSubscriptionAddon);
+router.delete('/subscription-addons/:id', controller.deleteSubscriptionAddon);
+
 // Audit & Security
 router.get('/audit-logs', controller.getAuditLogs);
 
