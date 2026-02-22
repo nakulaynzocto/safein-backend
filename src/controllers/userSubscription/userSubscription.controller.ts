@@ -150,8 +150,9 @@ export class UserSubscriptionController {
      * GET /api/v1/user-subscriptions/addons/available
      */
     @TryCatch('Failed to get available addons')
-    static async getAvailableAddons(_req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        const addons = await UserSubscriptionService.getAvailableAddons();
+    static async getAvailableAddons(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+        const publicOnly = req.query.publicOnly !== 'false';
+        const addons = await UserSubscriptionService.getAvailableAddons(publicOnly);
         ResponseUtil.success(res, 'Available addons retrieved successfully', addons);
     }
 
@@ -461,13 +462,13 @@ export class UserSubscriptionController {
      */
     @TryCatch('Failed to add extra limits')
     static async addExtraLimits(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
-        const { userId, type, quantity, notes } = req.body;
+        const { userId, type, quantity, notes, addonId } = req.body;
 
         if (!userId || !type || !quantity) {
             throw new AppError('Missing required fields: userId, type, quantity', ERROR_CODES.BAD_REQUEST);
         }
 
-        const addon = await UserSubscriptionService.addExtraLimits(userId, type, quantity, 'admin', notes);
+        const addon = await UserSubscriptionService.addExtraLimits(userId, type, quantity, 'admin', notes, addonId);
 
         ResponseUtil.success(res, 'Extra limits added successfully', addon, ERROR_CODES.CREATED);
     }

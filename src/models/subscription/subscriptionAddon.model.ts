@@ -8,6 +8,7 @@ export interface ISubscriptionAddon extends Document {
     amount: number; // Price in INR
     currency: string;
     isActive: boolean;
+    isPublic: boolean;
     sortOrder: number;
     isDeleted: boolean;
     createdAt: Date;
@@ -46,6 +47,10 @@ const subscriptionAddonSchema = new Schema<ISubscriptionAddon>(
             lowercase: true,
         },
         isActive: {
+            type: Boolean,
+            default: true,
+        },
+        isPublic: {
             type: Boolean,
             default: true,
         },

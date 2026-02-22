@@ -66,7 +66,8 @@ export class UserSubscriptionService {
         userId: string | mongoose.Types.ObjectId;
         subscriptionId: mongoose.Types.ObjectId;
         planType: string;
-        planId: string | mongoose.Types.ObjectId;
+        planId?: string | mongoose.Types.ObjectId;
+        addonId?: string | mongoose.Types.ObjectId;
         startDate: Date;
         endDate: Date;
         amount: number;
@@ -76,7 +77,7 @@ export class UserSubscriptionService {
         paymentStatus: string;
         razorpayOrderId?: string;
         razorpayPaymentId?: string;
-        source: 'user' | 'admin';
+        source: 'user' | 'admin' | 'system';
         billingDetails?: any;
         taxSplit?: any;
         amountInWords?: string;
@@ -97,8 +98,9 @@ export class UserSubscriptionService {
             const subscriptionHistory = new SubscriptionHistory({
                 userId: toObjectId(String(params.userId)),
                 subscriptionId: params.subscriptionId,
-                planType: params.planType,
-                planId: toObjectId(String(params.planId)),
+                planType: params.planType as any,
+                planId: params.planId ? toObjectId(String(params.planId)) : undefined,
+                addonId: params.addonId ? toObjectId(String(params.addonId)) : undefined,
                 invoiceNumber,
                 purchaseDate: new Date(),
                 startDate: params.startDate,
@@ -977,11 +979,15 @@ export class UserSubscriptionService {
     /**
      * Get all available active subscription addons
      */
-    static async getAvailableAddons(): Promise<any[]> {
-        return SubscriptionAddon.find({
+    static async getAvailableAddons(publicOnly: boolean = true): Promise<any[]> {
+        const query: any = {
             isActive: true,
             isDeleted: false
-        }).sort({ sortOrder: 1 }).lean();
+        };
+        if (publicOnly) {
+            query.isPublic = true;
+        }
+        return SubscriptionAddon.find(query).sort({ sortOrder: 1 }).lean();
     }
 
     /**
@@ -1015,6 +1021,58 @@ export class UserSubscriptionService {
                 razorpayPaymentId,
                 isActive: true
             });
+
+            // Generate Invoice/History for Addon Purchase
+            try {
+                // Find active subscription to link history
+                const activeSub = await UserSubscription.findOne({
+                    userId: toObjectId(userId),
+                    isActive: true,
+                    isDeleted: false
+                }).sort({ endDate: -1 });
+
+                if (activeSub) {
+                    const taxPercentage = 18; // Default or fetch from profile? Addons in model don't have tax yet.
+                    const taxAmount = (addon.amount * taxPercentage) / 100;
+                    const totalAmount = addon.amount + taxAmount;
+
+                    const userForAddress = await User.findById(userId);
+                    const billingDetails = await UserSubscriptionService.getBillingDetailsFromSafeinProfile() as any;
+
+                    const calculatedTaxSplit = getTaxSplit(
+                        taxAmount,
+                        taxPercentage,
+                        userForAddress?.address,
+                        billingDetails?.companyDetails?.state,
+                        billingDetails?.companyDetails?.country
+                    );
+
+                    const calculatedAmountInWords = amountToWords(Math.round(totalAmount));
+
+                    await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
+                        userId,
+                        subscriptionId: activeSub._id as mongoose.Types.ObjectId,
+                        planType: 'addon',
+                        addonId: addon._id as mongoose.Types.ObjectId,
+                        startDate: activeSub.startDate,
+                        endDate: activeSub.endDate,
+                        amount: addon.amount,
+                        currency: addon.currency || 'INR',
+                        taxAmount,
+                        taxPercentage,
+                        taxSplit: calculatedTaxSplit,
+                        amountInWords: calculatedAmountInWords,
+                        paymentStatus: 'succeeded',
+                        razorpayOrderId,
+                        razorpayPaymentId,
+                        source: 'user',
+                        billingDetails: billingDetails
+                    });
+                }
+            } catch (historyError) {
+                console.error('Error creating addon subscription history:', historyError);
+                // Don't fail the purchase, just log the history error
+            }
 
             return newUserAddon;
         } catch (error) {
@@ -1085,17 +1143,71 @@ export class UserSubscriptionService {
         type: 'employee' | 'appointment' | 'spotPass' | 'visitor',
         quantity: number,
         source: 'system' | 'admin' | 'purchase' = 'admin',
-        notes?: string
+        notes?: string,
+        addonId?: string
     ): Promise<any> {
-        return UserAddon.create({
+        const userAddon = await UserAddon.create({
             userId: toObjectId(userId),
+            addonId: addonId ? toObjectId(addonId) : undefined,
             addonType: type,
             quantity: quantity,
             paymentStatus: 'succeeded',
             isActive: true,
             source: source,
             notes: notes,
-            // addonId is optional now, we intentionally omit it
         });
+
+        // Generate Invoice for Admin Assignment if addonId is provided
+        if (addonId) {
+            try {
+                const addon = await SubscriptionAddon.findById(addonId);
+                const activeSub = await UserSubscription.findOne({
+                    userId: toObjectId(userId),
+                    isActive: true,
+                    isDeleted: false
+                }).sort({ endDate: -1 });
+
+                if (addon && activeSub) {
+                    const taxPercentage = 18; // Default
+                    const taxAmount = (addon.amount * taxPercentage) / 100;
+                    const totalAmount = addon.amount + taxAmount;
+
+                    const userForAddress = await User.findById(userId);
+                    const billingDetails = await UserSubscriptionService.getBillingDetailsFromSafeinProfile() as any;
+
+                    const calculatedTaxSplit = getTaxSplit(
+                        taxAmount,
+                        taxPercentage,
+                        userForAddress?.address,
+                        billingDetails?.companyDetails?.state,
+                        billingDetails?.companyDetails?.country
+                    );
+
+                    const calculatedAmountInWords = amountToWords(Math.round(totalAmount));
+
+                    await UserSubscriptionService.createSubscriptionHistoryWithInvoice({
+                        userId,
+                        subscriptionId: activeSub._id as mongoose.Types.ObjectId,
+                        planType: 'addon',
+                        addonId: addon._id as mongoose.Types.ObjectId,
+                        startDate: activeSub.startDate,
+                        endDate: activeSub.endDate,
+                        amount: addon.amount,
+                        currency: addon.currency || 'INR',
+                        taxAmount,
+                        taxPercentage,
+                        taxSplit: calculatedTaxSplit,
+                        amountInWords: calculatedAmountInWords,
+                        paymentStatus: 'succeeded',
+                        source: 'admin',
+                        billingDetails: billingDetails
+                    });
+                }
+            } catch (historyError) {
+                console.error('Error creating admin addon history:', historyError);
+            }
+        }
+
+        return userAddon;
     }
 }

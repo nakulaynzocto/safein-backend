@@ -3,8 +3,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ISubscriptionHistory extends Document {
     userId: mongoose.Types.ObjectId; // Reference to the User model
     subscriptionId: mongoose.Types.ObjectId; // Reference to the UserSubscription model
-    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    planType: 'free' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'addon';
     planId?: mongoose.Types.ObjectId; // Reference to SubscriptionPlan (if available)
+    addonId?: mongoose.Types.ObjectId; // Reference to SubscriptionAddon (if available)
     invoiceNumber?: string; // Generated invoice number with dynamic date formatting
     purchaseDate: Date; // When the plan was purchased
     startDate: Date; // When the subscription started
@@ -44,12 +45,17 @@ const subscriptionHistorySchema = new Schema<ISubscriptionHistory>(
         },
         planType: {
             type: String,
-            enum: ['free', 'weekly', 'monthly', 'quarterly', 'yearly'],
+            enum: ['free', 'weekly', 'monthly', 'quarterly', 'yearly', 'addon'],
             required: true,
         },
         planId: {
             type: Schema.Types.ObjectId,
             ref: 'SubscriptionPlan',
+            default: null,
+        },
+        addonId: {
+            type: Schema.Types.ObjectId,
+            ref: 'SubscriptionAddon',
             default: null,
         },
         invoiceNumber: {
