@@ -14,6 +14,7 @@ import { EmployeeUtil } from '../../utils/employee.util';
 import { escapeRegex } from '../../utils/string.util';
 import mongoose from 'mongoose';
 import { NotificationService } from '../notification/notification.service';
+import { SettingsService } from '../settings/settings.service';
 
 export class SpecialVisitorBookingService {
     /**
@@ -56,10 +57,13 @@ export class SpecialVisitorBookingService {
         const adminUser = await User.findById(adminId).select('companyName').lean();
         const companyName = adminUser?.companyName || 'SafeIn';
 
-        // Send Entry Code via SMS/WhatsApp
+        // Fetch admin's WhatsApp config (same as appointment.service.ts)
+        const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
+
+        // Send Entry Code via WhatsApp using admin's configured provider
         const whatsappMessage = `Hello ${visitorName}, Your Visitor Entry Code for ${companyName} is: ${otp}. Please show this at reception.`;
         try {
-            await WhatsAppService.sendMessage(visitorPhone, whatsappMessage);
+            await WhatsAppService.sendMessage(visitorPhone, whatsappMessage, whatsappConfig);
         } catch (error) {
             // Ignore error
         }
@@ -167,10 +171,13 @@ export class SpecialVisitorBookingService {
         const adminUser = await User.findById(adminId).select('companyName').lean();
         const companyName: string = (adminUser as any)?.companyName || 'SafeIn';
 
-        // Resend Entry Code via SMS/WhatsApp
+        // Fetch admin's WhatsApp config
+        const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
+
+        // Resend Entry Code via WhatsApp using admin's configured provider
         const whatsappMessage = `Hello ${booking.visitorName}, Your Visitor Entry Code for ${companyName} is: ${booking.otp}. Please show this at reception.`;
         try {
-            await WhatsAppService.sendMessage(booking.visitorPhone, whatsappMessage);
+            await WhatsAppService.sendMessage(booking.visitorPhone, whatsappMessage, whatsappConfig);
         } catch (error) {
             // Ignore error
         }
