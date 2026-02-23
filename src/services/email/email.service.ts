@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import { AppError } from '../../middlewares/errorHandler';
 import { ERROR_CODES, CONSTANTS } from '../../utils/constants';
+import { Settings } from '../../models/settings/settings.model';
+import { decryptToken } from '../../utils/tokenEncryption.util';
 import { getOtpEmailTemplate, getOtpEmailText, getVisitorOtpEmailTemplate, getVisitorOtpEmailText } from '../../templates/email/otp-email.template';
 import { getWelcomeEmailTemplate, getWelcomeEmailText } from '../../templates/email/welcome-email.template';
 import { getAppointmentApprovalEmailTemplate, getAppointmentApprovalEmailText } from '../../templates/email/appointment-approval-email.template';
@@ -229,14 +231,49 @@ export class EmailService {
     fromName?: string;
     logMessage?: string;
     disableClickTracking?: boolean;
+    adminId?: string;
   }): Promise<void> {
-    const { to, subject, html, text, from, fromName, disableClickTracking } = options;
+    const { to, subject, html, text, from, fromName, disableClickTracking, adminId } = options;
+
+    // Priority 0: Custom SMTP (Tenant Specific)
+    // If adminId is provided, try to use their verified SMTP settings first
+    if (adminId) {
+      try {
+        const settings = await Settings.findOne({ userId: adminId }, { smtp: 1 });
+        if (settings?.smtp?.verified && settings.smtp.host) {
+
+          let pass = settings.smtp.pass || '';
+          try { pass = decryptToken(pass); } catch { /* use as-is */ }
+
+          const customTransporter = nodemailer.createTransport({
+            host: settings.smtp.host,
+            port: settings.smtp.port,
+            secure: settings.smtp.secure,
+            auth: { user: settings.smtp.user, pass },
+            connectionTimeout: 10000, // 10s timeout
+            socketTimeout: 10000,
+          } as any);
+
+          await customTransporter.sendMail({
+            from: `"${fromName || settings.smtp.fromName || 'SafeIn'}" <${from || settings.smtp.fromEmail}>`,
+            to,
+            subject,
+            html,
+            text: text || html.replace(/<[^>]*>/g, ''),
+          });
+
+          return;
+        }
+      } catch (err: any) {
+        console.warn(`[EmailService] Custom SMTP failed for ${to} (Admin: ${adminId}). Falling back to system:`, err.message);
+        // Continue to Priority 1 (System Defaults)
+      }
+    }
 
     // Priority 1: Use Brevo API if BREVO_API_KEY is set and not disabled
     // Brevo API is preferred because it's more reliable and faster than SMTP
     if (CONSTANTS.BREVO_API_KEY && !this.brevoApiDisabled) {
       try {
-        console.log(`[EmailService] Using Brevo API to send email to ${to}`);
         await this.sendWithBrevo({
           to,
           subject,
@@ -246,7 +283,6 @@ export class EmailService {
           fromName: fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management',
           disableClickTracking,
         });
-        console.log(`[EmailService] Successfully sent email to ${to} via Brevo API`);
         return;
       } catch (brevoError: any) {
         // If it's an authentication error (401), disable Brevo for future attempts
@@ -262,7 +298,6 @@ export class EmailService {
     } else if (CONSTANTS.BREVO_API_KEY && this.brevoApiDisabled) {
       console.warn('[EmailService] Brevo API is disabled (invalid key). Using SMTP fallback.');
     } else if (!CONSTANTS.BREVO_API_KEY) {
-      console.log('[EmailService] BREVO_API_KEY not set. Using SMTP.');
     }
 
     // Priority 2: Use Resend API if RESEND_API_KEY is set
@@ -340,7 +375,6 @@ export class EmailService {
             fromName: fromName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn Security Management',
             disableClickTracking,
           });
-          console.log(`[EmailService] Successfully sent email to ${to} via Brevo API fallback`);
           return;
         } catch (brevoError: any) {
           console.error(`[EmailService] Brevo API fallback also failed for ${to}:`, brevoError.message);
@@ -358,7 +392,7 @@ export class EmailService {
    * Send OTP email
    * Note: Uses "SafeIn Security Management" as fromName (only for registration)
    */
-  static async sendOtpEmail(email: string, otp: string, companyName: string): Promise<void> {
+  static async sendOtpEmail(email: string, otp: string, companyName: string, adminId?: string): Promise<void> {
     try {
       await this.sendEmail({
         to: email,
@@ -367,6 +401,7 @@ export class EmailService {
         text: getOtpEmailText(otp, companyName),
         fromName: `${companyName} Security Management`, // Explicitly use companyName for registration
         logMessage: 'OTP email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send OTP email:', error.message);
@@ -427,7 +462,8 @@ export class EmailService {
     employeeName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName: string = 'SafeIn'
+    companyName: string = 'SafeIn',
+    adminId?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -439,6 +475,7 @@ export class EmailService {
         text: getAppointmentApprovalEmailText(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Appointment approval email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send appointment approval email:', error.message);
@@ -454,7 +491,8 @@ export class EmailService {
     employeeName: string,
     scheduledDate: Date,
     scheduledTime: string,
-    companyName: string = 'SafeIn'
+    companyName: string = 'SafeIn',
+    adminId?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -466,6 +504,7 @@ export class EmailService {
         text: getAppointmentRejectionEmailText(visitorName, employeeName, scheduledDate, scheduledTime, companyName),
         fromName,
         logMessage: 'Appointment rejection email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send appointment rejection email:', error.message);
@@ -540,7 +579,8 @@ export class EmailService {
     purpose: string,
     approvalToken: string,
     companyName: string = 'SafeIn',
-    companyLogo?: string
+    companyLogo?: string,
+    adminId?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -552,6 +592,7 @@ export class EmailService {
         text: getNewAppointmentRequestEmailText(employeeName, visitorDetails, scheduledDate, scheduledTime, purpose, approvalToken, companyName),
         fromName,
         logMessage: 'New appointment request email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send new appointment request email:', error.message);
@@ -561,7 +602,7 @@ export class EmailService {
   /**
    * Send password reset email
    */
-  static async sendPasswordResetEmail(email: string, resetUrl: string, companyName: string): Promise<void> {
+  static async sendPasswordResetEmail(email: string, resetUrl: string, companyName: string, adminId?: string): Promise<void> {
     try {
       await this.sendEmail({
         to: email,
@@ -569,6 +610,7 @@ export class EmailService {
         html: getPasswordResetEmailTemplate(resetUrl, companyName),
         text: getPasswordResetEmailText(resetUrl, companyName),
         logMessage: 'Password reset email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send password reset email:', error.message);
@@ -590,7 +632,8 @@ export class EmailService {
     employeeName: string,
     bookingUrl: string,
     expiresAt: Date,
-    companyName?: string
+    companyName?: string,
+    adminId?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
@@ -603,6 +646,7 @@ export class EmailService {
         fromName,
         logMessage: 'Appointment link email',
         disableClickTracking: true, // Disable click tracking to prevent tracking URL issues
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send appointment link email:', error.message);
@@ -621,18 +665,20 @@ export class EmailService {
     scheduledTime: string,
     purpose: string,
     companyName?: string,
-    companyLogo?: string
+    companyLogo?: string,
+    adminId?: string
   ): Promise<void> {
     try {
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
         to: visitorEmail,
-        subject: `Appointment Request Submitted - ${companyName}`,
+        subject: `Appointment Confirmed - ${companyName}`,
         html: getAppointmentConfirmationEmailTemplate(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyName, companyLogo),
         text: getAppointmentConfirmationEmailText(visitorName, employeeName, scheduledDate, scheduledTime, purpose, companyName),
         fromName,
-        logMessage: 'Appointment confirmation email to visitor',
+        logMessage: 'Appointment confirmation email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send appointment confirmation email to visitor:', error.message);
@@ -674,7 +720,7 @@ export class EmailService {
   /**
    * Send Safein User Credentials Email
    */
-  static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string, userName: string): Promise<void> {
+  static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string, userName: string, adminId?: string): Promise<void> {
     try {
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
@@ -703,6 +749,7 @@ export class EmailService {
         html: htmlContent,
         text: textContent,
         logMessage: 'Safein user credentials email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send credentials email:', error.message);
@@ -716,18 +763,14 @@ export class EmailService {
     email: string,
     employeeName: string,
     setupUrl: string,
-    companyName: string = 'SafeIn'
+    companyName: string = 'SafeIn',
+    adminId?: string
   ): Promise<void> {
     try {
-      console.log(`[EmailService] Preparing to send employee setup email to: ${email}`);
-      console.log(`[EmailService] Email service available: ${this.isEmailServiceAvailable}`);
-      console.log(`[EmailService] SMTP Host: ${CONSTANTS.SMTP_HOST || 'Not configured'}`);
-      console.log(`[EmailService] Brevo API Key: ${CONSTANTS.BREVO_API_KEY ? 'Configured' : 'Not configured'}`);
 
       const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, companyName);
       const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, companyName);
 
-      console.log(`[EmailService] Email content generated, sending email...`);
 
       await this.sendEmail({
         to: email,
@@ -736,13 +779,11 @@ export class EmailService {
         text: textContent,
         fromName: `${companyName} Security Management`,
         logMessage: 'Employee setup email',
+        adminId,
       });
 
-      console.log(`[EmailService] Employee setup email sent successfully to: ${email}`);
     } catch (error: any) {
       console.error(`[EmailService] Failed to send employee setup email to ${email}:`, error.message);
-      console.error(`[EmailService] Error stack:`, error.stack);
-      console.error(`[EmailService] Error code:`, error.code);
       // Don't throw to avoid blocking employee creation response, but log it
     }
   }

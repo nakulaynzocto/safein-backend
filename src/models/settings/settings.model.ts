@@ -24,20 +24,86 @@ const settingsSchema = new Schema<ISettings>(
             }
         },
         whatsapp: {
+            activeProvider: {
+                type: String,
+                enum: ['meta', 'custom'],
+                default: 'meta'
+            },
             senderNumber: {
                 type: String,
                 trim: true,
                 default: '',
                 match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
             },
+            apiUrl: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            apiKey: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            phoneNumberId: {
+                type: String,
+                trim: true,
+                default: ''
+            },
+            accessToken: {
+                type: String,
+                trim: true,
+                default: ''
+            },
             verified: {
+                type: Boolean,
+                default: false
+            },
+            metaVerified: {
+                type: Boolean,
+                default: false
+            },
+            customVerified: {
                 type: Boolean,
                 default: false
             },
             verifiedAt: {
                 type: Date,
                 default: null
+            },
+            verificationOtp: {
+                type: String,
+                default: null
+            },
+            verificationOtpExpiry: {
+                type: Date,
+                default: null
+            },
+            testNumber: {
+                type: String,
+                trim: true,
+                default: ''
             }
+        },
+        smtp: {
+            host: { type: String, trim: true, default: '' },
+            port: { type: Number, default: 587 },
+            secure: { type: Boolean, default: false },
+            user: { type: String, trim: true, default: '' },
+            pass: { type: String, trim: true, default: '' },  // encrypted
+            fromName: { type: String, trim: true, default: '' },
+            fromEmail: { type: String, trim: true, default: '' },
+            verified: { type: Boolean, default: false },
+            verifiedAt: { type: Date, default: null }
+        },
+        pendingWhatsapp: {
+            activeProvider: { type: String, enum: ['meta', 'custom'] },
+            senderNumber: { type: String, trim: true },
+            testNumber: { type: String, trim: true },
+            apiUrl: { type: String, trim: true },
+            apiKey: { type: String, trim: true },
+            phoneNumberId: { type: String, trim: true },
+            accessToken: { type: String, trim: true }
         }
     },
     {

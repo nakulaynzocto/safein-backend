@@ -112,7 +112,7 @@ export const xssProtection = (req: Request, _res: Response, next: NextFunction):
 /**
  * Common fields that are safe to contain special characters in search/filter contexts.
  */
-const EXEMPT_KEYS = ['search', 'search_query', 'query', 'department', 'designation', 'company', 'city', 'state', 'country', 'purpose', 'notes', 'securityNotes', 'meetingRoom'];
+const EXEMPT_KEYS = ['search', 'search_query', 'query', 'department', 'designation', 'company', 'city', 'state', 'country', 'purpose', 'notes', 'securityNotes'];
 
 /**
  * Filter out exempt fields from an input object for security scanning

@@ -134,7 +134,6 @@ export class SpecialVisitorBookingService {
                 purpose: booking.purpose,
                 scheduledDate: booking.scheduledDate ? new Date(booking.scheduledDate) : now,
                 scheduledTime: booking.scheduledTime || defaultTime,
-                duration: 30,
                 notes: booking.notes || '',
             },
             status: 'approved'

@@ -119,7 +119,8 @@ export class AppointmentBookingLinkService {
         (employee as any).name || 'Employee',
         link,
         expiresAt,
-        companyName
+        companyName,
+        adminUserId
       );
     } catch (error: any) {
       // Continue even if email fails
@@ -342,7 +343,8 @@ export class AppointmentBookingLinkService {
       (link.employeeId as any).name || 'Employee',
       bookingUrl,
       link.expiresAt,
-      companyName
+      companyName,
+      adminId
     );
   }
 

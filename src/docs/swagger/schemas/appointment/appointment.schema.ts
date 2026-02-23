@@ -177,16 +177,6 @@ export const appointmentSchemas = {
                         description: 'Scheduled time (HH:MM)',
                         example: '14:30'
                     },
-                    duration: {
-                        type: 'number',
-                        description: 'Duration in minutes',
-                        example: 60
-                    },
-                    meetingRoom: {
-                        type: 'string',
-                        description: 'Meeting room',
-                        example: 'Conference Room A'
-                    },
                     notes: {
                         type: 'string',
                         description: 'Additional notes',
@@ -364,7 +354,7 @@ export const appointmentSchemas = {
             },
             appointmentDetails: {
                 type: 'object',
-                required: ['purpose', 'scheduledDate', 'scheduledTime', 'duration'],
+                required: ['purpose', 'scheduledDate', 'scheduledTime'],
                 properties: {
                     purpose: {
                         type: 'string',
@@ -383,19 +373,6 @@ export const appointmentSchemas = {
                         pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',
                         description: 'Scheduled time (HH:MM)',
                         example: '14:30'
-                    },
-                    duration: {
-                        type: 'number',
-                        minimum: 15,
-                        maximum: 480,
-                        description: 'Duration in minutes (15-480)',
-                        example: 60
-                    },
-                    meetingRoom: {
-                        type: 'string',
-                        maxLength: 50,
-                        description: 'Meeting room',
-                        example: 'Conference Room A'
                     },
                     notes: {
                         type: 'string',
@@ -492,19 +469,6 @@ export const appointmentSchemas = {
                         pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',
                         description: 'Scheduled time (HH:MM)',
                         example: '14:30'
-                    },
-                    duration: {
-                        type: 'number',
-                        minimum: 15,
-                        maximum: 480,
-                        description: 'Duration in minutes (15-480)',
-                        example: 60
-                    },
-                    meetingRoom: {
-                        type: 'string',
-                        maxLength: 50,
-                        description: 'Meeting room',
-                        example: 'Conference Room A'
                     },
                     notes: {
                         type: 'string',
@@ -784,11 +748,6 @@ export const appointmentSchemas = {
                                 description: 'Scheduled time',
                                 example: '14:30'
                             },
-                            duration: {
-                                type: 'number',
-                                description: 'Duration in minutes',
-                                example: 60
-                            },
                             status: {
                                 type: 'string',
                                 enum: ['scheduled', 'checked_in', 'in_meeting', 'completed', 'cancelled', 'no_show'],
@@ -864,12 +823,6 @@ export const appointmentSchemas = {
                 pattern: '^[0-9a-fA-F]{24}$',
                 description: 'New employee ID for appointments',
                 example: '64f1a2b3c4d5e6f7g8h9i0j2'
-            },
-            meetingRoom: {
-                type: 'string',
-                maxLength: 50,
-                description: 'New meeting room for appointments',
-                example: 'Conference Room B'
             }
         }
     },

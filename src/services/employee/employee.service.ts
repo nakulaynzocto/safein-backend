@@ -18,6 +18,7 @@ import { escapeRegex } from '../../utils/string.util';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
 import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
+import { EmployeeUtil } from '../../utils/employee.util';
 
 export class EmployeeService {
     /**
@@ -628,7 +629,8 @@ export class EmployeeService {
         // Send OTP Email
         // We'll add a specific method to EmailService or reuse generic one
         try {
-            await EmailService.sendOtpEmail(employee.email, otp, 'SafeIn');
+            const actualAdminId = await EmployeeUtil.getAdminId(employee.createdBy.toString());
+            await EmailService.sendOtpEmail(employee.email, otp, 'SafeIn', actualAdminId);
         } catch (emailError) {
             console.error('Failed to send OTP email', emailError);
             throw new AppError('Failed to send verification email', ERROR_CODES.INTERNAL_SERVER_ERROR);
@@ -731,8 +733,9 @@ export class EmployeeService {
 
                 await user.save({ session });
 
+                const actualAdminId = await EmployeeUtil.getAdminId(employee.createdBy.toString());
                 // Send Credentials Email
-                await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName, employee.name);
+                await EmailService.sendSafeinUserCredentialsEmail(employee.email, password, companyName, employee.name, actualAdminId);
             }
 
         } catch (error: any) {

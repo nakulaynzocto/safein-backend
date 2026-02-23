@@ -105,8 +105,10 @@ export class AppointmentService {
         const { session, sendNotifications = false, createdByVisitor = false, adminUserId, suppressEmails = false } = options;
 
         // Check plan limits before creating appointment
-        // Use adminUserId if visitor is creating (from appointment link), otherwise use createdBy
-        const userIdForLimitCheck = adminUserId || createdBy;
+        // Resolve the actual admin ID (tenant/company owner) for settings and limits
+        const actualAdminId = await EmployeeUtil.getAdminId(adminUserId || createdBy);
+        const userIdForLimitCheck = actualAdminId;
+
         try {
             await UserSubscriptionService.checkPlanLimits(userIdForLimitCheck, 'appointments', false);
         } catch (error: any) {
@@ -176,25 +178,28 @@ export class AppointmentService {
             console.warn('Failed to fetch company name and logo for email:', error);
         }
 
-        // 🔔 Process all notifications (Email, WhatsApp, Socket) in background to reduce API latency
-        this.processBackgroundNotifications(
-            (appointment._id as any).toString(),
-            appointment.status,
-            populatedAppointment,
-            createdBy,
-            approvalLink,
-            {
-                emailEnabled,
-                whatsappEnabled,
-                smsEnabled,
-                sendNotifications,
-                createdByVisitor,
-                adminUserId,
-                companyName,
-                companyLogo,
-                suppressEmails
-            }
-        ).catch(err => console.error('Background notification processing failed:', err));
+        // Socket notification and email sending moved to background to prevent blocking response
+        if (!suppressEmails || sendNotifications) {
+            this.processBackgroundNotifications(
+                (appointment._id as any).toString(),
+                appointment.status,
+                populatedAppointment,
+                createdBy,
+                approvalLink,
+                {
+                    emailEnabled,
+                    whatsappEnabled,
+                    smsEnabled,
+                    sendNotifications,
+                    createdByVisitor,
+                    adminUserId,
+                    actualAdminId,
+                    companyName,
+                    companyLogo,
+                    suppressEmails
+                }
+            ).catch(err => console.error('Error in background notifications:', err));
+        }
 
         // Socket notification also moved to background process
 
@@ -222,6 +227,7 @@ export class AppointmentService {
             sendNotifications: boolean;
             createdByVisitor?: boolean;
             adminUserId?: string;
+            actualAdminId?: string;
             companyName?: string;
             companyLogo?: string;
             suppressEmails?: boolean;
@@ -233,6 +239,7 @@ export class AppointmentService {
             sendNotifications,
             createdByVisitor,
             adminUserId,
+            actualAdminId,
             companyName,
             companyLogo,
             suppressEmails
@@ -258,7 +265,8 @@ export class AppointmentService {
                             populatedAppointment.appointmentDetails.scheduledTime,
                             populatedAppointment.appointmentDetails.purpose,
                             companyName,
-                            companyLogo
+                            companyLogo,
+                            actualAdminId || adminUserId
                         );
                         emailSent = true;
                     }
@@ -272,7 +280,8 @@ export class AppointmentService {
                         populatedAppointment.appointmentDetails.purpose,
                         approvalLink.token,
                         companyName,
-                        companyLogo
+                        companyLogo,
+                        actualAdminId || adminUserId
                     );
                     emailSent = true;
                 }
@@ -288,6 +297,7 @@ export class AppointmentService {
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
                 if (status === 'pending' && employeePhone && approvalLink?.link) {
+                    const whatsappConfig = await SettingsService.getWhatsAppConfig(createdBy);
                     const sent = await WhatsAppService.sendAppointmentNotification(
                         employeePhone,
                         employeeName,
@@ -301,7 +311,8 @@ export class AppointmentService {
                         populatedAppointment.appointmentDetails.scheduledTime,
                         populatedAppointment.appointmentDetails.purpose,
                         approvalLink.link,
-                        (populatedAppointment._id as any).toString()
+                        options.companyName,
+                        whatsappConfig
                     );
                     whatsappSent = sent;
                 }
@@ -480,7 +491,6 @@ export class AppointmentService {
 
             filter.$or = [
                 { 'appointmentDetails.purpose': searchRegex },
-                { 'appointmentDetails.meetingRoom': searchRegex },
                 { 'appointmentDetails.notes': searchRegex }
             ];
 
@@ -1010,17 +1020,19 @@ export class AppointmentService {
         // Send email notification to visitor (if enabled)
         try {
             if (emailEnabled) {
+                const actualAdminId = await EmployeeUtil.getAdminId(userId || '');
                 await EmailService.sendAppointmentApprovalEmail(
                     (appointment.visitorId as any).email,
                     (appointment.visitorId as any).name,
                     (appointment.employeeId as any).name,
                     appointment.appointmentDetails.scheduledDate,
                     appointment.appointmentDetails.scheduledTime,
-                    companyName
+                    companyName,
+                    actualAdminId
                 );
             }
-        } catch {
-            // Email sending failed, continue
+        } catch (error: any) {
+            console.error('Failed to send appointment approval email:', error.message);
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -1034,7 +1046,8 @@ export class AppointmentService {
                         (appointment.employeeId as any).name,
                         appointment.appointmentDetails.scheduledDate,
                         appointment.appointmentDetails.scheduledTime,
-                        'approved'
+                        'approved',
+                        companyName
                     );
                 }
             }
@@ -1144,17 +1157,19 @@ export class AppointmentService {
         // Send email notification to visitor (if enabled)
         try {
             if (emailEnabled) {
+                const actualAdminId = await EmployeeUtil.getAdminId(userId || '');
                 await EmailService.sendAppointmentRejectionEmail(
                     (appointment.visitorId as any).email,
                     (appointment.visitorId as any).name,
                     (appointment.employeeId as any).name,
                     appointment.appointmentDetails.scheduledDate,
                     appointment.appointmentDetails.scheduledTime,
-                    companyName
+                    companyName,
+                    actualAdminId
                 );
             }
-        } catch {
-            // Email sending failed, continue
+        } catch (error: any) {
+            console.error('Failed to send appointment rejection email:', error.message);
         }
 
         // Send WhatsApp notification to visitor (if enabled)
@@ -1168,7 +1183,8 @@ export class AppointmentService {
                         (appointment.employeeId as any).name,
                         appointment.appointmentDetails.scheduledDate,
                         appointment.appointmentDetails.scheduledTime,
-                        'rejected'
+                        'rejected',
+                        companyName
                     );
                 }
             }

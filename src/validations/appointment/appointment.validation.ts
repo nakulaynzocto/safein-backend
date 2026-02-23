@@ -124,22 +124,6 @@ const appointmentDetailsValidation = Joi.object({
             'time.min': 'Scheduled time cannot be in the past for today\'s date',
             'any.required': 'Scheduled time is required'
         }),
-    duration: Joi.number()
-        .required()
-        .min(15)
-        .max(480)
-        .messages({
-            'number.min': 'Duration must be at least 15 minutes',
-            'number.max': 'Duration cannot exceed 8 hours',
-            'any.required': 'Duration is required'
-        }),
-    meetingRoom: Joi.string()
-        .optional()
-        .trim()
-        .max(50)
-        .messages({
-            'string.max': 'Meeting room cannot exceed 50 characters'
-        }),
     notes: Joi.string()
         .optional()
         .allow('')
@@ -347,13 +331,6 @@ export const bulkUpdateAppointmentsValidation = Joi.object({
         .pattern(/^[0-9a-fA-F]{24}$/)
         .messages({
             'string.pattern.base': 'Invalid employee ID format'
-        }),
-    meetingRoom: Joi.string()
-        .optional()
-        .trim()
-        .max(50)
-        .messages({
-            'string.max': 'Meeting room cannot exceed 50 characters'
         })
 });
 

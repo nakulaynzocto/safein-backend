@@ -18,8 +18,6 @@ export interface IAppointment extends mongoose.Document {
         purpose: string;
         scheduledDate: Date;
         scheduledTime: string;
-        duration: number; // in minutes
-        meetingRoom?: string;
         notes?: string;
         vehicleNumber?: string; // Optional vehicle number
         vehiclePhoto?: string; // Optional vehicle photo URL
@@ -118,17 +116,6 @@ const appointmentSchema = new Schema<IAppointment>(
                 type: String,
                 required: [true, 'Scheduled time is required'],
                 match: [/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)']
-            },
-            duration: {
-                type: Number,
-                required: [true, 'Duration is required'],
-                min: [15, 'Duration must be at least 15 minutes'],
-                max: [480, 'Duration cannot exceed 8 hours']
-            },
-            meetingRoom: {
-                type: String,
-                trim: true,
-                maxlength: [50, 'Meeting room cannot exceed 50 characters']
             },
             notes: {
                 type: String,

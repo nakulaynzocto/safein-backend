@@ -15,6 +15,14 @@ router.put('/',
     asyncWrapper(SettingsController.updateSettings)
 );
 
+// WhatsApp verification routes
+router.post('/whatsapp/verify/initiate', asyncWrapper(SettingsController.initiateWhatsAppVerification));
+router.post('/whatsapp/verify/confirm', asyncWrapper(SettingsController.verifyWhatsAppOTP));
+
+// SMTP configuration routes
+router.post('/smtp', asyncWrapper(SettingsController.saveSMTPConfig));
+router.delete('/smtp', asyncWrapper(SettingsController.removeSMTPConfig));
+
 export default router;
 
 

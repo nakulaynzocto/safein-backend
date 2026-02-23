@@ -1,4 +1,14 @@
-// Using fetch instead of axios for better compatibility
+export interface IWhatsAppConfig {
+    activeProvider?: 'meta' | 'custom';
+    senderNumber?: string;
+    testNumber?: string;
+    apiUrl?: string;
+    apiKey?: string;
+    phoneNumberId?: string;
+    accessToken?: string;
+}
+
+import { decryptToken } from '../../utils/tokenEncryption.util';
 
 /**
  * WhatsApp Service
@@ -9,14 +19,16 @@ export class WhatsAppService {
     private static readonly WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || '';
     private static readonly WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
     private static readonly WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
+    private static readonly DEFAULT_PROVIDER = (process.env.WHATSAPP_PROVIDER as 'meta' | 'custom') || 'meta';
 
     /**
      * Send WhatsApp message
      * @param to - Recipient phone number (with country code, e.g., +919876543210)
      * @param message - Message text
+     * @param config - Optional configuration (overrides process.env)
      * @returns Promise<boolean> - Success status
      */
-    static async sendMessage(to: string, message: string): Promise<boolean> {
+    static async sendMessage(to: string, message: string, config?: IWhatsAppConfig): Promise<boolean> {
         try {
             // Format phone number (remove spaces, ensure + prefix)
             const formattedPhone = this.formatPhoneNumber(to);
@@ -25,24 +37,41 @@ export class WhatsAppService {
                 return false;
             }
 
-            // If WhatsApp API is not configured, log and return false
-            if (!this.WHATSAPP_API_URL && !this.WHATSAPP_ACCESS_TOKEN) {
-                console.warn('WhatsApp API not configured. Message would be sent to:', formattedPhone);
-                console.warn('Message content:', message);
+            const activeProvider = config?.activeProvider || this.DEFAULT_PROVIDER;
+            const apiUrl = config?.apiUrl || this.WHATSAPP_API_URL;
+            let apiKey = config?.apiKey || this.WHATSAPP_API_KEY;
+            const phoneNumberId = config?.phoneNumberId || this.WHATSAPP_PHONE_NUMBER_ID;
+            let accessToken = config?.accessToken || this.WHATSAPP_ACCESS_TOKEN;
+            const senderNumber = config?.senderNumber || '';
+
+            // Decrypt keys if they are from database (they will be longer and base64 encoded)
+            try {
+                if (accessToken && accessToken.length > 50) accessToken = decryptToken(accessToken);
+            } catch (e) { /* Likely not encrypted or different key */ }
+
+            try {
+                if (apiKey && apiKey.length > 50) apiKey = decryptToken(apiKey);
+            } catch (e) { /* Likely not encrypted */ }
+
+            // Use WhatsApp Business API (Meta/Facebook)
+            if (activeProvider === 'meta') {
+                if (accessToken && phoneNumberId) {
+                    return await this.sendViaWhatsAppBusinessAPI(formattedPhone, message, phoneNumberId, accessToken);
+                }
+                console.warn('Meta Cloud API selected but not properly configured');
                 return false;
             }
 
-            // Use WhatsApp Business API (Meta/Facebook)
-            if (this.WHATSAPP_ACCESS_TOKEN && this.WHATSAPP_PHONE_NUMBER_ID) {
-                return await this.sendViaWhatsAppBusinessAPI(formattedPhone, message);
-            }
-
             // Use custom WhatsApp API
-            if (this.WHATSAPP_API_URL && this.WHATSAPP_API_KEY) {
-                return await this.sendViaCustomAPI(formattedPhone, message);
+            if (activeProvider === 'custom') {
+                if (apiUrl && apiKey) {
+                    return await this.sendViaCustomAPI(formattedPhone, message, apiUrl, apiKey, senderNumber);
+                }
+                console.warn('Custom WhatsApp API selected but not properly configured');
+                return false;
             }
 
-            console.warn('WhatsApp API not properly configured');
+            console.warn('Unknown WhatsApp provider selected');
             return false;
         } catch (error: any) {
             console.error('Failed to send WhatsApp message:', error.message);
@@ -53,16 +82,16 @@ export class WhatsAppService {
     /**
      * Send message via WhatsApp Business API (Meta/Facebook) - WhatsApp Cloud API
      */
-    private static async sendViaWhatsAppBusinessAPI(to: string, message: string): Promise<boolean> {
+    private static async sendViaWhatsAppBusinessAPI(to: string, message: string, phoneNumberId: string, accessToken: string): Promise<boolean> {
         try {
             // Remove + from phone number for WhatsApp Cloud API
             const phoneNumber = to.replace('+', '');
-            const url = `https://graph.facebook.com/v18.0/${this.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+            const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
 
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.WHATSAPP_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -71,7 +100,7 @@ export class WhatsAppService {
                     to: phoneNumber,
                     type: 'text',
                     text: {
-                        preview_url: false,
+                        preview_url: true,
                         body: message
                     }
                 })
@@ -94,29 +123,97 @@ export class WhatsAppService {
     }
 
     /**
-     * Send message via custom WhatsApp API
+     * Send message via custom WhatsApp API or Twilio
      */
-    private static async sendViaCustomAPI(to: string, message: string): Promise<boolean> {
+    private static async sendViaCustomAPI(to: string, message: string, apiUrl: string, apiKey: string, senderNumber?: string): Promise<boolean> {
         try {
-            const response = await fetch(this.WHATSAPP_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    to,
-                    message,
-                    apiKey: this.WHATSAPP_API_KEY
-                })
-            });
+            const isTwilio = apiUrl.includes('api.twilio.com');
+            const headers: any = {};
+            let body: any;
 
-            if (!response.ok) {
-                const errorData: any = await response.json().catch(() => ({}));
-                const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
-                throw new Error(`Custom WhatsApp API error: ${errorMessage}`);
+            if (isTwilio) {
+                const url = apiUrl.endsWith('.json') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/Messages.json`;
+
+                // Extract AccountSid from URL if possible
+                const match = url.match(/Accounts\/(AC[A-Za-z0-9]+)/i);
+                const accountSid = match ? match[1] : '';
+
+                if (!accountSid || !apiKey) {
+                    throw new Error('Twilio requires Account SID in URL and Auth Token (entered in API Secret Key)');
+                }
+
+                // Twilio requires Basic Auth (AccountSid:AuthToken)
+                const authHeader = `Basic ${Buffer.from(`${accountSid}:${apiKey}`).toString('base64')}`;
+                headers['Authorization'] = authHeader;
+                headers['Content-Type'] = 'application/x-www-form-urlencoded';
+
+                const params = new URLSearchParams();
+
+                // Format To number for WhatsApp
+                let formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+                params.append('To', formattedTo);
+
+                // Twilio REQUIRES a 'From' number for WhatsApp (e.g. whatsapp:+14155238886)
+                if (senderNumber) {
+                    let fromNum = senderNumber.trim();
+                    // If it doesn't already have 'whatsapp:', add it
+                    if (!fromNum.startsWith('whatsapp:')) {
+                        // Ensure there's a '+' for the number part if it looks like a number
+                        if (!fromNum.startsWith('+') && /^\d+$/.test(fromNum)) {
+                            fromNum = '+' + fromNum;
+                        }
+                        fromNum = `whatsapp:${fromNum}`;
+                    }
+                    params.append('From', fromNum);
+                }
+
+                params.append('Body', message);
+                body = params.toString();
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body
+                });
+
+                if (!response.ok) {
+                    let errorMessage = `Twilio Error: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData: any = await response.json();
+                        errorMessage = errorData.message || errorData.error || errorMessage;
+                    } catch (e) {
+                        const text = await response.text().catch(() => '');
+                        if (text) errorMessage = text;
+                    }
+                    throw new Error(errorMessage);
+                }
+                return true;
+            } else {
+                // Generic JSON API
+                headers['Content-Type'] = 'application/json';
+                if (apiKey) {
+                    headers['Authorization'] = `Bearer ${apiKey}`;
+                    headers['X-API-Key'] = apiKey;
+                }
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        to,
+                        message,
+                        apiKey: apiKey // Keep for backward compatibility
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData: any = await response.json().catch(() => ({}));
+                    const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+                    throw new Error(`Custom WhatsApp API error: ${errorMessage}`);
+                }
+
+                return true;
             }
-
-            return true;
         } catch (error: any) {
             console.error('Custom WhatsApp API error:', error.message);
             throw error;
@@ -162,6 +259,22 @@ export class WhatsAppService {
     }
 
     /**
+     * Format 24-hour time string (HH:mm) to 12-hour format with AM/PM
+     */
+    private static formatTo12Hour(time: string): string {
+        if (!time) return '';
+        try {
+            const [hours, minutes] = time.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) return time;
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const hours12 = hours % 12 || 12;
+            return `${hours12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+        } catch (e) {
+            return time;
+        }
+    }
+
+    /**
      * Send appointment notification with approval links
      * @param employeePhone - Employee phone number
      * @param employeeName - Employee name
@@ -186,7 +299,8 @@ export class WhatsAppService {
         scheduledTime: string,
         purpose: string,
         approvalLink: string,
-        appointmentId?: string
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
     ): Promise<boolean> {
         try {
             const formattedDate = scheduledDate.toLocaleDateString('en-US', {
@@ -195,52 +309,28 @@ export class WhatsAppService {
                 month: 'long',
                 day: 'numeric'
             });
+            const formattedTime = this.formatTo12Hour(scheduledTime);
 
-            const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-
-            // Create approve and reject URLs if appointmentId is provided
-            let actionUrls = '';
-            if (appointmentId) {
-                const approveUrl = `${baseUrl}/email-action/approve/${appointmentId}`;
-                const rejectUrl = `${baseUrl}/email-action/reject/${appointmentId}`;
-                actionUrls = `*Quick Actions:*
-✅ Approve: ${approveUrl}
-❌ Reject: ${rejectUrl}
-
-Or use the verification link: ${approvalLink}`;
-            } else {
-                actionUrls = `*Quick Action:*
-Click here to approve or reject: ${approvalLink}`;
-            }
-
-            // Create WhatsApp message
-            const message = `🔔 *New Appointment Request*
+            // Create WhatsApp message (Matches Email Text Format)
+            const message = `*NEW APPOINTMENT REQUEST*
 
 Hello ${employeeName},
 
-You have received a new appointment request. Please review the details below.
+You have a new appointment request for *${companyName}*.
 
-*Appointment Details:*
-📅 Date: ${formattedDate}
-🕐 Time: ${scheduledTime}
-📋 Purpose: ${purpose}
+*DETAILS*
+• Visitor: ${visitorDetails.name}
+• Date: ${formattedDate}
+• Time: ${formattedTime}
+• Purpose: ${purpose}
 
-*Visitor Information:*
-👤 Name: ${visitorDetails.name}
-📧 Email: ${visitorDetails.email}
-📞 Phone: ${visitorDetails.phone}
-${visitorDetails._id ? `🆔 Visitor ID: ${visitorDetails._id}` : ''}
-
-${actionUrls}
-
-Or visit your dashboard: ${baseUrl}/dashboard/notifications
-
-⏰ Please respond as soon as possible so the visitor can plan accordingly.
+*To view and take action, click here:*
+${approvalLink}
 
 Best regards,
-SafeIn Security Team`;
+${companyName} Team`;
 
-            return await this.sendMessage(employeePhone, message);
+            return await this.sendMessage(employeePhone, message, config);
         } catch (error: any) {
             console.error('Failed to send appointment notification via WhatsApp:', error.message);
             return false;
@@ -263,7 +353,9 @@ SafeIn Security Team`;
         employeeName: string,
         scheduledDate: Date,
         scheduledTime: string,
-        status: 'approved' | 'rejected'
+        status: 'approved' | 'rejected',
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
     ): Promise<boolean> {
         try {
             const formattedDate = scheduledDate.toLocaleDateString('en-US', {
@@ -273,34 +365,31 @@ SafeIn Security Team`;
                 day: 'numeric'
             });
 
-            const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            const statusEmoji = status === 'approved' ? '✅' : '❌';
-            const statusText = status === 'approved' ? 'Approved' : 'Rejected';
+            const statusText = status === 'approved' ? 'APPROVED' : 'REJECTED';
+            const formattedTime = this.formatTo12Hour(scheduledTime);
             const actionText = status === 'approved'
-                ? 'Your appointment has been confirmed! Please arrive on time.'
+                ? 'Your appointment has been confirmed. Please arrive on time at the scheduled location.'
                 : 'Unfortunately, your appointment request has been declined.';
 
-            const message = `${statusEmoji} *Appointment ${statusText}*
+            const message = `*APPOINTMENT ${statusText}*
 
 Hello ${visitorName},
 
 ${actionText}
 
-*Appointment Details:*
-📅 Date: ${formattedDate}
-🕐 Time: ${scheduledTime}
-👤 Meeting With: ${employeeName}
+*DETAILS*
+• Date: ${formattedDate}
+• Time: ${formattedTime}
+• Meeting With: ${employeeName}
 
 ${status === 'approved'
-                    ? `✅ Your appointment is confirmed. Please arrive on time and bring a valid ID.`
-                    : `❌ Your appointment request has been rejected. Please contact ${employeeName} for more information.`}
-
-Visit your dashboard: ${baseUrl}/dashboard/notifications
+                    ? `Please ensure you bring a valid government-issued ID for verification at *${companyName}*.`
+                    : `For further information, please contact ${employeeName} directly.`}
 
 Best regards,
-SafeIn Security Team`;
+${companyName} Team`;
 
-            return await this.sendMessage(visitorPhone, message);
+            return await this.sendMessage(visitorPhone, message, config);
         } catch (error: any) {
             console.error('Failed to send appointment status update via WhatsApp:', error.message);
             return false;
