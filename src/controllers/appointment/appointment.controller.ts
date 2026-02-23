@@ -139,7 +139,12 @@ export class AppointmentController {
             adminUserId = userId;
         }
 
-        const stats = await AppointmentService.getAppointmentStats(adminUserId, employeeId);
+        const stats = await AppointmentService.getAppointmentStats(adminUserId, employeeId, {
+            dateFrom: req.query.dateFrom as string | undefined,
+            dateTo: req.query.dateTo as string | undefined,
+            search: req.query.search as string | undefined,
+            filterEmployeeId: req.query.employeeId as string | undefined,
+        });
         ResponseUtil.success(res, 'Appointment stats retrieved successfully', stats);
     }
 

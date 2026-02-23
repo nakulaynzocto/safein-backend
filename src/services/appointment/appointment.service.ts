@@ -554,7 +554,11 @@ export class AppointmentService {
         const sort: any = {};
         sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        const [appointments, totalAppointments] = await Promise.all([
+        // Today midnight — used to determine isTimedOut
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
+
+        const [rawAppointments, totalAppointments] = await Promise.all([
             Appointment.find(filter)
                 .populate('employeeId', 'name email department designation phone photo')
                 .populate('visitorId', 'name email phone photo address idProof')
@@ -566,6 +570,15 @@ export class AppointmentService {
                 .lean(),
             Appointment.countDocuments(filter)
         ]);
+
+        // Inject isTimedOut: true when a PENDING appointment's scheduled date has passed (yesterday or earlier)
+        // Only applies to 'pending' — approved/completed/rejected are never timed out
+        const appointments = rawAppointments.map((appt: any) => {
+            const scheduledDate = appt.appointmentDetails?.scheduledDate;
+            const isPending = appt.status === 'pending';
+            const isTimedOut = isPending && !!scheduledDate && new Date(scheduledDate) < todayMidnight;
+            return { ...appt, isTimedOut };
+        });
 
         const totalPages = Math.ceil(totalAppointments / limit);
 
@@ -583,21 +596,28 @@ export class AppointmentService {
 
     /**
      * Get appointment stats (optimized for dashboard)
-     * Uses MongoDB aggregation for efficient counting by status
+     * Accepts the same filters as the appointments list so count cards stay in sync.
      */
-    static async getAppointmentStats(adminUserId?: string, employeeId?: string): Promise<{
+    static async getAppointmentStats(adminUserId?: string, employeeId?: string, options?: {
+        dateFrom?: string;
+        dateTo?: string;
+        search?: string;
+        filterEmployeeId?: string;
+    }): Promise<{
         total: number;
         pending: number;
         approved: number;
         rejected: number;
         completed: number;
         cancelled: number;
+        time_out: number;
     }> {
         const filter: any = { isDeleted: false };
 
+        const zeros = { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, cancelled: 0, time_out: 0 };
+
         // SECURITY: Filter by admin's employees or specific employee
         if (adminUserId) {
-            // Get all employees created by this admin
             const adminEmployees = await Employee.find({
                 createdBy: adminUserId,
                 isDeleted: false
@@ -607,46 +627,102 @@ export class AppointmentService {
 
             if (adminEmployeeIds.length > 0) {
                 if (employeeId) {
-                    // Verify employee belongs to admin
                     if (adminEmployeeIds.includes(employeeId.toString())) {
                         filter.employeeId = toObjectId(employeeId);
                     } else {
-                        // Invalid employee, return zeros
-                        return {
-                            total: 0,
-                            pending: 0,
-                            approved: 0,
-                            rejected: 0,
-                            completed: 0,
-                            cancelled: 0,
-                        };
+                        return zeros;
                     }
                 } else {
-                    // All admin's employees
                     filter.employeeId = { $in: adminEmployeeIds.map(id => toObjectId(id)) };
                 }
             } else {
-                // No employees, return zeros
-                return {
-                    total: 0,
-                    pending: 0,
-                    approved: 0,
-                    rejected: 0,
-                    completed: 0,
-                    cancelled: 0,
-                };
+                return zeros;
             }
         } else if (employeeId) {
-            // Employee case
             filter.employeeId = toObjectId(employeeId);
         }
 
+        // Apply the same date/search/employee filters as the appointments list
+        const { dateFrom, dateTo, search, filterEmployeeId } = options || {};
+
+        // Override employee filter if explicitly passed from table dropdown
+        if (filterEmployeeId) {
+            filter.employeeId = toObjectId(filterEmployeeId);
+        }
+
+        // Date range filter (same field as the list query uses: appointmentDetails.scheduledDate)
+        if (dateFrom || dateTo) {
+            const dateFilter: any = {};
+            if (dateFrom) {
+                dateFilter.$gte = new Date(dateFrom);
+            }
+            if (dateTo) {
+                const end = new Date(dateTo);
+                // Include the full dateTo day
+                end.setDate(end.getDate() + 1);
+                dateFilter.$lt = end;
+            }
+            filter['appointmentDetails.scheduledDate'] = dateFilter;
+        }
+
+        // Search filter — exactly matches getAllAppointments search logic
+        if (search && search.trim()) {
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchRegex = { $regex: escaped, $options: 'i' };
+
+            const [visitorIds, empIds] = await Promise.all([
+                Visitor.find({
+                    $or: [
+                        { name: searchRegex },
+                        { phone: searchRegex },
+                        { email: searchRegex }
+                    ]
+                }).select('_id').lean().then((r: any[]) => r.map(v => v._id)),
+                Employee.find({
+                    $or: [
+                        { name: searchRegex },
+                        { email: searchRegex },
+                        { department: searchRegex }
+                    ]
+                }).select('_id').lean().then((r: any[]) => r.map(e => e._id))
+            ]);
+
+            filter.$or = [
+                { 'appointmentDetails.purpose': searchRegex },
+                { 'appointmentDetails.notes': searchRegex },
+                ...(visitorIds.length > 0 ? [{ visitorId: { $in: visitorIds } }] : []),
+                ...(empIds.length > 0 ? [{ employeeId: { $in: empIds } }] : [])
+            ];
+        }
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
         // Use MongoDB aggregation for efficient counting
+        // Pending appointments past their scheduled date are grouped as 'time_out'
         const stats = await Appointment.aggregate([
             { $match: filter },
             {
+                $project: {
+                    status: 1,
+                    // isTimedOut = pending AND scheduledDate < today midnight
+                    isTimedOut: {
+                        $and: [
+                            { $eq: ['$status', 'pending'] },
+                            { $lt: ['$appointmentDetails.scheduledDate', todayStart] }
+                        ]
+                    }
+                }
+            },
+            {
                 $group: {
-                    _id: '$status',
+                    _id: {
+                        $cond: {
+                            if: '$isTimedOut',
+                            then: 'time_out',
+                            else: '$status'
+                        }
+                    },
                     count: { $sum: 1 }
                 }
             }
@@ -658,6 +734,7 @@ export class AppointmentService {
         const rejected = stats.find(s => s._id === 'rejected')?.count || 0;
         const completed = stats.find(s => s._id === 'completed')?.count || 0;
         const cancelled = stats.find(s => s._id === 'cancelled')?.count || 0;
+        const time_out = stats.find(s => s._id === 'time_out')?.count || 0;
 
         return {
             total,
@@ -666,6 +743,7 @@ export class AppointmentService {
             rejected,
             completed,
             cancelled,
+            time_out,
         };
     }
 
