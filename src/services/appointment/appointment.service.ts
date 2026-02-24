@@ -1117,7 +1117,8 @@ export class AppointmentService {
         try {
             if (whatsappEnabled) {
                 const visitorPhone = (appointment.visitorId as any).phone;
-                if (visitorPhone) {
+                if (visitorPhone && userId) {
+                    const whatsappConfig = await SettingsService.getWhatsAppConfig(userId);
                     await WhatsAppService.sendAppointmentStatusUpdate(
                         visitorPhone,
                         (appointment.visitorId as any).name,
@@ -1125,7 +1126,8 @@ export class AppointmentService {
                         appointment.appointmentDetails.scheduledDate,
                         appointment.appointmentDetails.scheduledTime,
                         'approved',
-                        companyName
+                        companyName,
+                        whatsappConfig
                     );
                 }
             }
@@ -1254,7 +1256,8 @@ export class AppointmentService {
         try {
             if (whatsappEnabled) {
                 const visitorPhone = (appointment.visitorId as any).phone;
-                if (visitorPhone) {
+                if (visitorPhone && userId) {
+                    const whatsappConfig = await SettingsService.getWhatsAppConfig(userId);
                     await WhatsAppService.sendAppointmentStatusUpdate(
                         visitorPhone,
                         (appointment.visitorId as any).name,
@@ -1262,7 +1265,8 @@ export class AppointmentService {
                         appointment.appointmentDetails.scheduledDate,
                         appointment.appointmentDetails.scheduledTime,
                         'rejected',
-                        companyName
+                        companyName,
+                        whatsappConfig
                     );
                 }
             }

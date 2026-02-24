@@ -60,10 +60,9 @@ export class SpecialVisitorBookingService {
         // Fetch admin's WhatsApp config (same as appointment.service.ts)
         const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
 
-        // Send Entry Code via WhatsApp using admin's configured provider
-        const whatsappMessage = `Hello ${visitorName}, Your Visitor Entry Code for ${companyName} is: ${otp}. Please show this at reception.`;
+        // Send Entry Code via WhatsApp using professional format
         try {
-            await WhatsAppService.sendMessage(visitorPhone, whatsappMessage, whatsappConfig);
+            await WhatsAppService.sendSpecialVisitorEntryCode(visitorPhone, visitorName, otp, companyName, whatsappConfig);
         } catch (error) {
             // Ignore error
         }
@@ -174,10 +173,15 @@ export class SpecialVisitorBookingService {
         // Fetch admin's WhatsApp config
         const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
 
-        // Resend Entry Code via WhatsApp using admin's configured provider
-        const whatsappMessage = `Hello ${booking.visitorName}, Your Visitor Entry Code for ${companyName} is: ${booking.otp}. Please show this at reception.`;
+        // Resend Entry Code via WhatsApp using professional format
         try {
-            await WhatsAppService.sendMessage(booking.visitorPhone, whatsappMessage, whatsappConfig);
+            await WhatsAppService.sendSpecialVisitorEntryCode(
+                booking.visitorPhone,
+                booking.visitorName || 'Visitor',
+                booking.otp || '',
+                companyName,
+                whatsappConfig
+            );
         } catch (error) {
             // Ignore error
         }

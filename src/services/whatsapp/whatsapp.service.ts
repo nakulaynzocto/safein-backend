@@ -395,6 +395,41 @@ ${companyName} Team`;
             return false;
         }
     }
+
+    /**
+     * Send special visitor entry code via WhatsApp
+     * @param visitorPhone - Visitor phone number
+     * @param visitorName - Visitor name
+     * @param otp - Entry code
+     * @param companyName - Company name
+     * @param config - Optional configuration
+     * @returns Promise<boolean> - Success status
+     */
+    static async sendSpecialVisitorEntryCode(
+        visitorPhone: string,
+        visitorName: string,
+        otp: string,
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
+    ): Promise<boolean> {
+        try {
+            const message = `*VISITOR ENTRY PASS*
+
+Dear *${visitorName}*,
+
+Welcome! Your entry code for *${companyName}* is: *${otp}*
+
+Please show this code at the reception desk upon your arrival.
+
+Best regards,
+*${companyName} Team*`;
+
+            return await this.sendMessage(visitorPhone, message, config);
+        } catch (error: any) {
+            console.error('Failed to send special visitor entry code via WhatsApp:', error.message);
+            return false;
+        }
+    }
 }
 
 
