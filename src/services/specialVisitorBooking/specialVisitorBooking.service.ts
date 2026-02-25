@@ -1,5 +1,4 @@
 import { SpecialVisitorBooking, SpecialBookingStatus } from '../../models/specialVisitorBooking/specialVisitorBooking.model';
-import { Visitor } from '../../models/visitor/visitor.model';
 import { Employee } from '../../models/employee/employee.model';
 import { User } from '../../models/user/user.model';
 import { AppointmentService } from '../appointment/appointment.service';
@@ -52,12 +51,8 @@ export class SpecialVisitorBookingService {
 
         await booking.save();
 
-        // Fetch Company Name (from Admin)
-        const adminId = await EmployeeUtil.getAdminId(createdBy);
-        const adminUser = await User.findById(adminId).select('companyName').lean();
-        const companyName = adminUser?.companyName || 'SafeIn';
-
-        // Fetch admin's WhatsApp config (same as appointment.service.ts)
+        // Fetch Admin context and WhatsApp config
+        const { adminId, companyName } = await EmployeeUtil.getAdminContext(createdBy);
         const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
 
         // Send Entry Code via WhatsApp using professional format
@@ -68,10 +63,12 @@ export class SpecialVisitorBookingService {
         }
 
         // Send Entry Code via Email
-        try {
-            await EmailService.sendVisitorOtpEmail(visitorEmail, otp, visitorName, companyName);
-        } catch (error) {
-            // Ignore error
+        if (visitorEmail) {
+            try {
+                await EmailService.sendVisitorOtpEmail(visitorEmail, otp, visitorName, companyName);
+            } catch (error) {
+                // Ignore error
+            }
         }
 
         // Socket Notification
@@ -107,12 +104,7 @@ export class SpecialVisitorBookingService {
         // 1. Get Admin ID
         const adminId = await EmployeeUtil.getAdminId(userId);
 
-        // 2. Check if visitor exists for this admin
-        let visitor: any = await Visitor.findOne({
-            email: booking.visitorEmail.toLowerCase().trim(),
-            createdBy: toObjectId(adminId),
-            isDeleted: false,
-        });
+        let visitor: any = await VisitorService.findVisitorByContact(adminId, booking.visitorEmail, booking.visitorPhone);
 
         if (!visitor) {
             visitor = await VisitorService.createVisitor({
@@ -165,12 +157,8 @@ export class SpecialVisitorBookingService {
             throw new AppError('OTP can only be resent for pending bookings', ERROR_CODES.BAD_REQUEST);
         }
 
-        // Fetch Company Name (from Admin)
-        const adminId = await EmployeeUtil.getAdminId(userId);
-        const adminUser = await User.findById(adminId).select('companyName').lean();
-        const companyName: string = (adminUser as any)?.companyName || 'SafeIn';
-
-        // Fetch admin's WhatsApp config
+        // Fetch Admin context and WhatsApp config
+        const { adminId, companyName } = await EmployeeUtil.getAdminContext(userId);
         const whatsappConfig = await SettingsService.getWhatsAppConfig(adminId);
 
         // Resend Entry Code via WhatsApp using professional format
@@ -187,15 +175,17 @@ export class SpecialVisitorBookingService {
         }
 
         // Resend Entry Code via Email
-        try {
-            await EmailService.sendVisitorOtpEmail(
-                booking.visitorEmail || '',
-                booking.otp || '',
-                booking.visitorName || '',
-                companyName
-            );
-        } catch (error) {
-            // Ignore error
+        if (booking.visitorEmail) {
+            try {
+                await EmailService.sendVisitorOtpEmail(
+                    booking.visitorEmail,
+                    booking.otp || '',
+                    booking.visitorName || '',
+                    companyName
+                );
+            } catch (error) {
+                // Ignore error
+            }
         }
 
         return booking;
@@ -249,33 +239,11 @@ export class SpecialVisitorBookingService {
             }
 
             const shouldNotifyEmployee = type === 'arrival' || !isEmployee;
-            const shouldNotifyAdmin = isEmployee; // Notify admin if an employee is involved (creation, arrival, notes)
+            const shouldNotifyAdmin = isEmployee;
 
             if (shouldNotifyAdmin) {
                 const adminId = await EmployeeUtil.getAdminId(senderId);
-
-                // Save to DB
-                await NotificationService.createNotification({
-                    userId: adminId,
-                    type: 'general',
-                    title,
-                    message,
-                    metadata: {
-                        bookingId: booking._id,
-                        type: socketType
-                    }
-                });
-
-                socketService.emitToUser(adminId, SocketEvents.NEW_NOTIFICATION, {
-                    type: 'NEW_NOTIFICATION',
-                    payload: {
-                        title,
-                        message,
-                        type: socketType,
-                        bookingId: booking._id,
-                    },
-                    timestamp: new Date().toISOString()
-                });
+                await this.sendInternalNotification(adminId, title, message, socketType, booking._id);
             }
 
             if (shouldNotifyEmployee) {
@@ -283,33 +251,46 @@ export class SpecialVisitorBookingService {
                 const employeeUserId = await EmployeeUtil.getUserIdFromEmployeeId(employeeId.toString());
 
                 if (employeeUserId) {
-                    // Save to DB
-                    await NotificationService.createNotification({
-                        userId: employeeUserId,
-                        type: socketType === 'special_booking_arrival' ? 'appointment_status_changed' : 'general',
-                        title,
-                        message,
-                        metadata: {
-                            bookingId: booking._id,
-                            type: socketType
-                        }
-                    });
-
-                    socketService.emitToUser(employeeUserId, SocketEvents.NEW_NOTIFICATION, {
-                        type: 'NEW_NOTIFICATION',
-                        payload: {
-                            title,
-                            message,
-                            type: socketType,
-                            bookingId: booking._id,
-                        },
-                        timestamp: new Date().toISOString()
-                    });
+                    const notifyType = socketType === 'special_booking_arrival' ? 'appointment_status_changed' : 'general';
+                    await this.sendInternalNotification(employeeUserId, title, message, socketType, booking._id, notifyType);
                 }
             }
         } catch (error) {
             console.error('Socket notification failed:', error);
         }
+    }
+
+    /**
+     * Helper to send both DB and Socket notifications
+     */
+    private static async sendInternalNotification(
+        userId: string,
+        title: string,
+        message: string,
+        socketType: string,
+        bookingId: any,
+        dbType: string = 'general'
+    ) {
+        // Save to DB
+        await NotificationService.createNotification({
+            userId,
+            type: dbType as any,
+            title,
+            message,
+            metadata: { bookingId, type: socketType }
+        });
+
+        // Emit Socket
+        socketService.emitToUser(userId, SocketEvents.NEW_NOTIFICATION, {
+            type: 'NEW_NOTIFICATION',
+            payload: {
+                title,
+                message,
+                type: socketType,
+                bookingId,
+            },
+            timestamp: new Date().toISOString()
+        });
     }
 
     /**

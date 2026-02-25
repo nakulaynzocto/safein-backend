@@ -1,9 +1,11 @@
+import { SettingsService } from '../settings/settings.service';
+import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { AppointmentService } from '../appointment/appointment.service';
 import { AppointmentBookingLink } from '../../models/appointmentBookingLink/appointmentBookingLink.model';
 import { Employee } from '../../models/employee/employee.model';
-import { Visitor } from '../../models/visitor/visitor.model';
+import { VisitorService } from '../visitor/visitor.service';
 import { User } from '../../models/user/user.model';
 import { EmailService } from '../email/email.service';
-import { AppointmentService } from '../appointment/appointment.service';
 import { EmployeeUtil } from '../../utils/employee.util';
 import { ERROR_CODES } from '../../utils/constants';
 import { AppError } from '../../middlewares/errorHandler';
@@ -13,8 +15,10 @@ import { escapeRegex } from '../../utils/string.util';
 import { ICreateAppointmentDTO } from '../../types/appointment/appointment.types';
 import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
 
+// Verified imports for WhatsApp notification logic
 interface ICreateAppointmentLinkDTO {
-  visitorEmail: string;
+  visitorEmail?: string;
+  visitorPhone: string;
   employeeId: string;
   expiresInDays?: number;
 }
@@ -36,7 +40,7 @@ export class AppointmentBookingLinkService {
     data: ICreateAppointmentLinkDTO,
     createdBy: string
   ): Promise<{ token: string; link: string; expiresAt: Date }> {
-    const { visitorEmail, employeeId, expiresInDays = 7 } = data;
+    const { visitorEmail, visitorPhone, employeeId, expiresInDays = 7 } = data;
 
     // Validate employee exists
     const employee = await Employee.findOne({ _id: employeeId, isDeleted: false });
@@ -44,27 +48,17 @@ export class AppointmentBookingLinkService {
       throw new AppError('Employee not found', ERROR_CODES.NOT_FOUND);
     }
 
-    // Check if visitor exists by email
-    // Visitors belong to admin, so check by admin's userId, not employee's userId
-    const normalizedEmail = visitorEmail.toLowerCase().trim();
+    // Check if visitor exists by email or phone
+    const normalizedEmail = visitorEmail?.toLowerCase().trim();
     let visitorId: any = null;
 
-    // Get admin's userId (if createdBy is employee, get their admin's ID)
-    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
-    const adminUserIdObjectId = toObjectId(adminUserId);
+    // Get admin context and check if visitor exists
+    const { adminId, companyName } = await EmployeeUtil.getAdminContext(createdBy);
+    const adminUserId = adminId; // Keep variable name for compatibility below
+    const existingVisitor = await VisitorService.findVisitorByContact(adminId, normalizedEmail, visitorPhone);
 
-    if (adminUserIdObjectId) {
-      const existingVisitor = await Visitor.findOne({
-        email: normalizedEmail,
-        createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
-        isDeleted: false,
-      })
-        .select('_id')
-        .lean();
-
-      if (existingVisitor && existingVisitor._id) {
-        visitorId = toObjectId(existingVisitor._id.toString());
-      }
+    if (existingVisitor) {
+      visitorId = toObjectId(existingVisitor._id.toString());
     }
 
     // Generate unique token
@@ -84,17 +78,16 @@ export class AppointmentBookingLinkService {
     expiresAt.setTime(expiresAt.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
 
     // Create appointment booking link
-    // Note: createdBy can be employee's userId or admin's userId
-    // We store it as-is for tracking who created the link
     const createdByObjectId = toObjectId(createdBy);
     const appointmentLink = new AppointmentBookingLink({
       visitorEmail: normalizedEmail,
+      visitorPhone: visitorPhone.trim(),
       employeeId: toObjectId(employeeId),
       secureToken: token,
       expiresAt,
       createdBy: createdByObjectId,
       isBooked: false,
-      visitorId: visitorId, // Set visitorId if visitor exists
+      visitorId: visitorId,
     });
 
     await appointmentLink.save();
@@ -102,28 +95,43 @@ export class AppointmentBookingLinkService {
     const baseUrl = this.getBaseUrl();
     const link = `${baseUrl}/book-appointment/${token}`;
 
-    // Get company name from user (createdBy) for email fromName
-    let companyName: string | undefined;
-    try {
-      const user = await User.findById(createdBy).select('companyName').lean();
-      companyName = user?.companyName;
-    } catch (error) {
-      // If user not found or error, companyName will remain undefined
-      console.warn('Failed to fetch company name for email fromName:', error);
-    }
+
 
     // Send email to visitor
-    try {
-      await EmailService.sendAppointmentLinkEmail(
-        visitorEmail,
-        (employee as any).name || 'Employee',
-        link,
-        expiresAt,
-        companyName,
-        adminUserId
-      );
-    } catch (error: any) {
-      // Continue even if email fails
+    if (visitorEmail) {
+      try {
+        await EmailService.sendAppointmentLinkEmail(
+          visitorEmail,
+          (employee as any).name || 'Employee',
+          link,
+          expiresAt,
+          companyName,
+          adminUserId
+        );
+      } catch (error: any) {
+        // Continue even if email fails
+      }
+    }
+
+    // Send WhatsApp to visitor
+    const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
+    if (whatsappEnabled) {
+      try {
+        const visitorPhone = appointmentLink.visitorPhone;
+        if (visitorPhone) {
+          const whatsappConfig = await SettingsService.getWhatsAppConfig(createdBy);
+          await WhatsAppService.sendAppointmentLinkWhatsApp(
+            visitorPhone,
+            (employee as any).name || 'Employee',
+            link,
+            expiresAt,
+            companyName,
+            whatsappConfig
+          );
+        }
+      } catch (error: any) {
+        // Continue even if WhatsApp fails
+      }
     }
 
     return { token, link, expiresAt };
@@ -164,23 +172,17 @@ export class AppointmentBookingLinkService {
 
       return {
         ...link,
+        employee: link.employeeId,
         visitorId: existingVisitorId,
         visitor: populatedVisitor || undefined,
       };
     }
 
-    // If link doesn't have visitorId, check if visitor exists by email
     if (link.visitorEmail && link.createdBy) {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
-      const createdByObjectId = toObjectId(createdByIdString || undefined);
-      if (createdByObjectId) {
-        const visitor = await Visitor.findOne({
-          email: link.visitorEmail.toLowerCase().trim(),
-          createdBy: createdByObjectId,
-          isDeleted: false,
-        })
-          .select('_id name email phone')
-          .lean();
+      if (createdByIdString) {
+        const adminId = await EmployeeUtil.getAdminId(createdByIdString);
+        const visitor = await VisitorService.findVisitorByContact(adminId, link.visitorEmail);
 
         if (visitor && visitor._id) {
           const visitorObjectId = toObjectId(visitor._id.toString());
@@ -195,6 +197,7 @@ export class AppointmentBookingLinkService {
 
           return {
             ...link,
+            employee: link.employeeId,
             visitorId: visitor._id.toString(),
             visitor: visitor,
           };
@@ -205,6 +208,7 @@ export class AppointmentBookingLinkService {
     // No visitor found, return link without visitorId
     return {
       ...link,
+      employee: link.employeeId,
       visitorId: null,
       visitor: undefined,
     };
@@ -293,9 +297,10 @@ export class AppointmentBookingLinkService {
     const totalPages = Math.ceil(totalLinks / limit);
     const baseUrl = this.getBaseUrl();
 
-    // Add bookingUrl to each link
+    // Add bookingUrl and employee object to each link
     const linksWithBookingUrl = links.map((link: any) => ({
       ...link,
+      employee: link.employeeId,
       bookingUrl: `${baseUrl}/book-appointment/${link.secureToken}`,
     }));
 
@@ -332,20 +337,41 @@ export class AppointmentBookingLinkService {
     const baseUrl = this.getBaseUrl();
     const bookingUrl = `${baseUrl}/book-appointment/${link.secureToken}`;
 
-    // Get company name from Admin
-    const adminId = await EmployeeUtil.getAdminId(userId);
-    const adminUser = await User.findById(adminId).select('companyName').lean();
-    const companyName = adminUser?.companyName;
+    // Get admin context
+    const { adminId, companyName } = await EmployeeUtil.getAdminContext(userId);
 
     // Send email to visitor
-    await EmailService.sendAppointmentLinkEmail(
-      link.visitorEmail,
-      (link.employeeId as any).name || 'Employee',
-      bookingUrl,
-      link.expiresAt,
-      companyName,
-      adminId
-    );
+    if (link.visitorEmail) {
+      await EmailService.sendAppointmentLinkEmail(
+        link.visitorEmail,
+        (link.employeeId as any).name || 'Employee',
+        bookingUrl,
+        link.expiresAt,
+        companyName,
+        adminId
+      );
+    }
+
+    // Send WhatsApp to visitor
+    const whatsappEnabled = await SettingsService.isWhatsAppEnabled(userId);
+    if (whatsappEnabled) {
+      try {
+        const visitorPhone = link.visitorPhone;
+        if (visitorPhone) {
+          const whatsappConfig = await SettingsService.getWhatsAppConfig(userId);
+          await WhatsAppService.sendAppointmentLinkWhatsApp(
+            visitorPhone,
+            (link.employeeId as any).name || 'Employee',
+            bookingUrl,
+            link.expiresAt,
+            companyName,
+            whatsappConfig
+          );
+        }
+      } catch (error: any) {
+        // Continue even if WhatsApp fails
+      }
+    }
   }
 
   /**
@@ -418,24 +444,12 @@ export class AppointmentBookingLinkService {
    * Visitors belong to admin, so we check across all employees of that admin
    */
   static async checkVisitorExists(
-    email: string,
+    email: string | undefined,
+    phone: string | undefined,
     createdBy: string
   ): Promise<{ exists: boolean; visitor?: any }> {
-    // Get admin's userId (if createdBy is employee, get their admin's ID)
-    const adminUserId = await EmployeeUtil.getAdminId(createdBy);
-    const adminUserIdObjectId = toObjectId(adminUserId);
-
-    if (!adminUserIdObjectId) {
-      return { exists: false, visitor: undefined };
-    }
-
-    const visitor = await Visitor.findOne({
-      email: email.toLowerCase().trim(),
-      createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
-      isDeleted: false,
-    })
-      .select('name email phone')
-      .lean();
+    const adminId = await EmployeeUtil.getAdminId(createdBy);
+    const visitor = await VisitorService.findVisitorByContact(adminId, email, phone);
 
     return {
       exists: !!visitor,
@@ -474,29 +488,18 @@ export class AppointmentBookingLinkService {
     if (!visitorIdString && link.visitorEmail && link.createdBy) {
       const createdByIdString = this.getCreatedByIdString(link.createdBy);
       if (createdByIdString) {
-        // Get admin's userId (if createdBy is employee, get their admin's ID)
-        const adminUserId = await EmployeeUtil.getAdminId(createdByIdString);
-        const adminUserIdObjectId = toObjectId(adminUserId);
+        const adminId = await EmployeeUtil.getAdminId(createdByIdString);
+        const visitor = await VisitorService.findVisitorByContact(adminId, link.visitorEmail);
 
-        if (adminUserIdObjectId) {
-          const visitor = await Visitor.findOne({
-            email: link.visitorEmail.toLowerCase().trim(),
-            createdBy: adminUserIdObjectId, // Check by admin's userId, not employee's
-            isDeleted: false,
-          })
-            .select('_id')
-            .lean();
-
-          if (visitor && visitor._id) {
-            const visitorObjectId = toObjectId(visitor._id.toString());
-            if (visitorObjectId) {
-              // Update the link document with visitorId
-              const linkDocument = await AppointmentBookingLink.findById(link._id);
-              if (linkDocument) {
-                linkDocument.visitorId = visitorObjectId;
-                await linkDocument.save();
-                visitorIdString = visitor._id.toString();
-              }
+        if (visitor && visitor._id) {
+          const visitorObjectId = toObjectId(visitor._id.toString());
+          if (visitorObjectId) {
+            // Update the link document with visitorId
+            const linkDocument = await AppointmentBookingLink.findById(link._id);
+            if (linkDocument) {
+              linkDocument.visitorId = visitorObjectId;
+              await linkDocument.save();
+              visitorIdString = visitor._id.toString();
             }
           }
         }

@@ -35,16 +35,6 @@ const settingsSchema = new Schema<ISettings>(
                 default: '',
                 match: [/^[\+]?[1-9][\d]{0,15}$/, 'Please enter a valid phone number']
             },
-            apiUrl: {
-                type: String,
-                trim: true,
-                default: ''
-            },
-            apiKey: {
-                type: String,
-                trim: true,
-                default: ''
-            },
             phoneNumberId: {
                 type: String,
                 trim: true,
@@ -60,10 +50,6 @@ const settingsSchema = new Schema<ISettings>(
                 default: false
             },
             metaVerified: {
-                type: Boolean,
-                default: false
-            },
-            customVerified: {
                 type: Boolean,
                 default: false
             },
@@ -100,8 +86,6 @@ const settingsSchema = new Schema<ISettings>(
             activeProvider: { type: String, enum: ['meta', 'custom'] },
             senderNumber: { type: String, trim: true },
             testNumber: { type: String, trim: true },
-            apiUrl: { type: String, trim: true },
-            apiKey: { type: String, trim: true },
             phoneNumberId: { type: String, trim: true },
             accessToken: { type: String, trim: true }
         }

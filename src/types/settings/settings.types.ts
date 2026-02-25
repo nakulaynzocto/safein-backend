@@ -8,15 +8,12 @@ export interface ISettings extends Document {
         smsEnabled: boolean;
     };
     whatsapp: {
-        activeProvider: 'meta' | 'custom';
+        activeProvider: 'meta';
         senderNumber: string; // Phone number from which WhatsApp messages are sent
-        apiUrl?: string;
-        apiKey?: string;
         phoneNumberId?: string;
         accessToken?: string;
         verified: boolean; // Overall verification status (usually tied to active)
         metaVerified: boolean;
-        customVerified: boolean;
         verifiedAt?: Date | null; // When the number was verified
         verificationOtp?: string | null;
         verificationOtpExpiry?: Date | null;
@@ -34,11 +31,9 @@ export interface ISettings extends Document {
         verifiedAt?: Date | null;
     };
     pendingWhatsapp?: {
-        activeProvider: 'meta' | 'custom';
+        activeProvider: 'meta';
         senderNumber: string;
         testNumber?: string;
-        apiUrl?: string;
-        apiKey?: string;
         phoneNumberId?: string;
         accessToken?: string;
     } | null;
@@ -64,16 +59,13 @@ export interface IUpdateSettingsDTO {
     };
     smtp?: Partial<ISmtpConfig>;
     whatsapp?: {
-        activeProvider?: 'meta' | 'custom';
+        activeProvider?: 'meta';
         senderNumber?: string;
         testNumber?: string;
-        apiUrl?: string;
-        apiKey?: string;
         phoneNumberId?: string;
         accessToken?: string;
         verified?: boolean;
         metaVerified?: boolean;
-        customVerified?: boolean;
         verifiedAt?: Date | null;
     };
 }
@@ -98,16 +90,13 @@ export interface ISettingsResponse {
         verifiedAt?: Date | null;
     };
     whatsapp: {
-        activeProvider: 'meta' | 'custom';
+        activeProvider: 'meta';
         senderNumber: string;
         testNumber?: string;
-        apiUrl?: string;
-        apiKey?: string;
         phoneNumberId?: string;
         accessToken?: string;
         verified: boolean;
         metaVerified: boolean;
-        customVerified: boolean;
         verifiedAt?: Date | null;
     };
     createdAt: Date;

@@ -1,9 +1,7 @@
 export interface IWhatsAppConfig {
-    activeProvider?: 'meta' | 'custom';
+    activeProvider?: 'meta';
     senderNumber?: string;
     testNumber?: string;
-    apiUrl?: string;
-    apiKey?: string;
     phoneNumberId?: string;
     accessToken?: string;
 }
@@ -12,14 +10,30 @@ import { decryptToken } from '../../utils/tokenEncryption.util';
 
 /**
  * WhatsApp Service
- * Handles sending WhatsApp messages for appointment notifications
+ * Handles sending WhatsApp messages for appointment notifications via Meta WhatsApp Cloud API
  */
 export class WhatsAppService {
-    private static readonly WHATSAPP_API_URL = process.env.WHATSAPP_API_URL || '';
-    private static readonly WHATSAPP_API_KEY = process.env.WHATSAPP_API_KEY || '';
     private static readonly WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
     private static readonly WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
-    private static readonly DEFAULT_PROVIDER = (process.env.WHATSAPP_PROVIDER as 'meta' | 'custom') || 'meta';
+
+    private static getCredentials(config?: IWhatsAppConfig) {
+        const phoneNumberId = config?.phoneNumberId || this.WHATSAPP_PHONE_NUMBER_ID;
+        let accessToken = config?.accessToken || this.WHATSAPP_ACCESS_TOKEN;
+
+        try {
+            if (accessToken && accessToken.length > 50) accessToken = decryptToken(accessToken);
+        } catch (e) { /* Likely not encrypted */ }
+
+        return { phoneNumberId, accessToken };
+    }
+
+    private static formatDate(date: Date | string): string {
+        return new Date(date).toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+    }
 
     /**
      * Send WhatsApp message
@@ -37,41 +51,14 @@ export class WhatsAppService {
                 return false;
             }
 
-            const activeProvider = config?.activeProvider || this.DEFAULT_PROVIDER;
-            const apiUrl = config?.apiUrl || this.WHATSAPP_API_URL;
-            let apiKey = config?.apiKey || this.WHATSAPP_API_KEY;
-            const phoneNumberId = config?.phoneNumberId || this.WHATSAPP_PHONE_NUMBER_ID;
-            let accessToken = config?.accessToken || this.WHATSAPP_ACCESS_TOKEN;
-            const senderNumber = config?.senderNumber || '';
-
-            // Decrypt keys if they are from database (they will be longer and base64 encoded)
-            try {
-                if (accessToken && accessToken.length > 50) accessToken = decryptToken(accessToken);
-            } catch (e) { /* Likely not encrypted or different key */ }
-
-            try {
-                if (apiKey && apiKey.length > 50) apiKey = decryptToken(apiKey);
-            } catch (e) { /* Likely not encrypted */ }
+            const { accessToken, phoneNumberId } = this.getCredentials(config);
 
             // Use WhatsApp Business API (Meta/Facebook)
-            if (activeProvider === 'meta') {
-                if (accessToken && phoneNumberId) {
-                    return await this.sendViaWhatsAppBusinessAPI(formattedPhone, message, phoneNumberId, accessToken);
-                }
-                console.warn('Meta Cloud API selected but not properly configured');
-                return false;
+            if (accessToken && phoneNumberId) {
+                return await this.sendViaWhatsAppBusinessAPI(formattedPhone, message, phoneNumberId, accessToken);
             }
 
-            // Use custom WhatsApp API
-            if (activeProvider === 'custom') {
-                if (apiUrl && apiKey) {
-                    return await this.sendViaCustomAPI(formattedPhone, message, apiUrl, apiKey, senderNumber);
-                }
-                console.warn('Custom WhatsApp API selected but not properly configured');
-                return false;
-            }
-
-            console.warn('Unknown WhatsApp provider selected');
+            console.warn('Meta Cloud API not properly configured');
             return false;
         } catch (error: any) {
             console.error('Failed to send WhatsApp message:', error.message);
@@ -109,12 +96,9 @@ export class WhatsAppService {
             if (!response.ok) {
                 const errorData: any = await response.json().catch(() => ({}));
                 const errorMessage = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
-                const errorCode = errorData.error?.code || errorData.error?.error_subcode || '';
-
-                throw new Error(`WhatsApp Cloud API error: ${errorMessage}${errorCode ? ` (Code: ${errorCode})` : ''}`);
+                throw new Error(`WhatsApp Cloud API error: ${errorMessage}`);
             }
 
-            await response.json().catch(() => ({}));
             return true;
         } catch (error: any) {
             console.error('WhatsApp Cloud API error:', error.message);
@@ -123,100 +107,57 @@ export class WhatsAppService {
     }
 
     /**
-     * Send message via custom WhatsApp API or Twilio
+     * Send a template message via Meta Cloud API
      */
-    private static async sendViaCustomAPI(to: string, message: string, apiUrl: string, apiKey: string, senderNumber?: string): Promise<boolean> {
+    static async sendTemplateMessage(
+        to: string,
+        templateName: string,
+        parameters: string[],
+        config?: IWhatsAppConfig
+    ): Promise<boolean> {
         try {
-            const isTwilio = apiUrl.includes('api.twilio.com');
-            const headers: any = {};
-            let body: any;
+            const formattedPhone = this.formatPhoneNumber(to);
+            if (!formattedPhone) return false;
 
-            if (isTwilio) {
-                const url = apiUrl.endsWith('.json') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/Messages.json`;
+            const { accessToken, phoneNumberId } = this.getCredentials(config);
 
-                // Extract AccountSid from URL if possible
-                const match = url.match(/Accounts\/(AC[A-Za-z0-9]+)/i);
-                const accountSid = match ? match[1] : '';
-
-                if (!accountSid || !apiKey) {
-                    throw new Error('Twilio requires Account SID in URL and Auth Token (entered in API Secret Key)');
-                }
-
-                // Twilio requires Basic Auth (AccountSid:AuthToken)
-                const authHeader = `Basic ${Buffer.from(`${accountSid}:${apiKey}`).toString('base64')}`;
-                headers['Authorization'] = authHeader;
-                headers['Content-Type'] = 'application/x-www-form-urlencoded';
-
-                const params = new URLSearchParams();
-
-                // Format To number for WhatsApp
-                let formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-                params.append('To', formattedTo);
-
-                // Twilio REQUIRES a 'From' number for WhatsApp (e.g. whatsapp:+14155238886)
-                if (senderNumber) {
-                    let fromNum = senderNumber.trim();
-                    // If it doesn't already have 'whatsapp:', add it
-                    if (!fromNum.startsWith('whatsapp:')) {
-                        // Ensure there's a '+' for the number part if it looks like a number
-                        if (!fromNum.startsWith('+') && /^\d+$/.test(fromNum)) {
-                            fromNum = '+' + fromNum;
-                        }
-                        fromNum = `whatsapp:${fromNum}`;
-                    }
-                    params.append('From', fromNum);
-                }
-
-                params.append('Body', message);
-                body = params.toString();
-
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers,
-                    body
-                });
-
-                if (!response.ok) {
-                    let errorMessage = `Twilio Error: ${response.status} ${response.statusText}`;
-                    try {
-                        const errorData: any = await response.json();
-                        errorMessage = errorData.message || errorData.error || errorMessage;
-                    } catch (e) {
-                        const text = await response.text().catch(() => '');
-                        if (text) errorMessage = text;
-                    }
-                    throw new Error(errorMessage);
-                }
-                return true;
-            } else {
-                // Generic JSON API
-                headers['Content-Type'] = 'application/json';
-                if (apiKey) {
-                    headers['Authorization'] = `Bearer ${apiKey}`;
-                    headers['X-API-Key'] = apiKey;
-                }
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({
-                        to,
-                        message,
-                        apiKey: apiKey // Keep for backward compatibility
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorData: any = await response.json().catch(() => ({}));
-                    const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
-                    throw new Error(`Custom WhatsApp API error: ${errorMessage}`);
-                }
-
-                return true;
+            if (!accessToken || !phoneNumberId) {
+                console.warn('Meta Cloud API not properly configured for template message');
+                return false;
             }
+
+            const phoneNumber = formattedPhone.replace('+', '');
+            const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to: phoneNumber,
+                    type: 'template',
+                    template: {
+                        name: templateName,
+                        language: { code: 'en' },
+                        components: [{
+                            type: 'body',
+                            parameters: parameters.map(p => ({ type: 'text', text: p }))
+                        }]
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                return false;
+            }
+
+            return true;
         } catch (error: any) {
-            console.error('Custom WhatsApp API error:', error.message);
-            throw error;
+            console.error('Failed to send WhatsApp template message:', error.message);
+            return false;
         }
     }
 
@@ -275,16 +216,7 @@ export class WhatsAppService {
     }
 
     /**
-     * Send appointment notification with approval links
-     * @param employeePhone - Employee phone number
-     * @param employeeName - Employee name
-     * @param visitorDetails - Visitor details object
-     * @param scheduledDate - Scheduled date
-     * @param scheduledTime - Scheduled time
-     * @param purpose - Purpose of visit
-     * @param approvalLink - Approval link URL (verify link)
-     * @param appointmentId - Appointment ID for direct approve/reject links
-     * @returns Promise<boolean> - Success status
+     * Send appointment notification with approval links (using visit_notification template)
      */
     static async sendAppointmentNotification(
         employeePhone: string,
@@ -297,40 +229,23 @@ export class WhatsAppService {
         },
         scheduledDate: Date,
         scheduledTime: string,
-        purpose: string,
+        _purpose: string,
         approvalLink: string,
         companyName: string = 'SafeIn',
         config?: IWhatsAppConfig
     ): Promise<boolean> {
         try {
-            const formattedDate = scheduledDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
+            const formattedDate = this.formatDate(scheduledDate);
             const formattedTime = this.formatTo12Hour(scheduledTime);
 
-            // Create WhatsApp message (Matches Email Text Format)
-            const message = `*NEW APPOINTMENT REQUEST*
-
-Hello ${employeeName},
-
-You have a new appointment request for *${companyName}*.
-
-*DETAILS*
-• Visitor: ${visitorDetails.name}
-• Date: ${formattedDate}
-• Time: ${formattedTime}
-• Purpose: ${purpose}
-
-*To view and take action, click here:*
-${approvalLink}
-
-Best regards,
-${companyName} Team`;
-
-            return await this.sendMessage(employeePhone, message, config);
+            // Template: new_appointment_request
+            // Body: Service Alert: Hello {{1}}, an appointment is scheduled with {{2}} for {{3}} at {{4}}. Please use this link to check details: {{5}}. Platform: {{6}} Support.
+            return await this.sendTemplateMessage(
+                employeePhone,
+                'new_appointment_request',
+                [employeeName, visitorDetails.name, formattedDate, formattedTime, approvalLink, companyName],
+                config
+            );
         } catch (error: any) {
             console.error('Failed to send appointment notification via WhatsApp:', error.message);
             return false;
@@ -339,17 +254,10 @@ ${companyName} Team`;
 
     /**
      * Send appointment status update to visitor
-     * @param visitorPhone - Visitor phone number
-     * @param visitorName - Visitor name
-     * @param employeeName - Employee name
-     * @param scheduledDate - Scheduled date
-     * @param scheduledTime - Scheduled time
-     * @param status - Appointment status ('approved' or 'rejected')
-     * @returns Promise<boolean> - Success status
      */
     static async sendAppointmentStatusUpdate(
         visitorPhone: string,
-        visitorName: string,
+        _visitorName: string,
         employeeName: string,
         scheduledDate: Date,
         scheduledTime: string,
@@ -358,38 +266,28 @@ ${companyName} Team`;
         config?: IWhatsAppConfig
     ): Promise<boolean> {
         try {
-            const formattedDate = scheduledDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
-
-            const statusText = status === 'approved' ? 'APPROVED' : 'REJECTED';
+            const formattedDate = this.formatDate(scheduledDate);
             const formattedTime = this.formatTo12Hour(scheduledTime);
-            const actionText = status === 'approved'
-                ? 'Your appointment has been confirmed. Please arrive on time at the scheduled location.'
-                : 'Unfortunately, your appointment request has been declined.';
 
-            const message = `*APPOINTMENT ${statusText}*
-
-Hello ${visitorName},
-
-${actionText}
-
-*DETAILS*
-• Date: ${formattedDate}
-• Time: ${formattedTime}
-• Meeting With: ${employeeName}
-
-${status === 'approved'
-                    ? `Please ensure you bring a valid government-issued ID for verification at *${companyName}*.`
-                    : `For further information, please contact ${employeeName} directly.`}
-
-Best regards,
-${companyName} Team`;
-
-            return await this.sendMessage(visitorPhone, message, config);
+            if (status === 'approved') {
+                // Template: booking_confirmation
+                // Body: Appointment Confirmed: Your visit at {{1}} with {{2}} is confirmed. Date: {{3}}, Time: {{4}}. Please arrive on time for seamless entry. Regards, Team {{5}} Office.
+                return await this.sendTemplateMessage(
+                    visitorPhone,
+                    'booking_confirmation',
+                    [companyName, employeeName, formattedDate, formattedTime, companyName],
+                    config
+                );
+            } else {
+                // Template: visit_status_update
+                // Body: Visit Update: Your request for {{1}} at {{2}} has been updated as unavailable. Please contact the host for any further coordination. Thank you.
+                return await this.sendTemplateMessage(
+                    visitorPhone,
+                    'visit_status_update',
+                    [formattedDate, companyName],
+                    config
+                );
+            }
         } catch (error: any) {
             console.error('Failed to send appointment status update via WhatsApp:', error.message);
             return false;
@@ -398,39 +296,121 @@ ${companyName} Team`;
 
     /**
      * Send special visitor entry code via WhatsApp
-     * @param visitorPhone - Visitor phone number
-     * @param visitorName - Visitor name
-     * @param otp - Entry code
-     * @param companyName - Company name
-     * @param config - Optional configuration
-     * @returns Promise<boolean> - Success status
      */
     static async sendSpecialVisitorEntryCode(
         visitorPhone: string,
-        visitorName: string,
+        _visitorName: string,
         otp: string,
         companyName: string = 'SafeIn',
         config?: IWhatsAppConfig
     ): Promise<boolean> {
         try {
-            const message = `*VISITOR ENTRY PASS*
+            const today = this.formatDate(new Date());
 
-Dear *${visitorName}*,
-
-Welcome! Your entry code for *${companyName}* is: *${otp}*
-
-Please show this code at the reception desk upon your arrival.
-
-Best regards,
-*${companyName} Team*`;
-
-            return await this.sendMessage(visitorPhone, message, config);
+            // Template: entry_reference
+            // Body: Welcome to {{1}}. Your visit reference ID is {{2}}. Please present this at the reception on {{3}}. Thank you.
+            return await this.sendTemplateMessage(
+                visitorPhone,
+                'entry_reference',
+                [companyName, otp, today],
+                config
+            );
         } catch (error: any) {
             console.error('Failed to send special visitor entry code via WhatsApp:', error.message);
             return false;
         }
     }
+
+    /**
+     * Send appointment booking link via WhatsApp
+     */
+    static async sendAppointmentLinkWhatsApp(
+        visitorPhone: string,
+        employeeName: string,
+        bookingUrl: string,
+        expiresAt: Date,
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
+    ): Promise<boolean> {
+        try {
+            const formattedExpiry = this.formatDate(expiresAt);
+
+            // Template: invitation_update
+            // Body: Registration Invite: {{1}} from {{2}} has invited you to complete your registration. Link: {{3}}. This invitation expires on {{4}} precisely.
+            return await this.sendTemplateMessage(
+                visitorPhone,
+                'invitation_update',
+                [employeeName, companyName, bookingUrl, formattedExpiry],
+                config
+            );
+        } catch (error: any) {
+            console.error('Failed to send appointment link via WhatsApp:', error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Send appointment confirmation via WhatsApp (Unified Template call)
+     */
+    static async sendAppointmentConfirmationWhatsApp(
+        recipientPhone: string,
+        recipientName: string,
+        otherPartyName: string,
+        scheduledDate: Date,
+        scheduledTime: string,
+        _purpose: string,
+        isEmployee: boolean = false,
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
+    ): Promise<boolean> {
+        try {
+            const formattedDate = this.formatDate(scheduledDate);
+            const formattedTime = this.formatTo12Hour(scheduledTime);
+
+            if (isEmployee) {
+                // Use new_appointment_request for employee (as a summary)
+                return await this.sendTemplateMessage(
+                    recipientPhone,
+                    'new_appointment_request',
+                    [recipientName, otherPartyName, formattedDate, formattedTime, 'N/A', companyName],
+                    config
+                );
+            } else {
+                // Use booking_confirmation for visitor
+                return await this.sendTemplateMessage(
+                    recipientPhone,
+                    'booking_confirmation',
+                    [companyName, otherPartyName, formattedDate, formattedTime, companyName],
+                    config
+                );
+            }
+        } catch (error: any) {
+            console.error('Failed to send appointment confirmation via WhatsApp:', error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Send OTP/Verification code via template (Utility)
+     */
+    static async sendOTPVerificationTemplate(
+        to: string,
+        otp: string,
+        companyName: string = 'SafeIn',
+        config?: IWhatsAppConfig
+    ): Promise<boolean> {
+        try {
+            // Template: system_config_update
+            // Body: Account Update: Your registration reference for the setup is {{1}}. Please refer to this ID to complete your profile settings. Regards, Team {{2}} Office.
+            return await this.sendTemplateMessage(
+                to,
+                'system_config_update',
+                [otp, companyName],
+                config
+            );
+        } catch (error: any) {
+            console.error('Failed to send OTP template:', error.message);
+            return false;
+        }
+    }
 }
-
-
-

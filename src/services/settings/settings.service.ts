@@ -17,7 +17,6 @@ const MASKED = '••••••••';
 function maskSettingsResponse(settings: any): ISettingsResponse {
     const response = settings as unknown as ISettingsResponse;
     if (response.whatsapp?.accessToken) response.whatsapp.accessToken = MASKED;
-    if (response.whatsapp?.apiKey) response.whatsapp.apiKey = MASKED;
     if (response.smtp?.pass) response.smtp.pass = MASKED;
     return response;
 }
@@ -55,30 +54,19 @@ export class SettingsService {
         }
 
         const ws = settings.whatsapp;
-        const hasMeta = !!(ws.phoneNumberId || ws.accessToken);
-        const hasCustom = !!(ws.apiUrl || ws.apiKey);
         let needsSave = false;
 
-        // Infer activeProvider from stored credentials if missing
-        if (!ws.activeProvider) {
-            ws.activeProvider = hasCustom && !hasMeta ? 'custom' : 'meta';
-            needsSave = true;
-        }
-
-        // Sync verification flags with the overall verified status (handles legacy data)
+        // Sync verification flags (handles legacy data)
         if (ws.verified) {
-            if (hasMeta && !ws.metaVerified) { ws.metaVerified = true; needsSave = true; }
-            if (hasCustom && !ws.customVerified) { ws.customVerified = true; needsSave = true; }
-        } else if (
-            (ws.activeProvider === 'meta' && ws.metaVerified) ||
-            (ws.activeProvider === 'custom' && ws.customVerified)
-        ) {
+            if (!ws.metaVerified) { ws.metaVerified = true; needsSave = true; }
+        } else if (ws.metaVerified) {
             ws.verified = true;
             needsSave = true;
         }
 
         if (needsSave) {
             settings.markModified('whatsapp');
+            settings.markModified('pendingWhatsapp');
             await settings.save();
         }
 
@@ -107,6 +95,19 @@ export class SettingsService {
         return settings?.notifications.smsEnabled ?? false;
     }
 
+    /**
+     * Get all notification flags and WhatsApp config in one query
+     */
+    static async getNotificationSettings(userId: string) {
+        const settings = await Settings.findOne({ userId }, { notifications: 1, whatsapp: 1 }).lean();
+        return {
+            emailEnabled: settings?.notifications?.emailEnabled ?? true,
+            whatsappEnabled: settings?.notifications?.whatsappEnabled ?? true,
+            smsEnabled: settings?.notifications?.smsEnabled ?? false,
+            whatsappConfig: settings?.whatsapp
+        };
+    }
+
     // ── Write / Update ─────────────────────────────────────────────────────────
 
     static async updateSettings(userId: string, updateData: IUpdateSettingsDTO): Promise<ISettingsResponse> {
@@ -128,14 +129,13 @@ export class SettingsService {
         // Update WhatsApp config (safe fields only — credentials require OTP verification)
         if (updateData.whatsapp) {
             const ws = settings.whatsapp;
-            const { activeProvider, senderNumber, testNumber } = updateData.whatsapp;
+            const { senderNumber, testNumber } = updateData.whatsapp;
 
-            if (activeProvider !== undefined) ws.activeProvider = activeProvider;
             if (senderNumber !== undefined) ws.senderNumber = senderNumber;
             if (testNumber !== undefined) ws.testNumber = testNumber;
 
-            // Sync the top-level verified flag from the active provider's specific flag
-            ws.verified = ws.activeProvider === 'meta' ? !!ws.metaVerified : !!ws.customVerified;
+            // Sync the top-level verified flag
+            ws.verified = !!ws.metaVerified;
 
             settings.markModified('whatsapp');
         }
@@ -162,7 +162,10 @@ export class SettingsService {
         const expiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
         const message = `Your WhatsApp verification code is: *${otp}*. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
 
-        const sent = await WhatsAppService.sendMessage(recipientNumber, message, whatsappConfig);
+        // Always force meta for verification
+        const config = { ...whatsappConfig, activeProvider: 'meta' };
+
+        const sent = await WhatsAppService.sendMessage(recipientNumber, message, config);
         if (!sent) throw new Error('Failed to send verification code. Please check your API credentials.');
 
         await Settings.findOneAndUpdate(
@@ -172,7 +175,7 @@ export class SettingsService {
                     'whatsapp.verificationOtp': otp,
                     'whatsapp.verificationOtpExpiry': expiry,
                     'whatsapp.verified': false,
-                    pendingWhatsapp: whatsappConfig,
+                    pendingWhatsapp: config,
                 },
             },
             { upsert: true }
@@ -197,22 +200,13 @@ export class SettingsService {
 
         // Promote pending config → main config
         if (settings.pendingWhatsapp) {
-            const provider = settings.pendingWhatsapp.activeProvider || settings.whatsapp.activeProvider;
-
-            settings.whatsapp.activeProvider = provider;
+            settings.whatsapp.activeProvider = 'meta';
             settings.whatsapp.senderNumber = settings.pendingWhatsapp.senderNumber || settings.whatsapp.senderNumber;
             settings.whatsapp.testNumber = settings.pendingWhatsapp.testNumber || settings.whatsapp.testNumber;
 
-            if (provider === 'meta') {
-                settings.whatsapp.phoneNumberId = settings.pendingWhatsapp.phoneNumberId;
-                settings.whatsapp.accessToken = encryptToken(settings.pendingWhatsapp.accessToken!);
-                settings.whatsapp.metaVerified = true;
-            } else {
-                settings.whatsapp.apiUrl = settings.pendingWhatsapp.apiUrl;
-                settings.whatsapp.apiKey = encryptToken(settings.pendingWhatsapp.apiKey!);
-                settings.whatsapp.customVerified = true;
-            }
-
+            settings.whatsapp.phoneNumberId = settings.pendingWhatsapp.phoneNumberId;
+            settings.whatsapp.accessToken = encryptToken(settings.pendingWhatsapp.accessToken!);
+            settings.whatsapp.metaVerified = true;
             settings.whatsapp.verified = true;
         }
 

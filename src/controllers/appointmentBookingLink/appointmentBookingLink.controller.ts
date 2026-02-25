@@ -20,17 +20,17 @@ export class AppointmentBookingLinkController {
   ): Promise<void> => {
     if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
 
-    const { visitorEmail, employeeId, expiresInDays } = req.body;
-    if (!visitorEmail || !employeeId) {
-      throw new AppError('Visitor email and employee ID are required', ERROR_CODES.BAD_REQUEST);
+    const { visitorEmail, visitorPhone, employeeId, expiresInDays } = req.body;
+    if (!visitorPhone || !employeeId) {
+      throw new AppError('Visitor phone and employee ID are required', ERROR_CODES.BAD_REQUEST);
     }
 
     const link = await AppointmentBookingLinkService.createAppointmentLink(
-      { visitorEmail, employeeId, expiresInDays },
+      { visitorEmail, visitorPhone, employeeId, expiresInDays },
       req.user._id.toString()
     );
 
-    ResponseUtil.success(res, 'Appointment link created and email sent successfully', link, 201);
+    ResponseUtil.success(res, 'Appointment link created and sent successfully', link, 201);
   };
 
   static getAppointmentLinkByToken = async (
@@ -278,10 +278,13 @@ export class AppointmentBookingLinkController {
   ): Promise<void> => {
     if (!req.user) throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
 
-    const { email } = req.query;
-    if (!email || typeof email !== 'string') throw new AppError('Email is required', ERROR_CODES.BAD_REQUEST);
+    const { email, phone } = req.query;
 
-    const result = await AppointmentBookingLinkService.checkVisitorExists(email, req.user._id.toString());
+    const result = await AppointmentBookingLinkService.checkVisitorExists(
+      email as string | undefined,
+      phone as string | undefined,
+      req.user._id.toString()
+    );
     ResponseUtil.success(res, 'Visitor check completed', result);
   };
 

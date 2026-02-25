@@ -31,19 +31,26 @@ export class VisitorService {
         const adminId = await EmployeeUtil.getAdminId(createdBy);
         const adminIdObjectId = toObjectId(adminId);
 
-        const normalizedEmail = visitorData.email.toLowerCase().trim();
+        const normalizedEmail = visitorData.email ? visitorData.email.toLowerCase().trim() : null;
+        const visitorPhone = visitorData.phone.trim();
 
-        const existingVisitor = await Visitor.findOne({
-            email: normalizedEmail,
-            createdBy: adminIdObjectId
-        }).session(session);
+        const query: any = {
+            createdBy: adminIdObjectId,
+            isDeleted: false,
+            $or: [{ phone: visitorPhone }]
+        };
+        if (normalizedEmail) {
+            query.$or.push({ email: normalizedEmail });
+        }
+
+        const existingVisitor = await Visitor.findOne(query).session(session);
 
         // If a visitor exists with the same email but is soft-deleted, restore it instead of blocking.
         if (existingVisitor) {
             if ((existingVisitor as any).isDeleted === true) {
                 existingVisitor.set({
                     ...visitorData,
-                    email: normalizedEmail,
+                    email: normalizedEmail || undefined,
                     isDeleted: false,
                     deletedAt: null,
                     deletedBy: null
@@ -51,12 +58,17 @@ export class VisitorService {
                 await existingVisitor.save({ session });
                 return existingVisitor.toObject() as unknown as IVisitorResponse;
             }
-            throw new AppError(ERROR_MESSAGES.VISITOR_EMAIL_EXISTS, ERROR_CODES.CONFLICT);
+            throw new AppError(
+                normalizedEmail && (existingVisitor as any).email === normalizedEmail
+                    ? ERROR_MESSAGES.VISITOR_EMAIL_EXISTS
+                    : 'A visitor with this phone number already exists.',
+                ERROR_CODES.CONFLICT
+            );
         }
 
         const visitor = new Visitor({
             ...visitorData,
-            email: normalizedEmail,
+            email: normalizedEmail || undefined,
             createdBy: adminIdObjectId
         });
         await visitor.save({ session });
@@ -221,7 +233,8 @@ export class VisitorService {
             const existingEmail = await Visitor.findOne({
                 email: normalizedEmail,
                 createdBy: existingVisitor.createdBy,
-                _id: { $ne: visitorIdObjectId }
+                _id: { $ne: visitorIdObjectId },
+                isDeleted: false
             }).session(session);
 
             if (existingEmail) {
@@ -305,9 +318,29 @@ export class VisitorService {
     }
 
 
+    /**
+     * Find an existing visitor by email or phone within a company
+     */
+    static async findVisitorByContact(adminId: string, email?: string, phone?: string): Promise<any> {
+        const adminIdObjectId = toObjectId(adminId);
+        if (!adminIdObjectId || (!email && !phone)) return null;
 
+        const filter: any = {
+            createdBy: adminIdObjectId,
+            isDeleted: false
+        };
 
+        const normalizedEmail = email?.toLowerCase().trim();
+        const cleanedPhone = phone?.trim();
 
+        if (normalizedEmail && cleanedPhone) {
+            filter.$or = [{ email: normalizedEmail }, { phone: cleanedPhone }];
+        } else if (normalizedEmail) {
+            filter.email = normalizedEmail;
+        } else if (cleanedPhone) {
+            filter.phone = cleanedPhone;
+        }
 
-
+        return await Visitor.findOne(filter).lean();
+    }
 }

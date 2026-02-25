@@ -15,7 +15,7 @@ export interface IIdProof {
 
 export interface IVisitor extends Document {
     name: string;
-    email: string;
+    email?: string;
     phone: string;
     gender?: 'male' | 'female' | 'other';
     address: IAddress;
@@ -124,10 +124,11 @@ const visitorSchema = new Schema<IVisitor>({
     },
     email: {
         type: String,
-        required: [true, 'Email is required'],
+        required: false,
         lowercase: true,
         trim: true,
-        match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+        match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
+        default: null
     },
     phone: {
         type: String,
@@ -235,7 +236,11 @@ visitorSchema.index({ isDeleted: 1 });
 visitorSchema.index({ deletedAt: 1 });
 visitorSchema.index({ createdBy: 1 });
 
-visitorSchema.index({ createdBy: 1, email: 1 }, { unique: true });
+visitorSchema.index({ createdBy: 1, email: 1 }, {
+    unique: true,
+    partialFilterExpression: { email: { $type: "string" } }
+});
+visitorSchema.index({ createdBy: 1, phone: 1 }, { unique: true });
 
 visitorSchema.virtual('fullName').get(function () {
     return this.name;

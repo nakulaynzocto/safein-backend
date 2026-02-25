@@ -104,15 +104,13 @@ export class AppointmentService {
     static async createAppointment(appointmentData: ICreateAppointmentDTO, createdBy: string, options: { session?: any; sendNotifications?: boolean; createdByVisitor?: boolean; adminUserId?: string; suppressEmails?: boolean } = {}): Promise<IAppointmentResponse> {
         const { session, sendNotifications = false, createdByVisitor = false, adminUserId, suppressEmails = false } = options;
 
-        // Check plan limits before creating appointment
-        // Resolve the actual admin ID (tenant/company owner) for settings and limits
-        const actualAdminId = await EmployeeUtil.getAdminId(adminUserId || createdBy);
-        const userIdForLimitCheck = actualAdminId;
+        // Resolve the actual admin context and notification settings in parallel
+        const { adminId: actualAdminId, companyName } = await EmployeeUtil.getAdminContext(adminUserId || createdBy);
+        const { emailEnabled, whatsappEnabled, smsEnabled, whatsappConfig } = await SettingsService.getNotificationSettings(actualAdminId);
 
         try {
-            await UserSubscriptionService.checkPlanLimits(userIdForLimitCheck, 'appointments', false);
+            await UserSubscriptionService.checkPlanLimits(actualAdminId, 'appointments', false);
         } catch (error: any) {
-            // Re-throw the error from checkPlanLimits
             throw error;
         }
 
@@ -148,37 +146,25 @@ export class AppointmentService {
             .populate('visitorId', 'name email phone address idProof photo')
             .session(session);
 
-        // Only create approval link if appointment status is 'pending'
-        // If status is 'approved' (e.g., created via employee's appointment link), no approval needed
         let approvalLink = null;
         if (appointment.status === 'pending') {
             try {
                 const appointmentId = (appointment._id as any).toString();
                 approvalLink = await ApprovalLinkService.createApprovalLink(appointmentId);
             } catch (error: any) {
-                // Log error for debugging but continue without approval link
                 console.error('Failed to create approval link for appointment:', appointment._id, error?.message || error);
-                // Approval link creation failed, continue without it
             }
         }
 
-        const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
-        const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
-        const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
-
-        // Get company name and profile picture (used as company logo) from user (createdBy) for email fromName and branding
-        let companyName: string | undefined;
+        // Get company logo from user
         let companyLogo: string | undefined;
         try {
-            const user = await User.findById(createdBy).select('companyName profilePicture').lean();
-            companyName = user?.companyName;
-            companyLogo = user?.profilePicture || undefined; // Use profilePicture as company logo
+            const user = await User.findById(actualAdminId).select('profilePicture').lean();
+            companyLogo = user?.profilePicture || undefined;
         } catch (error) {
-            // If user not found or error, companyName and companyLogo will remain undefined
-            console.warn('Failed to fetch company name and logo for email:', error);
+            console.warn('Failed to fetch company logo for email:', error);
         }
 
-        // Socket notification and email sending moved to background to prevent blocking response
         if (!suppressEmails || sendNotifications) {
             this.processBackgroundNotifications(
                 (appointment._id as any).toString(),
@@ -196,12 +182,11 @@ export class AppointmentService {
                     actualAdminId,
                     companyName,
                     companyLogo,
-                    suppressEmails
+                    suppressEmails,
+                    whatsappConfig
                 }
             ).catch(err => console.error('Error in background notifications:', err));
         }
-
-        // Socket notification also moved to background process
 
         const appointmentResponse = appointment.toObject() as unknown as IAppointmentResponse;
         return {
@@ -231,6 +216,7 @@ export class AppointmentService {
             companyName?: string;
             companyLogo?: string;
             suppressEmails?: boolean;
+            whatsappConfig?: any;
         }
     ) {
         const {
@@ -242,7 +228,8 @@ export class AppointmentService {
             actualAdminId,
             companyName,
             companyLogo,
-            suppressEmails
+            suppressEmails,
+            whatsappConfig
         } = options;
 
         let emailSent = false;
@@ -297,7 +284,6 @@ export class AppointmentService {
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
                 if (status === 'pending' && employeePhone && approvalLink?.link) {
-                    const whatsappConfig = await SettingsService.getWhatsAppConfig(createdBy);
                     const sent = await WhatsAppService.sendAppointmentNotification(
                         employeePhone,
                         employeeName,
@@ -315,6 +301,49 @@ export class AppointmentService {
                         whatsappConfig
                     );
                     whatsappSent = sent;
+                } else if (status === 'approved') {
+                    const visitorPhone = (populatedAppointment.visitorId as any)?.phone;
+                    const visitorName = (populatedAppointment.visitorId as any)?.name || 'Visitor';
+
+                    // 1. Notify Visitor
+                    if (visitorPhone) {
+                        try {
+                            await WhatsAppService.sendAppointmentConfirmationWhatsApp(
+                                visitorPhone,
+                                visitorName,
+                                employeeName,
+                                populatedAppointment.appointmentDetails.scheduledDate,
+                                populatedAppointment.appointmentDetails.scheduledTime,
+                                populatedAppointment.appointmentDetails.purpose,
+                                false, // isEmployee = false
+                                options.companyName,
+                                whatsappConfig
+                            );
+                            whatsappSent = true;
+                        } catch (err) {
+                            console.error('Failed to notify visitor via WhatsApp:', err);
+                        }
+                    }
+
+                    // 2. Notify Employee
+                    if (employeePhone) {
+                        try {
+                            await WhatsAppService.sendAppointmentConfirmationWhatsApp(
+                                employeePhone,
+                                employeeName,
+                                visitorName,
+                                populatedAppointment.appointmentDetails.scheduledDate,
+                                populatedAppointment.appointmentDetails.scheduledTime,
+                                populatedAppointment.appointmentDetails.purpose,
+                                true, // isEmployee = true
+                                options.companyName,
+                                whatsappConfig
+                            );
+                            whatsappSent = true;
+                        } catch (err) {
+                            console.error('Failed to notify employee via WhatsApp:', err);
+                        }
+                    }
                 }
             }
         } catch (error: any) {
@@ -370,12 +399,18 @@ export class AppointmentService {
         }
     }
 
+    private static getPopulateOptions() {
+        return [
+            { path: 'employeeId', select: 'name email department designation phone photo' },
+            { path: 'visitorId', select: 'name email phone photo address idProof' },
+            { path: 'createdBy', select: 'firstName lastName email' },
+            { path: 'deletedBy', select: 'firstName lastName email' }
+        ];
+    }
+
     static async getAppointmentById(appointmentId: string): Promise<IAppointmentResponse> {
         const appointment = await Appointment.findOne({ _id: appointmentId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone photo')
-            .populate('visitorId', 'name email phone photo address idProof')
-            .populate('createdBy', 'firstName lastName email')
-            .populate('deletedBy', 'firstName lastName email');
+            .populate(this.getPopulateOptions());
 
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
@@ -393,10 +428,7 @@ export class AppointmentService {
             throw new AppError('Invalid appointment ID format', ERROR_CODES.BAD_REQUEST);
         }
         const appointment = await Appointment.findOne({ _id: appointmentIdObjectId, isDeleted: false })
-            .populate('employeeId', 'name email department designation phone photo')
-            .populate('visitorId', 'name email phone photo address idProof')
-            .populate('createdBy', 'firstName lastName email')
-            .populate('deletedBy', 'firstName lastName email');
+            .populate(this.getPopulateOptions());
 
         if (!appointment) {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);

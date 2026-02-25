@@ -8,7 +8,7 @@ export enum SpecialBookingStatus {
 
 export interface ISpecialVisitorBooking extends Document {
     visitorName: string;
-    visitorEmail: string;
+    visitorEmail?: string;
     visitorPhone: string;
     employeeId: mongoose.Types.ObjectId;
     purpose: string;
@@ -35,7 +35,7 @@ const specialVisitorBookingSchema = new Schema<ISpecialVisitorBooking>(
         },
         visitorEmail: {
             type: String,
-            required: [true, 'Visitor email is required'],
+            required: false,
             lowercase: true,
             trim: true,
         },

@@ -155,5 +155,17 @@ export class EmployeeUtil {
 
     return user ? (user._id as any).toString() : null;
   }
+
+  /**
+   * Get admin ID and company name for a user
+   */
+  static async getAdminContext(userId: string): Promise<{ adminId: string; companyName: string }> {
+    const adminId = await this.getAdminId(userId);
+    const adminUser = await User.findById(adminId).select('companyName').lean();
+    return {
+      adminId,
+      companyName: adminUser?.companyName || 'SafeIn'
+    };
+  }
 }
 
