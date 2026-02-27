@@ -24,6 +24,7 @@ import { CONSTANTS } from './utils/constants';
 import { EmailService } from './services/email/email.service';
 import { webhookRouter } from './routes/userSubscription/userSubscription.routes';
 import { socketService } from './services/socket/socket.service';
+import { FirebaseService } from './services/firebase/firebase.service';
 import superAdminRoutes from './routes/internal/superAdmin.routes';
 
 const app: Express = express();
@@ -46,6 +47,8 @@ EmailService.initializeTransporter();
 EmailService.verifyConnection().catch((error) => {
   console.error('Email service initialization error:', error);
 });
+
+FirebaseService.initialize();
 
 // Enhanced Security Headers
 app.use(securityHeaders);

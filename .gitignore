@@ -6,6 +6,7 @@ yarn-error.log*
 pnpm-debug.log*
 .cursorrules
 .env
+certs/firebase-service-account.json
 
 # Runtime data
 pids

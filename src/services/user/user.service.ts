@@ -996,4 +996,16 @@ export class UserService {
       token,
     };
   }
+  /**
+   * Update FCM token for push notifications
+   */
+  static async updateFCMToken(userId: string, fcmToken: string): Promise<void> {
+    if (!fcmToken) {
+      throw new AppError('FCM token is required', ERROR_CODES.BAD_REQUEST);
+    }
+
+    await User.findByIdAndUpdate(userId, {
+      $addToSet: { fcmTokens: fcmToken }
+    });
+  }
 }

@@ -8,7 +8,6 @@ const chatSchema = new Schema<IChat>(
                 type: Schema.Types.ObjectId,
                 ref: 'User',
                 required: true,
-                index: true
             }
         ],
         lastMessage: {

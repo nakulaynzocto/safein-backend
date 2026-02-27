@@ -38,6 +38,19 @@ export class NotificationService {
         const notification = new Notification(notificationData);
         await notification.save();
 
+        // Send Push Notification (Background)
+        try {
+            const { FirebaseService } = require('../firebase/firebase.service');
+            FirebaseService.sendToUser(
+                String(userId), 
+                title, 
+                message, 
+                { type, ...(metadata || {}) }
+            ).catch((err: any) => console.error('Error sending push notification:', err));
+        } catch (error) {
+            console.error('FirebaseService not available:', error);
+        }
+
         return notification.toObject() as unknown as INotificationResponse;
     }
 

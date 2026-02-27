@@ -145,6 +145,10 @@ const userSchema = new Schema<IUser>(
             trim: true,
             default: null,
             sparse: true
+        },
+        fcmTokens: {
+            type: [String],
+            default: []
         }
     },
     {

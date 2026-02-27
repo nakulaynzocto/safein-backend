@@ -104,6 +104,7 @@ router.post('/change-password',
     validateRequest(changePasswordValidation),
     asyncWrapper(UserController.changePassword)
 );
+router.post('/fcm-token', asyncWrapper(UserController.updateFCMToken));
 
 router.get('/:id',
     validateRequest(getUserByIdValidation),

@@ -270,4 +270,16 @@ export class UserController {
     const result = await UserService.exchangeImpersonationToken(code);
     ResponseUtil.success(res, 'Impersonation secure exchange successful', result);
   }
+  /**
+   * Update FCM Token
+   */
+  @TryCatch('Failed to update FCM token')
+  static async updateFCMToken(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    if (!req.user) {
+      throw new AppError('User not authenticated', ERROR_CODES.UNAUTHORIZED);
+    }
+    const { fcmToken } = req.body;
+    await UserService.updateFCMToken(req.user._id.toString(), fcmToken);
+    ResponseUtil.success(res, 'FCM token updated successfully');
+  }
 }

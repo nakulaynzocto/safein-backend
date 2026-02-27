@@ -176,12 +176,49 @@ class ChatService {
             }
 
             await session.commitTransaction();
+
+            // Send Push Notifications (Background)
+            this._sendChatPushNotifications(chatId, senderId, text).catch(err => 
+                console.error('Error sending chat push notifications:', err)
+            );
+
             return message;
         } catch (error) {
             await session.abortTransaction();
             throw error;
         } finally {
             session.endSession();
+        }
+    }
+
+    /**
+     * Helper to send push notifications for a chat message
+     */
+    private async _sendChatPushNotifications(chatId: string, senderId: string, text: string) {
+        try {
+            const { FirebaseService } = require('../firebase/firebase.service');
+            const chat = await Chat.findById(chatId).lean();
+            if (!chat) return;
+
+            // Get sender info for the notification title
+            const personMap = await this._getParticipantDetails([senderId]);
+            const sender = personMap.get(String(senderId));
+            const senderName = sender?.name || 'Someone';
+
+            // Send to all other participants
+            for (const pId of chat.participants) {
+                const participantId = String(pId);
+                if (participantId !== String(senderId)) {
+                    await FirebaseService.sendToUser(
+                        participantId, 
+                        `New message from ${senderName}`, 
+                        text.length > 100 ? text.substring(0, 97) + '...' : text,
+                        { chatId, type: 'chat_message' }
+                    );
+                }
+            }
+        } catch (error) {
+            console.error('Failed to send push notification:', error);
         }
     }
 
@@ -208,7 +245,7 @@ class ChatService {
 
             // Notify via socket
             const { socketService, SocketEvents } = require('../socket/socket.service');
-            socketService.getInstance().getIO()?.to(`chat_${chatId}`).emit(SocketEvents.READ_RECEIPT, {
+            socketService.getIO()?.to(`chat_${chatId}`).emit(SocketEvents.READ_RECEIPT, {
                 chatId,
                 userId,
                 timestamp: new Date()
