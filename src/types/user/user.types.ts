@@ -127,6 +127,7 @@ export interface IUserResponse {
     createdBy?: string;
     updatedBy?: string;
     lastLoginAt?: Date;
+    photo?: string; // Personal photo for employees
     createdAt: Date;
     updatedAt: Date;
 }

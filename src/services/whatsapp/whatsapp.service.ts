@@ -12,6 +12,8 @@ import { decryptToken } from '../../utils/tokenEncryption.util';
  * WhatsApp Service
  * Handles sending WhatsApp messages for appointment notifications via Meta WhatsApp Cloud API
  */
+import { SettingsService } from '../settings/settings.service';
+
 export class WhatsAppService {
     private static readonly WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
     private static readonly WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
@@ -232,9 +234,14 @@ export class WhatsAppService {
         _purpose: string,
         approvalLink: string,
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'whatsapp');
+                if (!enabled) return false;
+            }
             const formattedDate = this.formatDate(scheduledDate);
             const formattedTime = this.formatTo12Hour(scheduledTime);
 
@@ -263,9 +270,14 @@ export class WhatsAppService {
         scheduledTime: string,
         status: 'approved' | 'rejected',
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'whatsapp');
+                if (!enabled) return false;
+            }
             const formattedDate = this.formatDate(scheduledDate);
             const formattedTime = this.formatTo12Hour(scheduledTime);
 
@@ -302,9 +314,14 @@ export class WhatsAppService {
         _visitorName: string,
         otp: string,
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'visitor', 'whatsapp');
+                if (!enabled) return false;
+            }
             const today = this.formatDate(new Date());
 
             // Template: entry_reference
@@ -330,9 +347,14 @@ export class WhatsAppService {
         bookingUrl: string,
         expiresAt: Date,
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'whatsapp');
+                if (!enabled) return false;
+            }
             const formattedExpiry = this.formatDate(expiresAt);
 
             // Template: invitation_update
@@ -361,9 +383,14 @@ export class WhatsAppService {
         _purpose: string,
         isEmployee: boolean = false,
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'whatsapp');
+                if (!enabled) return false;
+            }
             const formattedDate = this.formatDate(scheduledDate);
             const formattedTime = this.formatTo12Hour(scheduledTime);
 
@@ -397,9 +424,14 @@ export class WhatsAppService {
         to: string,
         otp: string,
         companyName: string = 'SafeIn',
-        config?: IWhatsAppConfig
+        config?: IWhatsAppConfig,
+        adminId?: string
     ): Promise<boolean> {
         try {
+            if (adminId) {
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'employee', 'whatsapp');
+                if (!enabled) return false;
+            }
             // Template: system_config_update
             // Body: Account Update: Your registration reference for the setup is {{1}}. Please refer to this ID to complete your profile settings. Regards, Team {{2}} Office.
             return await this.sendTemplateMessage(

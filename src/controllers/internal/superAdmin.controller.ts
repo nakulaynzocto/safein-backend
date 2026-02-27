@@ -158,4 +158,30 @@ export class SuperAdminController {
         const result = await SuperAdminService.getEmployeesByAdminId(req.params.id, page, limit, search);
         ResponseUtil.success(res, 'Employees fetched successfully', result);
     }
+
+    // --- WhatsApp Settings ---
+    @TryCatch('Failed to initiate WhatsApp verification')
+    public async sendUserWhatsAppOTP(req: Request, res: Response, _next: NextFunction) {
+        await SuperAdminService.sendUserWhatsAppOTP(req.params.id, req.body);
+        ResponseUtil.success(res, 'Verification code sent to user WhatsApp', null);
+    }
+
+    @TryCatch('WhatsApp verification failed')
+    public async verifyUserWhatsAppOTP(req: Request, res: Response, _next: NextFunction) {
+        const result = await SuperAdminService.verifyUserWhatsAppOTP(req.params.id, req.body.otp);
+        ResponseUtil.success(res, 'WhatsApp verified successfully', result);
+    }
+
+    // --- SMTP Settings ---
+    @TryCatch('Failed to save SMTP configuration')
+    public async saveUserSMTPConfig(req: Request, res: Response, _next: NextFunction) {
+        const result = await SuperAdminService.saveUserSMTPConfig(req.params.id, req.body);
+        ResponseUtil.success(res, 'SMTP configuration verified and saved', result);
+    }
+
+    @TryCatch('Failed to remove SMTP configuration')
+    public async removeUserSMTPConfig(req: Request, res: Response, _next: NextFunction) {
+        const result = await SuperAdminService.removeUserSMTPConfig(req.params.id);
+        ResponseUtil.success(res, 'SMTP configuration removed', result);
+    }
 }

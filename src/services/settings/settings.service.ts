@@ -29,6 +29,18 @@ function buildDefaultSettings(userId: string, overrides: Partial<IUpdateSettings
             emailEnabled: overrides.notifications?.emailEnabled ?? true,
             whatsappEnabled: overrides.notifications?.whatsappEnabled ?? true,
             smsEnabled: overrides.notifications?.smsEnabled ?? false,
+            visitor: {
+                email: overrides.notifications?.visitor?.email ?? true,
+                whatsapp: overrides.notifications?.visitor?.whatsapp ?? true,
+            },
+            employee: {
+                email: overrides.notifications?.employee?.email ?? true,
+                whatsapp: overrides.notifications?.employee?.whatsapp ?? true,
+            },
+            appointment: {
+                email: overrides.notifications?.appointment?.email ?? true,
+                whatsapp: overrides.notifications?.appointment?.whatsapp ?? true,
+            },
         },
         whatsapp: {
             activeProvider: 'meta',
@@ -95,15 +107,25 @@ export class SettingsService {
         return settings?.notifications.smsEnabled ?? false;
     }
 
-    /**
-     * Get all notification flags and WhatsApp config in one query
-     */
+    static async isCategoryEnabled(userId: string, category: 'visitor' | 'employee' | 'appointment', type: 'email' | 'whatsapp'): Promise<boolean> {
+        const settings = await Settings.findOne({ userId }, { [`notifications.${category}.${type}`]: 1, [`notifications.${type}Enabled`]: 1 });
+        if (!settings) return true;
+        
+        const masterEnabled = (settings.notifications as any)[`${type}Enabled`] ?? true;
+        const categoryEnabled = ((settings.notifications as any)[category] as any)?.[type] ?? true;
+        
+        return masterEnabled && categoryEnabled;
+    }
+
     static async getNotificationSettings(userId: string) {
         const settings = await Settings.findOne({ userId }, { notifications: 1, whatsapp: 1 }).lean();
         return {
             emailEnabled: settings?.notifications?.emailEnabled ?? true,
             whatsappEnabled: settings?.notifications?.whatsappEnabled ?? true,
             smsEnabled: settings?.notifications?.smsEnabled ?? false,
+            visitor: settings?.notifications?.visitor || { email: true, whatsapp: true },
+            employee: settings?.notifications?.employee || { email: true, whatsapp: true },
+            appointment: settings?.notifications?.appointment || { email: true, whatsapp: true },
             whatsappConfig: settings?.whatsapp
         };
     }
@@ -120,10 +142,31 @@ export class SettingsService {
 
         // Update notification flags
         if (updateData.notifications) {
-            const { emailEnabled, whatsappEnabled, smsEnabled } = updateData.notifications;
+            const { emailEnabled, whatsappEnabled, smsEnabled, visitor, employee, appointment } = updateData.notifications;
+            
             if (emailEnabled !== undefined) settings.notifications.emailEnabled = emailEnabled;
             if (whatsappEnabled !== undefined) settings.notifications.whatsappEnabled = whatsappEnabled;
             if (smsEnabled !== undefined) settings.notifications.smsEnabled = smsEnabled;
+            
+            if (visitor) {
+                if (visitor.email !== undefined) settings.notifications.visitor.email = visitor.email;
+                if (visitor.whatsapp !== undefined) settings.notifications.visitor.whatsapp = visitor.whatsapp;
+                settings.markModified('notifications.visitor');
+            }
+            
+            if (employee) {
+                if (employee.email !== undefined) settings.notifications.employee.email = employee.email;
+                if (employee.whatsapp !== undefined) settings.notifications.employee.whatsapp = employee.whatsapp;
+                settings.markModified('notifications.employee');
+            }
+            
+            if (appointment) {
+                if (appointment.email !== undefined) settings.notifications.appointment.email = appointment.email;
+                if (appointment.whatsapp !== undefined) settings.notifications.appointment.whatsapp = appointment.whatsapp;
+                settings.markModified('notifications.appointment');
+            }
+            
+            settings.markModified('notifications');
         }
 
         // Update WhatsApp config (safe fields only — credentials require OTP verification)

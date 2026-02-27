@@ -15,6 +15,7 @@ import { ERROR_CODES } from '../../utils/constants';
 import { UserService } from '../user/user.service';
 import { SubscriptionPlanService } from '../subscription/subscription.service';
 import { UserSubscriptionService } from '../userSubscription/userSubscription.service';
+import { SettingsService } from '../settings/settings.service';
 import { AuditLog } from '../../models/auditLog/auditLog.model';
 import * as crypto from 'crypto';
 import { getRedisClient } from '../../config/redis.config';
@@ -159,8 +160,8 @@ export class SuperAdminService {
             },
             {
                 $project: {
-                    totalRevenue: { $divide: ['$totalRevenue', 100] },
-                    revenueThisMonth: { $divide: ['$revenueThisMonth', 100] }
+                    totalRevenue: 1,
+                    revenueThisMonth: 1
                 }
             }
         ]);
@@ -190,7 +191,7 @@ export class SuperAdminService {
             {
                 $project: {
                     _id: 1,
-                    totalAmount: { $divide: ['$totalAmount', 100] }
+                    totalAmount: 1
                 }
             }
         ]);
@@ -410,15 +411,43 @@ export class SuperAdminService {
 
         // Specific Settings logic (not in UserService)
         if (notifications) {
+            const setFields: Record<string, any> = {
+                'notifications.emailEnabled': notifications.emailEnabled,
+                'notifications.whatsappEnabled': notifications.whatsappEnabled,
+            };
+
+            // Master switches
+            if (typeof notifications.smsEnabled === 'boolean') {
+                setFields['notifications.smsEnabled'] = notifications.smsEnabled;
+            }
+
+            // Per-category: visitor
+            if (notifications.visitor) {
+                if (typeof notifications.visitor.email === 'boolean')
+                    setFields['notifications.visitor.email'] = notifications.visitor.email;
+                if (typeof notifications.visitor.whatsapp === 'boolean')
+                    setFields['notifications.visitor.whatsapp'] = notifications.visitor.whatsapp;
+            }
+
+            // Per-category: employee
+            if (notifications.employee) {
+                if (typeof notifications.employee.email === 'boolean')
+                    setFields['notifications.employee.email'] = notifications.employee.email;
+                if (typeof notifications.employee.whatsapp === 'boolean')
+                    setFields['notifications.employee.whatsapp'] = notifications.employee.whatsapp;
+            }
+
+            // Per-category: appointment
+            if (notifications.appointment) {
+                if (typeof notifications.appointment.email === 'boolean')
+                    setFields['notifications.appointment.email'] = notifications.appointment.email;
+                if (typeof notifications.appointment.whatsapp === 'boolean')
+                    setFields['notifications.appointment.whatsapp'] = notifications.appointment.whatsapp;
+            }
+
             await Settings.findOneAndUpdate(
                 { userId: id },
-                {
-                    $set: {
-                        'notifications.emailEnabled': notifications.emailEnabled,
-                        'notifications.whatsappEnabled': notifications.whatsappEnabled,
-                        'notifications.smsEnabled': notifications.smsEnabled
-                    }
-                },
+                { $set: setFields },
                 { new: true, upsert: true, setDefaultsOnInsert: true }
             );
         }
@@ -681,5 +710,23 @@ export class SuperAdminService {
                 totalPages: Math.ceil(total / limit)
             }
         };
+    }
+
+    // --- WhatsApp Settings for User ---
+    static async sendUserWhatsAppOTP(userId: string, whatsappConfig: any) {
+        return await SettingsService.sendVerificationOTP(userId, whatsappConfig);
+    }
+
+    static async verifyUserWhatsAppOTP(userId: string, otp: string) {
+        return await SettingsService.verifyWhatsAppOTP(userId, otp);
+    }
+
+    // --- SMTP Settings for User ---
+    static async saveUserSMTPConfig(userId: string, smtpConfig: any) {
+        return await SettingsService.saveSMTPConfig(userId, smtpConfig);
+    }
+
+    static async removeUserSMTPConfig(userId: string) {
+        return await SettingsService.removeSMTPConfig(userId);
     }
 }

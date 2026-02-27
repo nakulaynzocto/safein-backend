@@ -33,6 +33,7 @@ import {
   getEmployeeSetupEmailTemplate,
   getEmployeeSetupEmailText
 } from '../../templates/email/employee-setup-email.template';
+import { SettingsService } from '../settings/settings.service';
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
@@ -394,6 +395,10 @@ export class EmailService {
    */
   static async sendOtpEmail(email: string, otp: string, companyName: string, adminId?: string): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'employee', 'email');
+        if (!enabled) return;
+      }
       await this.sendEmail({
         to: email,
         subject: `${companyName} Registration - Verify Your Email`,
@@ -418,8 +423,12 @@ export class EmailService {
   /**
    * Send Visitor Entry Code email
    */
-  static async sendVisitorOtpEmail(email: string, otp: string, visitorName: string, companyName: string): Promise<void> {
+  static async sendVisitorOtpEmail(email: string, otp: string, visitorName: string, companyName: string, adminId?: string): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'visitor', 'email');
+        if (!enabled) return;
+      }
       await this.sendEmail({
         to: email,
         subject: `Visitor Verification Code - ${companyName}`,
@@ -427,6 +436,7 @@ export class EmailService {
         text: getVisitorOtpEmailText(otp, visitorName, companyName),
         fromName: `${companyName} Visitor Management`,
         logMessage: 'Visitor OTP email',
+        adminId,
       });
     } catch (error: any) {
       console.error('Failed to send Visitor OTP email:', error.message);
@@ -466,6 +476,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'email');
+        if (!enabled) return;
+      }
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
@@ -495,6 +509,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'email');
+        if (!enabled) return;
+      }
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
@@ -583,6 +601,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'email');
+        if (!enabled) return;
+      }
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
@@ -636,6 +658,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'email');
+        if (!enabled) return;
+      }
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
@@ -669,6 +695,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'appointment', 'email');
+        if (!enabled) return;
+      }
       // Use company name if provided, otherwise fallback to default
       const fromName = companyName || CONSTANTS.SMTP_FROM_NAME || 'SafeIn';
       await this.sendEmail({
@@ -722,6 +752,10 @@ export class EmailService {
    */
   static async sendSafeinUserCredentialsEmail(email: string, password: string, companyName: string, userName: string, adminId?: string): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'employee', 'email');
+        if (!enabled) return;
+      }
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h2 style="color: #1A73E8; text-align: center;">Welcome to ${companyName} Security Cloud</h2>
@@ -767,6 +801,10 @@ export class EmailService {
     adminId?: string
   ): Promise<void> {
     try {
+      if (adminId) {
+        const enabled = await SettingsService.isCategoryEnabled(adminId, 'employee', 'email');
+        if (!enabled) return;
+      }
 
       const htmlContent = getEmployeeSetupEmailTemplate(employeeName, setupUrl, companyName);
       const textContent = getEmployeeSetupEmailText(employeeName, setupUrl, companyName);

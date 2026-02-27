@@ -36,6 +36,12 @@ router.put('/users/:id', controller.updateUser); // Status/Role update
 router.delete('/users/:id', controller.deleteUser);
 router.post('/users/:id/impersonate', controller.impersonateUser);
 
+// User-specific Settings (Managed by Super Admin)
+router.post('/users/:id/settings/whatsapp/verify/initiate', controller.sendUserWhatsAppOTP);
+router.post('/users/:id/settings/whatsapp/verify/confirm', controller.verifyUserWhatsAppOTP);
+router.post('/users/:id/settings/smtp', controller.saveUserSMTPConfig);
+router.delete('/users/:id/settings/smtp', controller.removeUserSMTPConfig);
+
 // Subscriptions
 router.get('/subscriptions', controller.getSubscriptionPlans);
 router.post('/subscriptions', controller.createSubscriptionPlan);

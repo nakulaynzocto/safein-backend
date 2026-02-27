@@ -16,6 +16,7 @@ export interface ISpecialVisitorBooking extends Document {
     scheduledTime?: string;
     accompanyingCount: number;
     notes?: string;
+    address?: string;
     otp?: string;
     otpExpiresAt?: Date;
     status: SpecialBookingStatus;
@@ -65,6 +66,10 @@ const specialVisitorBookingSchema = new Schema<ISpecialVisitorBooking>(
             default: 0,
         },
         notes: {
+            type: String,
+            trim: true,
+        },
+        address: {
             type: String,
             trim: true,
         },

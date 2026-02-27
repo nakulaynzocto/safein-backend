@@ -28,6 +28,7 @@ export class SpecialVisitorBookingService {
             purpose,
             accompanyingCount,
             notes,
+            address,
         } = data;
 
         // Generate 4-digit Entry Code (formerly OTP)
@@ -43,6 +44,7 @@ export class SpecialVisitorBookingService {
             purpose,
             accompanyingCount,
             notes,
+            address,
             otp,
             otpExpiresAt,
             createdBy: toObjectId(createdBy),
@@ -57,7 +59,7 @@ export class SpecialVisitorBookingService {
 
         // Send Entry Code via WhatsApp using professional format
         try {
-            await WhatsAppService.sendSpecialVisitorEntryCode(visitorPhone, visitorName, otp, companyName, whatsappConfig);
+            await WhatsAppService.sendSpecialVisitorEntryCode(visitorPhone, visitorName, otp, companyName, whatsappConfig, adminId);
         } catch (error) {
             // Ignore error
         }
@@ -65,7 +67,10 @@ export class SpecialVisitorBookingService {
         // Send Entry Code via Email
         if (visitorEmail) {
             try {
-                await EmailService.sendVisitorOtpEmail(visitorEmail, otp, visitorName, companyName);
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'visitor', 'email');
+                if (enabled) {
+                    await EmailService.sendVisitorOtpEmail(visitorEmail, otp, visitorName, companyName, adminId);
+                }
             } catch (error) {
                 // Ignore error
             }
@@ -168,7 +173,8 @@ export class SpecialVisitorBookingService {
                 booking.visitorName || 'Visitor',
                 booking.otp || '',
                 companyName,
-                whatsappConfig
+                whatsappConfig,
+                adminId
             );
         } catch (error) {
             // Ignore error
@@ -177,12 +183,16 @@ export class SpecialVisitorBookingService {
         // Resend Entry Code via Email
         if (booking.visitorEmail) {
             try {
-                await EmailService.sendVisitorOtpEmail(
-                    booking.visitorEmail,
-                    booking.otp || '',
-                    booking.visitorName || '',
-                    companyName
-                );
+                const enabled = await SettingsService.isCategoryEnabled(adminId, 'visitor', 'email');
+                if (enabled) {
+                    await EmailService.sendVisitorOtpEmail(
+                        booking.visitorEmail,
+                        booking.otp || '',
+                        booking.visitorName || '',
+                        companyName,
+                        adminId
+                    );
+                }
             } catch (error) {
                 // Ignore error
             }

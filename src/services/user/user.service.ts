@@ -36,6 +36,21 @@ export class UserService {
       // Only use the direct link present on the User model
       if (user.employeeId) {
         userProfile.employeeId = user.employeeId.toString();
+
+        // Also fetch personal photo from Employee model
+        try {
+          const employee = await Employee.findById(user.employeeId).select('photo').lean();
+          if (employee && employee.photo) {
+            userProfile.photo = employee.photo;
+            // If user's profilePicture is empty or matches company logo, 
+            // the personal photo can also serve as a better default
+            if (!userProfile.profilePicture) {
+              userProfile.profilePicture = employee.photo;
+            }
+          }
+        } catch (error) {
+          console.warn('[User Service] Failed to fetch employee photo:', error);
+        }
       }
     }
   }

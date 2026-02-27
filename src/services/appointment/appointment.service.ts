@@ -106,7 +106,7 @@ export class AppointmentService {
 
         // Resolve the actual admin context and notification settings in parallel
         const { adminId: actualAdminId, companyName } = await EmployeeUtil.getAdminContext(adminUserId || createdBy);
-        const { emailEnabled, whatsappEnabled, smsEnabled, whatsappConfig } = await SettingsService.getNotificationSettings(actualAdminId);
+        const { emailEnabled, whatsappEnabled, smsEnabled, whatsappConfig, appointment: appointmentSettings } = await SettingsService.getNotificationSettings(actualAdminId);
 
         try {
             await UserSubscriptionService.checkPlanLimits(actualAdminId, 'appointments', false);
@@ -183,7 +183,8 @@ export class AppointmentService {
                     companyName,
                     companyLogo,
                     suppressEmails,
-                    whatsappConfig
+                    whatsappConfig,
+                    appointmentSettings
                 }
             ).catch(err => console.error('Error in background notifications:', err));
         }
@@ -217,6 +218,7 @@ export class AppointmentService {
             companyLogo?: string;
             suppressEmails?: boolean;
             whatsappConfig?: any;
+            appointmentSettings?: { email: boolean; whatsapp: boolean };
         }
     ) {
         const {
@@ -229,15 +231,19 @@ export class AppointmentService {
             companyName,
             companyLogo,
             suppressEmails,
-            whatsappConfig
+            whatsappConfig,
+            appointmentSettings
         } = options;
+
+        const appointmentEmailEnabled = emailEnabled && (appointmentSettings?.email ?? true);
+        const appointmentWhatsappEnabled = whatsappEnabled && (appointmentSettings?.whatsapp ?? true);
 
         let emailSent = false;
         let whatsappSent = false;
 
         // 📧 Handle Email Notifications
         try {
-            if (populatedAppointment && emailEnabled && !suppressEmails) {
+            if (populatedAppointment && appointmentEmailEnabled && !suppressEmails) {
                 const employeeEmail = (populatedAppointment.employeeId as any)?.email;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
@@ -279,7 +285,7 @@ export class AppointmentService {
 
         // 📱 Send WhatsApp notification
         try {
-            if (populatedAppointment && whatsappEnabled) {
+            if (populatedAppointment && appointmentWhatsappEnabled) {
                 const employeePhone = (populatedAppointment.employeeId as any)?.phone;
                 const employeeName = (populatedAppointment.employeeId as any)?.name;
 
@@ -1111,8 +1117,8 @@ export class AppointmentService {
         }
 
         // Check settings for notifications
-        const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
-        const whatsappEnabled = userId ? await SettingsService.isWhatsAppEnabled(userId) : true;
+        const emailEnabled = userId ? await SettingsService.isCategoryEnabled(userId, 'appointment', 'email') : true;
+        const whatsappEnabled = userId ? await SettingsService.isCategoryEnabled(userId, 'appointment', 'whatsapp') : true;
         const smsEnabled = userId ? await SettingsService.isSmsEnabled(userId) : false;
 
         // Get company name from user (createdBy) for email fromName
@@ -1150,6 +1156,7 @@ export class AppointmentService {
             if (whatsappEnabled) {
                 const visitorPhone = (appointment.visitorId as any).phone;
                 if (visitorPhone && userId) {
+                    const actualAdminId = await EmployeeUtil.getAdminId(userId);
                     const whatsappConfig = await SettingsService.getWhatsAppConfig(userId);
                     await WhatsAppService.sendAppointmentStatusUpdate(
                         visitorPhone,
@@ -1159,7 +1166,8 @@ export class AppointmentService {
                         appointment.appointmentDetails.scheduledTime,
                         'approved',
                         companyName,
-                        whatsappConfig
+                        whatsappConfig,
+                        actualAdminId
                     );
                 }
             }
@@ -1250,8 +1258,8 @@ export class AppointmentService {
             .session(session);
 
         // Check settings for notifications
-        const emailEnabled = userId ? await SettingsService.isEmailEnabled(userId) : true;
-        const whatsappEnabled = userId ? await SettingsService.isWhatsAppEnabled(userId) : true;
+        const emailEnabled = userId ? await SettingsService.isCategoryEnabled(userId, 'appointment', 'email') : true;
+        const whatsappEnabled = userId ? await SettingsService.isCategoryEnabled(userId, 'appointment', 'whatsapp') : true;
         const smsEnabled = userId ? await SettingsService.isSmsEnabled(userId) : false;
 
         // Get company name from user (createdBy) for email fromName
@@ -1289,6 +1297,7 @@ export class AppointmentService {
             if (whatsappEnabled) {
                 const visitorPhone = (appointment.visitorId as any).phone;
                 if (visitorPhone && userId) {
+                    const actualAdminId = await EmployeeUtil.getAdminId(userId);
                     const whatsappConfig = await SettingsService.getWhatsAppConfig(userId);
                     await WhatsAppService.sendAppointmentStatusUpdate(
                         visitorPhone,
@@ -1298,7 +1307,8 @@ export class AppointmentService {
                         appointment.appointmentDetails.scheduledTime,
                         'rejected',
                         companyName,
-                        whatsappConfig
+                        whatsappConfig,
+                        actualAdminId
                     );
                 }
             }
@@ -1481,9 +1491,7 @@ export class AppointmentService {
         const approvalLink = await ApprovalLink.findOne({ appointmentId: appointment._id });
 
         const createdBy = (appointment.createdBy as any).toString() || appointment.createdBy;
-        const emailEnabled = await SettingsService.isEmailEnabled(createdBy);
-        const whatsappEnabled = await SettingsService.isWhatsAppEnabled(createdBy);
-        const smsEnabled = await SettingsService.isSmsEnabled(createdBy);
+        const { emailEnabled, whatsappEnabled, smsEnabled, appointment: appointmentSettings, whatsappConfig } = await SettingsService.getNotificationSettings(createdBy);
 
         // Get company name and logo
         const user = await User.findById(createdBy).select('companyName profilePicture').lean();
@@ -1503,7 +1511,9 @@ export class AppointmentService {
                 smsEnabled,
                 sendNotifications: true,
                 companyName,
-                companyLogo
+                companyLogo,
+                appointmentSettings,
+                whatsappConfig
             }
         ).catch(err => console.error('Resend background notification failed:', err));
     }

@@ -1,11 +1,19 @@
 import mongoose, { Document } from 'mongoose';
 
+export interface INotificationType {
+    email: boolean;
+    whatsapp: boolean;
+}
+
 export interface ISettings extends Document {
     userId: mongoose.Types.ObjectId;
     notifications: {
         emailEnabled: boolean;
         whatsappEnabled: boolean;
         smsEnabled: boolean;
+        visitor: INotificationType;
+        employee: INotificationType;
+        appointment: INotificationType;
     };
     whatsapp: {
         activeProvider: 'meta';
@@ -56,6 +64,9 @@ export interface IUpdateSettingsDTO {
         emailEnabled?: boolean;
         whatsappEnabled?: boolean;
         smsEnabled?: boolean;
+        visitor?: Partial<INotificationType>;
+        employee?: Partial<INotificationType>;
+        appointment?: Partial<INotificationType>;
     };
     smtp?: Partial<ISmtpConfig>;
     whatsapp?: {
@@ -77,6 +88,9 @@ export interface ISettingsResponse {
         emailEnabled: boolean;
         whatsappEnabled: boolean;
         smsEnabled: boolean;
+        visitor: INotificationType;
+        employee: INotificationType;
+        appointment: INotificationType;
     };
     smtp?: {
         host?: string;

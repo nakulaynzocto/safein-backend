@@ -53,6 +53,7 @@ class ChatService {
                     if (!u.profilePicture && empData.photo) {
                         u.profilePicture = empData.photo;
                     }
+                    u.photo = empData.photo; // Consistenty attach personal photo
                     if (!u.designation) u.designation = empData.designation;
                     if (!u.department) u.department = empData.department;
                 }

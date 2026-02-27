@@ -21,6 +21,18 @@ const settingsSchema = new Schema<ISettings>(
             smsEnabled: {
                 type: Boolean,
                 default: false
+            },
+            visitor: {
+                email: { type: Boolean, default: true },
+                whatsapp: { type: Boolean, default: true }
+            },
+            employee: {
+                email: { type: Boolean, default: true },
+                whatsapp: { type: Boolean, default: true }
+            },
+            appointment: {
+                email: { type: Boolean, default: true },
+                whatsapp: { type: Boolean, default: true }
             }
         },
         whatsapp: {
