@@ -286,7 +286,7 @@ export class WhatsAppService {
                 // Body: Appointment Confirmed: Your visit at {{1}} with {{2}} is confirmed. Date: {{3}}, Time: {{4}}. Please arrive on time for seamless entry. Regards, Team {{5}} Office.
                 return await this.sendTemplateMessage(
                     visitorPhone,
-                    'booking_confirmation',
+                    'appointment_confirmation',
                     [companyName, employeeName, formattedDate, formattedTime, companyName],
                     config
                 );
@@ -328,7 +328,7 @@ export class WhatsAppService {
             // Body: Welcome to {{1}}. Your visit reference ID is {{2}}. Please present this at the reception on {{3}}. Thank you.
             return await this.sendTemplateMessage(
                 visitorPhone,
-                'entry_reference',
+                'entry_pass',
                 [companyName, otp, today],
                 config
             );
@@ -357,11 +357,11 @@ export class WhatsAppService {
             }
             const formattedExpiry = this.formatDate(expiresAt);
 
-            // Template: invitation_update
+            // Template: visitor_invitation
             // Body: Registration Invite: {{1}} from {{2}} has invited you to complete your registration. Link: {{3}}. This invitation expires on {{4}} precisely.
             return await this.sendTemplateMessage(
                 visitorPhone,
-                'invitation_update',
+                'visitor_invitation',
                 [employeeName, companyName, bookingUrl, formattedExpiry],
                 config
             );
@@ -406,7 +406,7 @@ export class WhatsAppService {
                 // Use booking_confirmation for visitor
                 return await this.sendTemplateMessage(
                     recipientPhone,
-                    'booking_confirmation',
+                    'appointment_confirmation',
                     [companyName, otherPartyName, formattedDate, formattedTime, companyName],
                     config
                 );
