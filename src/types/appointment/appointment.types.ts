@@ -1,5 +1,5 @@
 
-export type AppointmentStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+export type AppointmentStatus = 'pending' | 'approved' | 'rejected' | 'completed' | 'checked_in';
 export type IDProofType = 'aadhaar' | 'pan' | 'driving_license' | 'passport' | 'other';
 
 export interface IVisitorDetails {

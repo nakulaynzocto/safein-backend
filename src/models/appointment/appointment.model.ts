@@ -22,9 +22,11 @@ export interface IAppointment extends mongoose.Document {
         vehicleNumber?: string; // Optional vehicle number
         vehiclePhoto?: string; // Optional vehicle photo URL
     };
-    status: 'pending' | 'approved' | 'rejected' | 'completed';
+    status: 'pending' | 'approved' | 'rejected' | 'completed' | 'checked_in';
     checkInTime?: Date;
     checkOutTime?: Date;
+    checkInNotes?: string;
+    checkOutNotes?: string;
     actualDuration?: number; // in minutes
     securityDetails: {
         badgeIssued: boolean;
@@ -136,16 +138,28 @@ const appointmentSchema = new Schema<IAppointment>(
         status: {
             type: String,
             enum: {
-                values: ['pending', 'approved', 'rejected', 'completed'],
-                message: 'Status must be one of: pending, approved, rejected, completed'
+                values: ['pending', 'approved', 'rejected', 'completed', 'checked_in'],
+                message: 'Status must be one of: pending, approved, rejected, completed, checked_in'
             },
             default: 'pending'
         },
         checkInTime: {
-            type: Date
+            type: Date,
+            default: null
         },
         checkOutTime: {
-            type: Date
+            type: Date,
+            default: null
+        },
+        checkInNotes: {
+            type: String,
+            trim: true,
+            maxlength: [500, 'Check-in notes cannot exceed 500 characters']
+        },
+        checkOutNotes: {
+            type: String,
+            trim: true,
+            maxlength: [500, 'Check-out notes cannot exceed 500 characters']
         },
         actualDuration: {
             type: Number,

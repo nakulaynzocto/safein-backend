@@ -31,6 +31,7 @@ export interface IDashboardStats {
     approvedAppointments: number;
     rejectedAppointments: number;
     completedAppointments: number;
+    checkedInAppointments: number;
     upcomingAppointments: number;
     todayAppointments: number;
 }
@@ -647,12 +648,13 @@ export class AppointmentService {
         approved: number;
         rejected: number;
         completed: number;
+        checked_in: number;
         cancelled: number;
         time_out: number;
     }> {
         const filter: any = { isDeleted: false };
 
-        const zeros = { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, cancelled: 0, time_out: 0 };
+        const zeros = { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, checked_in: 0, cancelled: 0, time_out: 0 };
 
         // SECURITY: Filter by admin's employees or specific employee
         if (adminUserId) {
@@ -771,6 +773,7 @@ export class AppointmentService {
         const approved = stats.find(s => s._id === 'approved')?.count || 0;
         const rejected = stats.find(s => s._id === 'rejected')?.count || 0;
         const completed = stats.find(s => s._id === 'completed')?.count || 0;
+        const checked_in = stats.find(s => s._id === 'checked_in')?.count || 0;
         const cancelled = stats.find(s => s._id === 'cancelled')?.count || 0;
         const time_out = stats.find(s => s._id === 'time_out')?.count || 0;
 
@@ -780,6 +783,7 @@ export class AppointmentService {
             approved,
             rejected,
             completed,
+            checked_in,
             cancelled,
             time_out,
         };
@@ -925,11 +929,11 @@ export class AppointmentService {
             throw new AppError('Appointment not found', ERROR_CODES.NOT_FOUND);
         }
 
-        if (appointment.status !== 'pending') {
-            throw new AppError('Appointment is not in pending status', ERROR_CODES.BAD_REQUEST);
+        if (appointment.status !== 'pending' && appointment.status !== 'approved') {
+            throw new AppError('Only pending or approved appointments can be checked in', ERROR_CODES.BAD_REQUEST);
         }
 
-        appointment.status = 'approved';
+        appointment.status = 'checked_in';
         appointment.checkInTime = new Date();
 
         if (badgeNumber) {
@@ -939,6 +943,7 @@ export class AppointmentService {
 
         if (securityNotes) {
             appointment.securityDetails.securityNotes = securityNotes;
+            appointment.checkInNotes = securityNotes;
         }
 
         await appointment.save({ session });
@@ -1001,7 +1006,7 @@ export class AppointmentService {
         }
 
         if (notes) {
-            appointment.appointmentDetails.notes = notes;
+            appointment.checkOutNotes = notes;
         }
 
         await appointment.save({ session });
@@ -1321,18 +1326,6 @@ export class AppointmentService {
             // Will send appointment rejection notification via SMS provider
         }
 
-        // try {
-        //     await EmailService.sendEmployeeAppointmentRejectionEmail(
-        //         (appointment.employeeId as any).email,
-        //         (appointment.employeeId as any).name,
-        //         (appointment.visitorId as any).name,
-        //         appointment.appointmentDetails.scheduledDate,
-        //         appointment.appointmentDetails.scheduledTime,
-        //         companyName
-        //     );
-        // } catch {
-        //     // Email sending failed, continue
-        // }
 
         // Send socket notification to both admin and employee
         if (populatedAppointment && userId) {
@@ -1426,6 +1419,10 @@ export class AppointmentService {
                         { $match: { status: 'completed' } },
                         { $count: 'count' }
                     ],
+                    checked_in: [
+                        { $match: { status: 'checked_in' } },
+                        { $count: 'count' }
+                    ],
                     upcoming: [
                         {
                             $match: {
@@ -1457,6 +1454,7 @@ export class AppointmentService {
         const approved = stats.approved[0]?.count || 0;
         const rejected = stats.rejected[0]?.count || 0;
         const completed = stats.completed[0]?.count || 0;
+        const checked_in = stats.checked_in[0]?.count || 0;
         const upcoming = stats.upcoming[0]?.count || 0;
         const today = stats.today[0]?.count || 0;
 
@@ -1466,6 +1464,7 @@ export class AppointmentService {
             approvedAppointments: approved,
             rejectedAppointments: rejected,
             completedAppointments: completed,
+            checkedInAppointments: checked_in,
             upcomingAppointments: upcoming,
             todayAppointments: today
         };
